@@ -13,18 +13,20 @@ go -C "$SRC_DIR/backend" build \
   -o "$SRC_DIR/bin/omagen" \
   ./cmd/omagen
 
-echo "Installing plugin..."
+echo "Installing Omagen..."
 
 mkdir -p "$DEST_DIR/bin"
 
+rm -rf "$DEST_DIR/qml"
+
 cp "$SRC_DIR/manifest.json" "$DEST_DIR/"
 cp "$SRC_DIR/Omagen.qml" "$DEST_DIR/"
+cp -r "$SRC_DIR/qml" "$DEST_DIR/"
 cp "$SRC_DIR/bin/omagen" "$DEST_DIR/bin/"
 
 chmod +x "$DEST_DIR/bin/omagen"
 
 omarchy-shell shell rescanPlugins
 omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1 || true
-omarchy restart shell
 
 echo "Installed $PLUGIN_ID -> $DEST_DIR"
