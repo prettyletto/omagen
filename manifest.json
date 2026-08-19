@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "pretty.omagen",
+  "name": "Omagen",
+  "version": "0.1.0",
+  "author": "Prettyletto",
+  "description": "Generate Omarchy themes from images",
+  "kinds": [
+    "overlay"
+  ],
+  "keeploaded": true,
+  "entryPoints": {
+    "overlay": "Omagen.qml"
+  }
+}
