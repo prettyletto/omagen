@@ -12,6 +12,8 @@ Item {
     property string backendStatus: "Not checked"
     property string backendVersion: ""
     property int openCount: 0
+    property string sourceImage: ""
+    property string imagePickerError: ""
     readonly property string backendPath: decodeURIComponent(Qt.resolvedUrl("bin/omagen").toString().replace("file://", ""))
 
     function open(payload) {
@@ -30,6 +32,12 @@ Item {
     function checkBackend() {
         backendStatus = "Checking...";
         backendProcess.exec([root.backendPath, "ping"]);
+    }
+
+    function chooseImage() {
+        imagePickerError = "";
+        opened = false;
+        imagePickerProcess.exec(["omarchy", "file", "select", "--title", "Choose an image for Omagen", "--extensions", "png jpg jpeg webp"]);
     }
 
     function cancelSession() {
@@ -64,6 +72,38 @@ Item {
 
         stderr: StdioCollector {
             id: backendStderr
+
+            waitForEnd: true
+        }
+
+    }
+
+    Process {
+        id: imagePickerProcess
+
+        onExited: function(exitCode, exitStatus) {
+            root.opened = true;
+            if (exitCode === 0) {
+                const path = imagePickerStdout.text.trim();
+                if (path !== "")
+                    root.sourceImage = path;
+
+                return ;
+            }
+            if (exitCode === 1)
+                return ;
+
+            root.imagePickerError = imagePickerStderr.text.trim();
+        }
+
+        stdout: StdioCollector {
+            id: imagePickerStdout
+
+            waitForEnd: true
+        }
+
+        stderr: StdioCollector {
+            id: imagePickerStderr
 
             waitForEnd: true
         }
@@ -123,15 +163,52 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: "Generate (fake)"
+                        text: root.sourceImage === "" ? "Choose Image" : "Change Image"
                         color: Color.background
                     }
 
                     MouseArea {
                         anchors.fill: parent
-                        onClicked: root.startSession()
+                        onClicked: root.chooseImage()
                     }
 
+                }
+
+                Rectangle {
+                    visible: root.sourceImage !== ""
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 420
+                    height: 180
+                    radius: 10
+
+                    Image {
+                        anchors.fill: parent
+                        source: root.sourceImage !== "" ? Util.fileUrl(root.sourceImage) : ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        sourceSize.width: 420
+                        sourceSize.height: 180
+                    }
+
+                }
+
+                Text {
+                    visible: root.sourceImage !== ""
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 420
+                    text: root.sourceImage
+                    color: Color.muted
+                    font.pixelSize: 12
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                    visible: root.imagePickerError !== ""
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: root.imagePickerError
+                    color: Color.red
+                    font.pixelSize: 12
                 }
 
                 Text {
