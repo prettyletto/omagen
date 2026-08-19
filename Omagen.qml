@@ -179,6 +179,20 @@ Item {
                 anchors.centerIn: parent
                 spacing: 24
 
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Theme Workspace"
+                    color: Color.foreground
+                    font.pixelSize: 32
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Session is alive"
+                    color: Color.muted
+                    font.pixelSize: 16
+                }
+
                 Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 180
@@ -204,20 +218,6 @@ Item {
                     text: root.backendStatus + (root.backendVersion !== "" ? " · " + root.backendVersion : "")
                     color: Color.muted
                     font.pixelSize: 14
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Theme Workspace"
-                    color: Color.foreground
-                    font.pixelSize: 32
-                }
-
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Session is alive"
-                    color: Color.muted
-                    font.pixelSize: 16
                 }
 
                 Row {

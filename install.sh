@@ -25,5 +25,6 @@ chmod +x "$DEST_DIR/bin/omagen"
 
 omarchy-shell shell rescanPlugins
 omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1 || true
+omarchy restart shell
 
 echo "Installed $PLUGIN_ID -> $DEST_DIR"
