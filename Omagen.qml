@@ -9,11 +9,16 @@ Item {
 
     property bool opened: false
     property bool sessionActive: false
+    property bool sessionBusy: false
+    property int openCount: 0
     property string backendStatus: "Not checked"
     property string backendVersion: ""
-    property int openCount: 0
     property string sourceImage: ""
     property string imagePickerError: ""
+    property string sessionId: ""
+    property string originalTheme: ""
+    property string originalBackground: ""
+    property string sessionError: ""
     readonly property string backendPath: decodeURIComponent(Qt.resolvedUrl("bin/omagen").toString().replace("file://", ""))
 
     function open(payload) {
@@ -23,10 +28,6 @@ Item {
 
     function close() {
         opened = false;
-    }
-
-    function startSession() {
-        sessionActive = true;
     }
 
     function checkBackend() {
@@ -40,9 +41,13 @@ Item {
         imagePickerProcess.exec(["omarchy", "file", "select", "--title", "Choose an image for Omagen", "--extensions", "png jpg jpeg webp"]);
     }
 
-    function cancelSession() {
-        sessionActive = false;
-        opened = false;
+    function beginSession() {
+        if (sourceImage === "" || sessionBusy)
+            return ;
+
+        sessionError = "";
+        sessionBusy = true;
+        sessionBeginProcess.exec([root.backendPath, "session", "begin"]);
     }
 
     Process {
@@ -57,7 +62,7 @@ Item {
             try {
                 const result = JSON.parse(backendStdout.text);
                 root.backendStatus = result.ok ? "Connected" : "Invalid response";
-                root.backendVersion = result.version ?? "";
+                root.backendVersion = result.version || "";
             } catch (error) {
                 root.backendStatus = "Invalid JSON";
                 root.backendVersion = "";
@@ -93,7 +98,8 @@ Item {
             if (exitCode === 1)
                 return ;
 
-            root.imagePickerError = imagePickerStderr.text.trim();
+            const error = imagePickerStderr.text.trim();
+            root.imagePickerError = error !== "" ? error : "Image picker failed";
         }
 
         stdout: StdioCollector {
@@ -110,12 +116,55 @@ Item {
 
     }
 
+    Process {
+        id: sessionBeginProcess
+
+        onExited: function(exitCode, exitStatus) {
+            root.sessionBusy = false;
+            if (exitCode !== 0) {
+                const error = sessionBeginStderr.text.trim();
+                root.sessionError = error !== "" ? error : "Failed to begin session";
+                return ;
+            }
+            try {
+                const result = JSON.parse(sessionBeginStdout.text);
+                const id = result.session_id || "";
+                const theme = result.original_theme || "";
+                const background = result.original_background || "";
+                if (id === "" || theme === "" || background === "") {
+                    root.sessionError = "Backend returned incomplete session data";
+                    return ;
+                }
+                root.sessionId = id;
+                root.originalTheme = theme;
+                root.originalBackground = background;
+                root.sessionActive = true;
+                root.sessionError = "";
+            } catch (error) {
+                root.sessionError = "Backend returned invalid JSON";
+            }
+        }
+
+        stdout: StdioCollector {
+            id: sessionBeginStdout
+
+            waitForEnd: true
+        }
+
+        stderr: StdioCollector {
+            id: sessionBeginStderr
+
+            waitForEnd: true
+        }
+
+    }
+
     PanelWindow {
         id: setupWindow
 
         visible: root.opened && !root.sessionActive
         implicitWidth: 520
-        implicitHeight: 360
+        implicitHeight: 600
         color: "transparent"
         WlrLayershell.namespace: "omagen-setup"
         WlrLayershell.layer: WlrLayer.Overlay
@@ -138,7 +187,7 @@ Item {
 
             Column {
                 anchors.centerIn: parent
-                spacing: 20
+                spacing: 18
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -150,7 +199,8 @@ Item {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: "Create a theme from an image"
-                    color: Color.muted
+                    color: Color.foreground
+                    opacity: 0.65
                     font.pixelSize: 15
                 }
 
@@ -165,6 +215,7 @@ Item {
                         anchors.centerIn: parent
                         text: root.sourceImage === "" ? "Choose Image" : "Change Image"
                         color: Color.background
+                        font.pixelSize: 14
                     }
 
                     MouseArea {
@@ -178,8 +229,10 @@ Item {
                     visible: root.sourceImage !== ""
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 420
-                    height: 180
+                    height: 220
                     radius: 10
+                    color: Color.darkerBackground
+                    clip: true
 
                     Image {
                         anchors.fill: parent
@@ -187,7 +240,7 @@ Item {
                         fillMode: Image.PreserveAspectCrop
                         asynchronous: true
                         sourceSize.width: 420
-                        sourceSize.height: 180
+                        sourceSize.height: 220
                     }
 
                 }
@@ -197,7 +250,8 @@ Item {
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: 420
                     text: root.sourceImage
-                    color: Color.muted
+                    color: Color.foreground
+                    opacity: 0.65
                     font.pixelSize: 12
                     elide: Text.ElideMiddle
                     horizontalAlignment: Text.AlignHCenter
@@ -206,16 +260,47 @@ Item {
                 Text {
                     visible: root.imagePickerError !== ""
                     anchors.horizontalCenter: parent.horizontalCenter
+                    width: 420
                     text: root.imagePickerError
                     color: Color.red
                     font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                }
+
+                Rectangle {
+                    visible: root.sourceImage !== ""
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 180
+                    height: 44
+                    radius: 8
+                    color: Color.accent
+                    opacity: root.sessionBusy ? 0.6 : 1
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.sessionBusy ? "Starting..." : "Continue"
+                        color: Color.background
+                        font.pixelSize: 14
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: !root.sessionBusy
+                        onClicked: root.beginSession()
+                    }
+
                 }
 
                 Text {
+                    visible: root.sessionError !== ""
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Opened " + root.openCount + " times"
-                    color: Color.muted
-                    font.pixelSize: 13
+                    width: 420
+                    text: root.sessionError
+                    color: Color.red
+                    font.pixelSize: 12
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
                 }
 
             }
@@ -254,7 +339,7 @@ Item {
 
             Column {
                 anchors.centerIn: parent
-                spacing: 24
+                spacing: 18
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
@@ -265,9 +350,58 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Session is alive"
-                    color: Color.muted
+                    text: "Session active"
+                    color: Color.foreground
+                    opacity: 0.65
                     font.pixelSize: 16
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 700
+                    text: "Session: " + root.sessionId
+                    color: Color.foreground
+                    opacity: 0.65
+                    font.pixelSize: 13
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: "Original theme: " + root.originalTheme
+                    color: Color.foreground
+                    font.pixelSize: 14
+                }
+
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 700
+                    text: "Original background: " + root.originalBackground
+                    color: Color.foreground
+                    opacity: 0.65
+                    font.pixelSize: 13
+                    elide: Text.ElideMiddle
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                Rectangle {
+                    width: 420
+                    height: 220
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    radius: 10
+                    color: Color.darkerBackground
+                    clip: true
+
+                    Image {
+                        anchors.fill: parent
+                        source: root.sourceImage !== "" ? Util.fileUrl(root.sourceImage) : ""
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        sourceSize.width: 420
+                        sourceSize.height: 220
+                    }
+
                 }
 
                 Rectangle {
@@ -281,6 +415,7 @@ Item {
                         anchors.centerIn: parent
                         text: "Check Backend"
                         color: Color.background
+                        font.pixelSize: 14
                     }
 
                     MouseArea {
@@ -293,50 +428,28 @@ Item {
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
                     text: root.backendStatus + (root.backendVersion !== "" ? " · " + root.backendVersion : "")
-                    color: Color.muted
+                    color: Color.foreground
+                    opacity: 0.65
                     font.pixelSize: 14
                 }
 
-                Row {
+                Rectangle {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    spacing: 16
+                    width: 160
+                    height: 44
+                    radius: 8
+                    color: Color.accent
 
-                    Rectangle {
-                        width: 160
-                        height: 44
-                        radius: 8
-                        color: Color.accent
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Hide"
-                            color: Color.background
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: root.close()
-                        }
-
+                    Text {
+                        anchors.centerIn: parent
+                        text: "Hide"
+                        color: Color.background
+                        font.pixelSize: 14
                     }
 
-                    Rectangle {
-                        width: 160
-                        height: 44
-                        radius: 8
-                        color: Color.red
-
-                        Text {
-                            anchors.centerIn: parent
-                            text: "Cancel Session"
-                            color: Color.background
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            onClicked: root.cancelSession()
-                        }
-
+                    MouseArea {
+                        anchors.fill: parent
+                        onClicked: root.close()
                     }
 
                 }
