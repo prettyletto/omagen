@@ -41,6 +41,10 @@ func TestGenerate(t *testing.T) {
 		if info, err := os.Stat(variant.Path); err != nil || !info.IsDir() {
 			t.Fatalf("variant %s missing: %v", variant.Variant, err)
 		}
+		background := filepath.Join(variant.Path, "backgrounds", "wallpaper.png")
+		if content, err := os.ReadFile(background); err != nil || string(content) != "image" {
+			t.Fatalf("variant %s has bad background: %v", variant.Variant, err)
+		}
 	}
 }
 
@@ -115,6 +119,14 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	if sourceBackground == deepBackground {
 		t.Fatalf("source and deep backgrounds should differ: %q", sourceBackground)
 	}
+
+	cachedSource, err := os.ReadFile(filepath.Join(generationRoot, "input", "source.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(cachedSource) != "image" {
+		t.Fatalf("cached source has unexpected content: %q", cachedSource)
+	}
 }
 
 func paletteValue(content, key string) string {
@@ -148,10 +160,10 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := runJobs(cancelled, t.TempDir()); err == nil {
+	if err := runJobs(cancelled, t.TempDir(), "source.png"); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
-	if err := (job{variant: Source}).run(context.Background(), filepath.Join(t.TempDir(), "missing", "nested")); err == nil {
+	if err := (job{variant: Source}).run(context.Background(), filepath.Join(t.TempDir(), "missing", "nested"), "source.png"); err == nil {
 		t.Fatal("expected mkdir error")
 	}
 }

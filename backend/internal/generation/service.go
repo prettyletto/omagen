@@ -96,9 +96,18 @@ func (s *Service) Generate(
 		}
 	}()
 
+	cachedSource, err := cacheSourceImage(
+		tmpRoot,
+		request.SourceImage,
+	)
+	if err != nil {
+		return Result{}, err
+	}
+
 	if err := runJobs(
 		ctx,
 		tmpRoot,
+		cachedSource,
 	); err != nil {
 		return Result{}, err
 	}
@@ -129,6 +138,7 @@ type jobResult struct {
 func runJobs(
 	ctx context.Context,
 	generationRoot string,
+	sourceImage string,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -153,8 +163,8 @@ func runJobs(
 			}).run(
 				ctx,
 				generationRoot,
+				sourceImage,
 			)
-
 			if err != nil {
 				cancel()
 			}

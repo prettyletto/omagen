@@ -16,6 +16,7 @@ type job struct {
 func (j job) run(
 	ctx context.Context,
 	generationRoot string,
+	sourceImage string,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -49,7 +50,7 @@ func (j job) run(
 		palette,
 	); err != nil {
 		return fmt.Errorf(
-			"write theme: %w",
+			"write colors: %w",
 			err,
 		)
 	}
@@ -58,5 +59,15 @@ func (j job) run(
 		return err
 	}
 
-	return nil
+	if err := theme.WriteBackground(
+		variantDir,
+		sourceImage,
+	); err != nil {
+		return fmt.Errorf(
+			"write background: %w",
+			err,
+		)
+	}
+
+	return ctx.Err()
 }
