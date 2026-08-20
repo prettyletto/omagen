@@ -36,8 +36,8 @@ func TestParseGenerateArgs(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(request.Options.ColorTheory.Harmony) != "triadic" {
-			t.Fatalf("got harmony %q", request.Options.ColorTheory.Harmony)
+		if request.Overrides.ColorTheory.Harmony == nil || string(*request.Overrides.ColorTheory.Harmony) != "triadic" {
+			t.Fatalf("got harmony override %#v", request.Overrides.ColorTheory.Harmony)
 		}
 	}
 }

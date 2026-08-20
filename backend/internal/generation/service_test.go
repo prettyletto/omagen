@@ -13,12 +13,23 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/settings"
 )
 
 func generationStore(t *testing.T) *session.Store {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return store
+}
+
+func generationSettingsStore(t *testing.T) *settings.Store {
+	t.Helper()
+	store, err := settings.NewStore()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,12 +47,15 @@ func TestGenerate(t *testing.T) {
 	if err := os.WriteFile(imagePath, imageData, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := NewService(store).Generate(context.Background(), Request{SessionID: "session", SourceImage: imagePath})
+	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: "session", SourceImage: imagePath})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result.GenerationID == "" || len(result.Variants) != len(orderedVariants) {
 		t.Fatalf("bad result: %#v", result)
+	}
+	if result.Settings != settings.Defaults() {
+		t.Fatalf("generation returned unexpected effective settings: %#v", result.Settings)
 	}
 	for _, variant := range result.Variants {
 		if info, err := os.Stat(variant.Path); err != nil || !info.IsDir() {
@@ -70,7 +84,7 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := NewService(store).Generate(context.Background(), Request{
+	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
 		SessionID:   "session",
 		SourceImage: imagePath,
 	})
@@ -165,7 +179,7 @@ func paletteValue(content, key string) string {
 
 func TestGenerateValidationAndJobErrors(t *testing.T) {
 	store := generationStore(t)
-	svc := NewService(store)
+	svc := NewService(store, generationSettingsStore(t))
 	for _, request := range []Request{{SessionID: "missing", SourceImage: "x"}, {SessionID: "missing", SourceImage: ""}} {
 		if _, err := svc.Generate(context.Background(), request); err == nil {
 			t.Fatal("expected validation error")
@@ -187,7 +201,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		Format:          "png",
 		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
 		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
-	}, DefaultOptions()); err == nil {
+	}, settings.Defaults()); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
 	if err := (job{
@@ -217,7 +231,7 @@ func TestGenerationHelpers(t *testing.T) {
 			t.Fatal("expected invalid source")
 		}
 	}
-	result := buildResult("id", "/root", DefaultOptions())
+	result := buildResult("id", "/root", settings.Defaults())
 	if result.Variants[0].Path != filepath.Join("/root", string(Source)) || !strings.Contains(result.GenerationID, "id") {
 		t.Fatalf("bad result: %#v", result)
 	}

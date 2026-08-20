@@ -17,8 +17,10 @@ import (
 	"path/filepath"
 	"sort"
 
+	"github.com/prettyletto/omagen/backend/internal/contrast"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
+	"github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
@@ -33,6 +35,7 @@ type preview struct {
 	Width           int                                 `json:"width"`
 	Height          int                                 `json:"height"`
 	Representatives []imageanalysis.RepresentativeColor `json:"representatives"`
+	Before          theme.Palette                       `json:"before_palette"`
 	Palette         theme.Palette                       `json:"palette"`
 }
 
@@ -73,14 +76,19 @@ func writePalettes(w http.ResponseWriter, corpusDir string) {
 			http.Error(w, fmt.Sprintf("analyze %s: %v", entry.Name(), err), http.StatusInternalServerError)
 			return
 		}
-		palette, err := semanticpalette.Source(analysis.Representatives, semanticpalette.HarmonyAuto)
+		before, err := semanticpalette.Source(analysis.Representatives, semanticpalette.HarmonyAuto)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("source palette %s: %v", entry.Name(), err), http.StatusInternalServerError)
 			return
 		}
+		palette, err := contrast.Enforce(before, settings.Defaults().Contrast)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("enforce contrast %s: %v", entry.Name(), err), http.StatusInternalServerError)
+			return
+		}
 		result = append(result, preview{
 			Name: trimPNG(entry.Name()), Image: "/corpus/" + entry.Name(), Width: analysis.Width,
-			Height: analysis.Height, Representatives: analysis.Representatives, Palette: palette,
+			Height: analysis.Height, Representatives: analysis.Representatives, Before: before, Palette: palette,
 		})
 	}
 	sort.Slice(result, func(i, j int) bool { return result[i].Name < result[j].Name })

@@ -41,17 +41,24 @@ func TestEnforceDarkPalette(t *testing.T) {
 		BrightMagenta: "#ff77ff",
 	}
 
-	result, err := Enforce(input)
+	targets := Targets{
+		PrimaryText:   4.5,
+		BrightText:    7,
+		SecondaryText: 3,
+		UIElement:     3,
+		SelectionText: 4.5,
+	}
+	result, err := Enforce(input, targets)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	assertMinimumRatio(t, result.Foreground, result.Background, primaryTextRatio)
-	assertMinimumRatio(t, result.BrightForeground, result.Background, brightTextRatio)
-	assertMinimumRatio(t, result.DarkForeground, result.Background, secondaryTextRatio)
-	assertMinimumRatio(t, result.Muted, result.Background, secondaryTextRatio)
-	assertMinimumRatio(t, result.Accent, result.Background, uiElementRatio)
-	assertMinimumRatio(t, result.Foreground, result.Selection, selectionTextRatio)
+	assertMinimumRatio(t, result.Foreground, result.Background, targets.PrimaryText)
+	assertMinimumRatio(t, result.BrightForeground, result.Background, targets.BrightText)
+	assertMinimumRatio(t, result.DarkForeground, result.Background, targets.SecondaryText)
+	assertMinimumRatio(t, result.Muted, result.Background, targets.SecondaryText)
+	assertMinimumRatio(t, result.Accent, result.Background, targets.UIElement)
+	assertMinimumRatio(t, result.Foreground, result.Selection, targets.SelectionText)
 }
 
 func assertMinimumRatio(t *testing.T, first, second string, minimum float64) {

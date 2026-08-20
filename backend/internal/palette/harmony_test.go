@@ -2,6 +2,18 @@ package palette
 
 import "testing"
 
+func TestHarmonyValidationDistinguishesKnownAndSupported(t *testing.T) {
+	if err := HarmonyTriadic.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if err := HarmonyTriadic.ValidateSupported(); err == nil {
+		t.Fatal("expected triadic harmony to be unsupported")
+	}
+	if err := HarmonyAuto.ValidateSupported(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestParseHarmony(t *testing.T) {
 	tests := []struct {
 		input string

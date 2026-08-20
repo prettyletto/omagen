@@ -12,6 +12,7 @@ PanelWindow {
     property string errorMessage: ""
 
     signal chooseImageRequested()
+    signal settingsRequested()
     signal continueRequested()
     signal hideRequested()
 
@@ -96,6 +97,29 @@ PanelWindow {
                     asynchronous: true
                     sourceSize.width: 420
                     sourceSize.height: 220
+                }
+            }
+
+            Rectangle {
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 180
+                height: 40
+                radius: 8
+                color: Util.alpha(Color.background, 0.5)
+                border.width: 1
+                border.color: Color.muted
+
+                Text {
+                    anchors.centerIn: parent
+                    text: "Settings"
+                    color: Color.foreground
+                    font.pixelSize: 14
+                }
+
+                MouseArea {
+                    anchors.fill: parent
+                    enabled: !root.busy
+                    onClicked: root.settingsRequested()
                 }
             }
 

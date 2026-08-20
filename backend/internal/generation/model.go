@@ -1,5 +1,7 @@
 package generation
 
+import "github.com/prettyletto/omagen/backend/internal/settings"
+
 type Variant string
 
 const (
@@ -23,7 +25,7 @@ var orderedVariants = [...]Variant{
 type Request struct {
 	SessionID   string
 	SourceImage string
-	Options     Options
+	Overrides   settings.Overrides
 }
 
 type VariantResult struct {
@@ -32,7 +34,7 @@ type VariantResult struct {
 }
 
 type Result struct {
-	GenerationID string          `json:"generation_id"`
-	Options      Options         `json:"options"`
-	Variants     []VariantResult `json:"variants"`
+	GenerationID string            `json:"generation_id"`
+	Settings     settings.Settings `json:"settings"`
+	Variants     []VariantResult   `json:"variants"`
 }

@@ -10,6 +10,8 @@ Item {
     property bool opened: false
     property bool sessionBusy: false
     property bool cancelBusy: false
+    property bool settingsOpen: false
+    property bool settingsBusy: false
     property string sourceImage: ""
     property string errorMessage: ""
 
@@ -25,6 +27,27 @@ Item {
 
     function close() {
         opened = false;
+        settingsOpen = false;
+    }
+
+    function openSettings() {
+        if (sessionBusy || cancelBusy)
+            return;
+
+        errorMessage = "";
+        settingsOpen = true;
+        settingsBusy = true;
+        settings.get();
+    }
+
+    function saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+        settingsBusy = true;
+        settings.save(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+    }
+
+    function resetSettings() {
+        settingsBusy = true;
+        settings.reset();
     }
 
     function chooseImage() {
@@ -124,13 +147,57 @@ Item {
         }
     }
 
+    State.SettingsState {
+        id: settingsState
+    }
+
+    Services.SettingsService {
+        id: settings
+        executable: root.backendPath
+
+        onLoaded: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+            settingsBusy = false;
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+        }
+
+        onLoadFailed: function(message) {
+            settingsBusy = false;
+            errorMessage = message;
+        }
+
+        onSaved: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+            settingsBusy = false;
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsOpen = false;
+        }
+
+        onSaveFailed: function(message) {
+            settingsBusy = false;
+            errorMessage = message;
+        }
+
+        onResetCompleted: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+            settingsBusy = false;
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+        }
+
+        onResetFailed: function(message) {
+            settingsBusy = false;
+            errorMessage = message;
+        }
+    }
+
     Views.SetupWindow {
-        active: root.opened && !session.active
+        active: root.opened && !session.active && !root.settingsOpen
         busy: root.sessionBusy
         sourceImage: root.sourceImage
         errorMessage: root.errorMessage
 
         onChooseImageRequested: root.chooseImage()
+        onSettingsRequested: root.openSettings()
         onContinueRequested: root.beginSession()
         onHideRequested: root.close()
     }
@@ -147,5 +214,24 @@ Item {
 
         onHideRequested: root.close()
         onCancelRequested: root.cancelSession()
+    }
+
+    Views.SettingsWindow {
+        id: settingsWindow
+        active: root.settingsOpen
+        busy: root.settingsBusy
+        harmony: settingsState.harmony
+        primaryText: settingsState.primaryText
+        brightText: settingsState.brightText
+        secondaryText: settingsState.secondaryText
+        uiElement: settingsState.uiElement
+        selectionText: settingsState.selectionText
+        errorMessage: root.errorMessage
+
+        onSaveRequested: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+            root.saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+        }
+        onResetRequested: root.resetSettings()
+        onHideRequested: root.close()
     }
 }

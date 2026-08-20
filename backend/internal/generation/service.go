@@ -13,17 +13,21 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 )
 
 type Service struct {
 	sessions *session.Store
+	settings *settingspkg.Store
 }
 
 func NewService(
 	sessions *session.Store,
+	settings *settingspkg.Store,
 ) *Service {
 	return &Service{
 		sessions: sessions,
+		settings: settings,
 	}
 }
 
@@ -40,12 +44,16 @@ func (s *Service) Generate(
 		)
 	}
 
-	options := request.Options.Normalize()
-	if err := options.Validate(); err != nil {
-		return Result{}, fmt.Errorf(
-			"validate generation options: %w",
-			err,
-		)
+	effectiveSettings, err := s.settings.Load()
+	if err != nil {
+		return Result{}, fmt.Errorf("load settings: %w", err)
+	}
+	effectiveSettings, err = settingspkg.ApplyOverrides(
+		effectiveSettings,
+		request.Overrides,
+	)
+	if err != nil {
+		return Result{}, fmt.Errorf("apply generation overrides: %w", err)
 	}
 
 	if err := validateSourceImage(
@@ -128,7 +136,7 @@ func (s *Service) Generate(
 		tmpRoot,
 		cachedSource,
 		analysis,
-		options,
+		effectiveSettings,
 	); err != nil {
 		return Result{}, err
 	}
@@ -148,7 +156,7 @@ func (s *Service) Generate(
 	return buildResult(
 		generationID,
 		finalRoot,
-		options,
+		effectiveSettings,
 	), nil
 }
 
@@ -162,7 +170,7 @@ func runJobs(
 	generationRoot string,
 	sourceImage string,
 	analysis *imageanalysis.Analysis,
-	options Options,
+	effectiveSettings settingspkg.Settings,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -186,7 +194,7 @@ func runJobs(
 				variant:     variant,
 				sourceImage: sourceImage,
 				analysis:    analysis,
-				options:     options,
+				settings:    effectiveSettings,
 			}).run(
 				ctx,
 				generationRoot,
@@ -280,11 +288,11 @@ func newGenerationID() (string, error) {
 func buildResult(
 	generationID string,
 	root string,
-	options Options,
+	effectiveSettings settingspkg.Settings,
 ) Result {
 	result := Result{
 		GenerationID: generationID,
-		Options:      options,
+		Settings:     effectiveSettings,
 		Variants: make(
 			[]VariantResult,
 			0,

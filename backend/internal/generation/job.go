@@ -9,6 +9,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/contrast"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
+	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
@@ -16,7 +17,7 @@ type job struct {
 	variant     Variant
 	sourceImage string
 	analysis    *imageanalysis.Analysis
-	options     Options
+	settings    settingspkg.Settings
 }
 
 func (j job) run(
@@ -58,12 +59,12 @@ func (j job) run(
 		var err error
 		generatedPalette, err = semanticpalette.Source(
 			j.analysis.Representatives,
-			j.options.ColorTheory.Harmony,
+			j.settings.ColorTheory.Harmony,
 		)
 		if err != nil {
 			return fmt.Errorf("build source palette: %w", err)
 		}
-		generatedPalette, err = contrast.Enforce(generatedPalette)
+		generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
 		if err != nil {
 			return fmt.Errorf("enforce source contrast: %w", err)
 		}

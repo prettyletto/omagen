@@ -11,6 +11,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 )
 
 type pingResponse struct {
@@ -45,6 +46,10 @@ func Run(
 			err,
 		)
 	}
+	settingsStore, err := settingspkg.NewStore()
+	if err != nil {
+		return fail(stderr, 1, "initialize settings store: %v", err)
+	}
 
 	sessionService := session.NewService(
 		store,
@@ -53,6 +58,7 @@ func Run(
 
 	generationService := generation.NewService(
 		store,
+		settingsStore,
 	)
 
 	switch args[0] {
@@ -81,6 +87,9 @@ func Run(
 			stdout,
 			stderr,
 		)
+
+	case "settings":
+		return runSettings(args[1:], settingsStore, stdout, stderr)
 
 	default:
 		return fail(
@@ -204,7 +213,6 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	request := generation.Request{
 		SessionID:   args[0],
 		SourceImage: args[1],
-		Options:     generation.DefaultOptions(),
 	}
 	harmonySeen := false
 
@@ -223,7 +231,7 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			if err != nil {
 				return generation.Request{}, err
 			}
-			request.Options.ColorTheory.Harmony = harmony
+			request.Overrides.ColorTheory.Harmony = &harmony
 			harmonySeen = true
 		case strings.HasPrefix(arg, "--harmony="):
 			if harmonySeen {
@@ -233,7 +241,7 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			if err != nil {
 				return generation.Request{}, err
 			}
-			request.Options.ColorTheory.Harmony = harmony
+			request.Overrides.ColorTheory.Harmony = &harmony
 			harmonySeen = true
 		default:
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
@@ -241,6 +249,43 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	}
 
 	return request, nil
+}
+
+func runSettings(args []string, store *settingspkg.Store, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "missing settings subcommand")
+	}
+	switch args[0] {
+	case "get":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen settings get")
+		}
+		current, err := store.Load()
+		if err != nil {
+			return fail(stderr, 1, "load settings: %v", err)
+		}
+		return writeJSON(stdout, stderr, current)
+	case "set":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen settings set '<json>'")
+		}
+		updated, err := store.UpdateJSON([]byte(args[1]))
+		if err != nil {
+			return fail(stderr, 1, "update settings: %v", err)
+		}
+		return writeJSON(stdout, stderr, updated)
+	case "reset":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen settings reset")
+		}
+		defaults, err := store.Reset()
+		if err != nil {
+			return fail(stderr, 1, "reset settings: %v", err)
+		}
+		return writeJSON(stdout, stderr, defaults)
+	default:
+		return fail(stderr, 2, "unknown settings subcommand: %s", args[0])
+	}
 }
 
 func writeJSON(

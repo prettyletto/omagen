@@ -6,17 +6,17 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
-const (
-	primaryTextRatio   = 4.5
-	brightTextRatio    = 7.0
-	secondaryTextRatio = 3.0
-	uiElementRatio     = 3.0
-	selectionTextRatio = 4.5
-)
-
 func Enforce(
 	palette theme.Palette,
+	targets Targets,
 ) (theme.Palette, error) {
+	if err := targets.Validate(); err != nil {
+		return theme.Palette{}, fmt.Errorf(
+			"validate contrast targets: %w",
+			err,
+		)
+	}
+
 	if err := palette.Validate(); err != nil {
 		return theme.Palette{}, fmt.Errorf(
 			"validate palette before contrast: %w",
@@ -49,7 +49,7 @@ func Enforce(
 		adjustLightness(
 			palette.Foreground,
 			palette.Background,
-			primaryTextRatio,
+			targets.PrimaryText,
 			textDirection,
 		)
 
@@ -64,7 +64,7 @@ func Enforce(
 		adjustLightness(
 			palette.LightForeground,
 			palette.Background,
-			primaryTextRatio,
+			targets.PrimaryText,
 			textDirection,
 		)
 
@@ -79,7 +79,7 @@ func Enforce(
 		adjustLightness(
 			palette.BrightForeground,
 			palette.Background,
-			brightTextRatio,
+			targets.BrightText,
 			textDirection,
 		)
 
@@ -94,7 +94,7 @@ func Enforce(
 		adjustLightness(
 			palette.DarkForeground,
 			palette.Background,
-			secondaryTextRatio,
+			targets.SecondaryText,
 			textDirection,
 		)
 
@@ -109,7 +109,7 @@ func Enforce(
 		adjustLightness(
 			palette.Muted,
 			palette.Background,
-			secondaryTextRatio,
+			targets.SecondaryText,
 			textDirection,
 		)
 
@@ -124,7 +124,7 @@ func Enforce(
 		adjustLightness(
 			palette.Accent,
 			palette.Background,
-			uiElementRatio,
+			targets.UIElement,
 			textDirection,
 		)
 
@@ -144,7 +144,7 @@ func Enforce(
 		adjustLightness(
 			palette.Selection,
 			palette.Foreground,
-			selectionTextRatio,
+			targets.SelectionText,
 			surfaceDirection,
 		)
 
