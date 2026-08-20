@@ -74,9 +74,51 @@ func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
 }
 
 func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error) {
-	return c.runThemeSetUntilCritical(themeName, logPath, []string{
+	current, currentErr := c.CurrentTheme()
+	if currentErr == nil && current == themeName {
+		return 0, true, nil
+	}
+
+	reloadSync, err := newTerminalReloadSync(logPath)
+	if err != nil {
+		return 0, false, err
+	}
+
+	environment := []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
-	}, 10*time.Second)
+	}
+	environment = append(environment, reloadSync.environment()...)
+	pid, err := c.startThemeSet(themeName, logPath, environment)
+	if err != nil {
+		_ = reloadSync.close()
+		return 0, false, err
+	}
+	if err := reloadSync.persist(); err != nil {
+		_ = reloadSync.close()
+		return pid, false, err
+	}
+	return pid, false, nil
+}
+
+func (c *Client) startThemeSet(theme, logPath string, environment []string) (int, error) {
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return 0, fmt.Errorf("open theme-set log: %w", err)
+	}
+
+	cmd := exec.Command("omarchy", "theme", "set", theme)
+	cmd.Env = replaceEnvironment(os.Environ(), environment...)
+	cmd.Stdout = logFile
+	cmd.Stderr = logFile
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	if err := cmd.Start(); err != nil {
+		_ = logFile.Close()
+		return 0, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
+	}
+	pid := cmd.Process.Pid
+	_ = logFile.Close()
+	_ = cmd.Process.Release()
+	return pid, nil
 }
 
 func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {

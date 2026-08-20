@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/prettyletto/omagen/backend/internal/demo"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
@@ -63,6 +64,7 @@ func Run(
 		store,
 		settingsStore,
 	)
+	demoService := demo.NewService(store)
 
 	switch args[0] {
 	case "ping":
@@ -95,6 +97,12 @@ func Run(
 			stderr,
 		)
 
+	case "generation":
+		return runGeneration(args[1:], generationService, stdout, stderr)
+
+	case "demo":
+		return runDemo(args[1:], demoService, stdout, stderr)
+
 	case "settings":
 		return runSettings(args[1:], settingsStore, stdout, stderr)
 
@@ -105,6 +113,25 @@ func Run(
 			"unknown command: %s",
 			args[0],
 		)
+	}
+}
+
+func runGeneration(args []string, service *generation.Service, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "missing generation subcommand")
+	}
+	switch args[0] {
+	case "describe":
+		if len(args) != 3 {
+			return fail(stderr, 2, "usage: omagen generation describe <session_id> <generation_id>")
+		}
+		result, err := service.Describe(args[1], args[2])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	default:
+		return fail(stderr, 2, "unknown generation subcommand: %s", args[0])
 	}
 }
 
@@ -241,6 +268,34 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 		return writeJSON(stdout, stderr, map[string]any{"ok": true, "session_id": args[1]})
 	default:
 		return fail(stderr, 2, "unknown preview subcommand: %s", args[0])
+	}
+}
+
+func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "missing demo subcommand")
+	}
+	switch args[0] {
+	case "open":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen demo open <session_id>")
+		}
+		result, err := service.Open(args[1])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	case "close":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen demo close <session_id>")
+		}
+		result, err := service.Close(args[1])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	default:
+		return fail(stderr, 2, "unknown demo subcommand: %s", args[0])
 	}
 }
 

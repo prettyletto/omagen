@@ -6,10 +6,19 @@
   "author": "Prettyletto",
   "description": "Generate Omarchy themes from images",
   "kinds": [
-    "overlay"
+    "overlay",
+    "bar-widget"
   ],
   "keepLoaded": true,
   "entryPoints": {
-    "overlay": "Omagen.qml"
+    "overlay": "Omagen.qml",
+    "barWidget": "OmagenBarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omagen",
+    "description": "Open the Omagen image theme generator",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
   }
 }

@@ -61,8 +61,8 @@ func TestSourceClosestTokyoNightMock(t *testing.T) {
 	if result.Background != "#1a1b26" {
 		t.Fatalf("background=%s, want #1a1b26", result.Background)
 	}
-	if result.Accent != "#7aa2f7" {
-		t.Fatalf("accent=%s, want #7aa2f7", result.Accent)
+	if result.Accent != "#f7768e" {
+		t.Fatalf("accent=%s, want #f7768e", result.Accent)
 	}
 	t.Logf("mode=%s bg=%s dark=%s darker=%s lighter=%s fg=%s accent=%s selection=%s muted=%s", result.Mode, result.Background, result.DarkBackground, result.DarkerBackground, result.LighterBackground, result.Foreground, result.Accent, result.Selection, result.Muted)
 	t.Logf("red=%s orange=%s yellow=%s green=%s cyan=%s blue=%s magenta=%s brown=%s", result.Red, result.Orange, result.Yellow, result.Green, result.Cyan, result.Blue, result.Magenta, result.Brown)

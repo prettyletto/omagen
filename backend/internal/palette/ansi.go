@@ -1,138 +1,112 @@
 package palette
 
 import (
-	"math"
-
 	"github.com/prettyletto/omagen/backend/internal/colorspace"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
-const (
-	ansiSourceChromaThreshold = 0.035
-	ansiMaximumHueDistance    = 35.0
-)
+type ansiRole struct{ targetHue, familyShift, chromaScale, darkL, lightL float64 }
 
-type ansiFamily struct{ targetHue float64 }
-
-var ansiFamilies = struct {
-	Red, Orange, Yellow, Green, Cyan, Blue, Magenta, Brown ansiFamily
-}{
-	Red: ansiFamily{25}, Orange: ansiFamily{55}, Yellow: ansiFamily{95}, Green: ansiFamily{145},
-	Cyan: ansiFamily{195}, Blue: ansiFamily{255}, Magenta: ansiFamily{320}, Brown: ansiFamily{55},
+var ansiRoles = struct{ Red, Orange, Yellow, Green, Cyan, Blue, Magenta, Brown ansiRole }{
+	Red: ansiRole{25, 0, 1.00, .66, .52}, Orange: ansiRole{55, 18, .88, .68, .53},
+	Yellow: ansiRole{95, 36, .78, .70, .55}, Green: ansiRole{145, 22, .64, .63, .47},
+	Cyan: ansiRole{195, 14, .70, .71, .56}, Blue: ansiRole{255, -29, .62, .67, .50},
+	Magenta: ansiRole{320, -14, .84, .68, .51}, Brown: ansiRole{55, 9, .44, .52, .42},
 }
+
+type identityANSISet struct{ Red, Orange, Yellow, Green, Cyan, Blue, Magenta, Brown colorspace.OKLCH }
 
 func applyANSI(result *theme.Palette, colors []imageanalysis.RepresentativeColor, accent colorspace.OKLCH) {
-	red := resolveANSIFamily(colors, ansiFamilies.Red, accent, result.Mode)
-	orange := resolveANSIFamily(colors, ansiFamilies.Orange, accent, result.Mode)
-	yellow := resolveANSIFamily(colors, ansiFamilies.Yellow, accent, result.Mode)
-	green := resolveANSIFamily(colors, ansiFamilies.Green, accent, result.Mode)
-	cyan := resolveANSIFamily(colors, ansiFamilies.Cyan, accent, result.Mode)
-	blue := resolveANSIFamily(colors, ansiFamilies.Blue, accent, result.Mode)
-	magenta := resolveANSIFamily(colors, ansiFamilies.Magenta, accent, result.Mode)
-	brown := resolveBrown(colors, accent, result.Mode)
-
-	result.Red = semanticColor(red.L, red.C, red.H)
-	result.Orange = semanticColor(orange.L, orange.C, orange.H)
-	result.Yellow = semanticColor(yellow.L, yellow.C, yellow.H)
-	result.Green = semanticColor(green.L, green.C, green.H)
-	result.Cyan = semanticColor(cyan.L, cyan.C, cyan.H)
-	result.Blue = semanticColor(blue.L, blue.C, blue.H)
-	result.Magenta = semanticColor(magenta.L, magenta.C, magenta.H)
-	result.Brown = semanticColor(brown.L, brown.C, brown.H)
-
-	brightRed := brightenANSI(red, result.Mode)
-	brightYellow := brightenANSI(yellow, result.Mode)
-	brightGreen := brightenANSI(green, result.Mode)
-	brightCyan := brightenANSI(cyan, result.Mode)
-	brightBlue := brightenANSI(blue, result.Mode)
-	brightMagenta := brightenANSI(magenta, result.Mode)
-
-	result.BrightRed = semanticColor(brightRed.L, brightRed.C, brightRed.H)
-	result.BrightYellow = semanticColor(brightYellow.L, brightYellow.C, brightYellow.H)
-	result.BrightGreen = semanticColor(brightGreen.L, brightGreen.C, brightGreen.H)
-	result.BrightCyan = semanticColor(brightCyan.L, brightCyan.C, brightCyan.H)
-	result.BrightBlue = semanticColor(brightBlue.L, brightBlue.C, brightBlue.H)
-	result.BrightMagenta = semanticColor(brightMagenta.L, brightMagenta.C, brightMagenta.H)
+	ansi := buildIdentityANSI(analyzeSourceIdentity(colors, accent), result.Mode)
+	result.Red, result.Orange, result.Yellow, result.Green = semanticColor(ansi.Red.L, ansi.Red.C, ansi.Red.H), semanticColor(ansi.Orange.L, ansi.Orange.C, ansi.Orange.H), semanticColor(ansi.Yellow.L, ansi.Yellow.C, ansi.Yellow.H), semanticColor(ansi.Green.L, ansi.Green.C, ansi.Green.H)
+	result.Cyan, result.Blue, result.Magenta, result.Brown = semanticColor(ansi.Cyan.L, ansi.Cyan.C, ansi.Cyan.H), semanticColor(ansi.Blue.L, ansi.Blue.C, ansi.Blue.H), semanticColor(ansi.Magenta.L, ansi.Magenta.C, ansi.Magenta.H), semanticColor(ansi.Brown.L, ansi.Brown.C, ansi.Brown.H)
+	bright := []struct {
+		value *string
+		base  colorspace.OKLCH
+	}{{&result.BrightRed, ansi.Red}, {&result.BrightYellow, ansi.Yellow}, {&result.BrightGreen, ansi.Green}, {&result.BrightCyan, ansi.Cyan}, {&result.BrightBlue, ansi.Blue}, {&result.BrightMagenta, ansi.Magenta}}
+	for _, item := range bright {
+		color := brightenANSI(item.base, result.Mode)
+		*item.value = semanticColor(color.L, color.C, color.H)
+	}
 }
 
-func resolveANSIFamily(colors []imageanalysis.RepresentativeColor, family ansiFamily, accent colorspace.OKLCH, mode string) colorspace.OKLCH {
-	if candidate, ok := findSourceHue(colors, family.targetHue); ok {
-		return normalizeANSI(candidate, mode)
+func buildIdentityANSI(identity sourceIdentity, mode string) identityANSISet {
+	if !identity.chromatic || len(identity.families) == 0 {
+		return neutralANSISet(mode)
 	}
-	return synthesizeANSI(family.targetHue, accent, mode)
+	usage := make([]int, len(identity.families))
+	return identityANSISet{
+		Red: sourceFamilyANSI(identity, ansiRoles.Red, mode, usage), Orange: sourceFamilyANSI(identity, ansiRoles.Orange, mode, usage),
+		Yellow: sourceFamilyANSI(identity, ansiRoles.Yellow, mode, usage), Green: sourceFamilyANSI(identity, ansiRoles.Green, mode, usage),
+		Cyan: sourceFamilyANSI(identity, ansiRoles.Cyan, mode, usage), Blue: sourceFamilyANSI(identity, ansiRoles.Blue, mode, usage),
+		Magenta: sourceFamilyANSI(identity, ansiRoles.Magenta, mode, usage), Brown: sourceFamilyANSI(identity, ansiRoles.Brown, mode, usage),
+	}
 }
 
-func findSourceHue(colors []imageanalysis.RepresentativeColor, targetHue float64) (colorspace.OKLCH, bool) {
-	bestScore := math.Inf(1)
-	var best colorspace.OKLCH
-	found := false
-	for _, candidate := range colors {
-		lch := candidate.LCH
-		if lch.C < ansiSourceChromaThreshold {
-			continue
-		}
-		distance := hueDistance(lch.H, targetHue)
-		if distance > ansiMaximumHueDistance {
-			continue
-		}
-		score := distance - math.Sqrt(candidate.Coverage)*5.0
-		if score < bestScore {
-			bestScore, best, found = score, lch, true
-		}
+func accentFamilyANSISet(anchor colorspace.OKLCH, mode string) identityANSISet {
+	return identityANSISet{Red: narrowFamilyANSI(anchor, ansiRoles.Red, mode), Orange: narrowFamilyANSI(anchor, ansiRoles.Orange, mode), Yellow: narrowFamilyANSI(anchor, ansiRoles.Yellow, mode), Green: narrowFamilyANSI(anchor, ansiRoles.Green, mode), Cyan: narrowFamilyANSI(anchor, ansiRoles.Cyan, mode), Blue: narrowFamilyANSI(anchor, ansiRoles.Blue, mode), Magenta: narrowFamilyANSI(anchor, ansiRoles.Magenta, mode), Brown: narrowFamilyANSI(anchor, ansiRoles.Brown, mode)}
+}
+
+func narrowFamilyANSI(anchor colorspace.OKLCH, role ansiRole, mode string) colorspace.OKLCH {
+	l := role.darkL
+	if mode == "light" {
+		l = role.lightL
 	}
-	return best, found
+	c := clampValue(anchor.C*role.chromaScale, .055, .20)
+	if role == ansiRoles.Brown {
+		c = clampValue(anchor.C*role.chromaScale, .035, .095)
+	}
+	return colorspace.OKLCH{L: l, C: c, H: normalizeHue(anchor.H + role.familyShift)}
+}
+
+func sourceFamilyANSI(identity sourceIdentity, role ansiRole, mode string, usage []int) colorspace.OKLCH {
+	i := nearestIdentityFamily(identity.families, role.targetHue, usage)
+	usage[i]++
+	color := colorspace.OKLCH{L: identity.families[i].L, C: identity.families[i].C, H: identity.families[i].H}
+	if role == ansiRoles.Brown {
+		color.C *= .55
+		if mode == "light" {
+			color.L = clampValue(color.L, .35, .50)
+		} else {
+			color.L = clampValue(color.L, .40, .55)
+		}
+		return color
+	}
+	return normalizeANSI(color, mode)
+}
+
+func neutralANSISet(mode string) identityANSISet {
+	return identityANSISet{Red: neutralANSI(ansiRoles.Red, mode), Orange: neutralANSI(ansiRoles.Orange, mode), Yellow: neutralANSI(ansiRoles.Yellow, mode), Green: neutralANSI(ansiRoles.Green, mode), Cyan: neutralANSI(ansiRoles.Cyan, mode), Blue: neutralANSI(ansiRoles.Blue, mode), Magenta: neutralANSI(ansiRoles.Magenta, mode), Brown: neutralANSI(ansiRoles.Brown, mode)}
+}
+func neutralANSI(role ansiRole, mode string) colorspace.OKLCH {
+	l := role.darkL
+	if mode == "light" {
+		l = role.lightL
+	}
+	return colorspace.OKLCH{L: l}
 }
 
 func normalizeANSI(color colorspace.OKLCH, mode string) colorspace.OKLCH {
 	if mode == "light" {
-		color.L = clampValue(color.L, 0.42, 0.62)
+		color.L = clampValue(color.L, .42, .62)
 	} else {
-		color.L = clampValue(color.L, 0.56, 0.76)
+		color.L = clampValue(color.L, .56, .76)
 	}
-	color.C = clampValue(color.C, 0.07, 0.20)
+	color.C = clampValue(color.C, .055, .20)
 	return color
-}
-
-func synthesizeANSI(targetHue float64, accent colorspace.OKLCH, mode string) colorspace.OKLCH {
-	lightness := 0.67
-	if mode == "light" {
-		lightness = 0.52
-	}
-	return colorspace.OKLCH{L: lightness, C: clampValue(accent.C*0.90, 0.10, 0.16), H: targetHue}
-}
-
-func resolveBrown(colors []imageanalysis.RepresentativeColor, accent colorspace.OKLCH, mode string) colorspace.OKLCH {
-	if candidate, ok := findSourceHue(colors, ansiFamilies.Brown.targetHue); ok {
-		candidate.C *= 0.55
-		if mode == "light" {
-			candidate.L = clampValue(candidate.L, 0.35, 0.50)
-		} else {
-			candidate.L = clampValue(candidate.L, 0.40, 0.55)
-		}
-		return candidate
-	}
-	lightness := 0.48
-	if mode == "light" {
-		lightness = 0.42
-	}
-	return colorspace.OKLCH{L: lightness, C: clampValue(accent.C*0.45, 0.055, 0.10), H: ansiFamilies.Brown.targetHue}
 }
 
 func brightenANSI(color colorspace.OKLCH, mode string) colorspace.OKLCH {
 	if mode == "light" {
-		color.L = clampValue(color.L+0.07, 0.50, 0.68)
+		color.L = clampValue(color.L+.07, .50, .68)
 	} else {
-		color.L = clampValue(color.L+0.09, 0.65, 0.84)
+		color.L = clampValue(color.L+.09, .65, .84)
 	}
-	color.C = clampValue(color.C*1.08, 0.08, 0.22)
+	if color.C < identityChromaThreshold {
+		color.C = 0
+		return color
+	}
+	color.C = clampValue(color.C*1.08, .060, .22)
 	return color
-}
-
-func hueDistance(a, b float64) float64 {
-	distance := math.Abs(a - b)
-	if distance > 180 {
-		distance = 360 - distance
-	}
-	return distance
 }

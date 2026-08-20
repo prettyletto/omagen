@@ -12,6 +12,14 @@ Item {
     property bool cancelBusy: false
     property bool settingsOpen: false
     property bool settingsBusy: false
+    property bool generationBusy: false
+    property bool describeBusy: false
+    property bool previewBusy: false
+    property bool demoBusy: false
+    property bool demoActive: false
+    property bool pendingDemo: false
+    property bool pendingCancelAfterDemo: false
+    property bool pendingApplyAfterDemo: false
     property string sourceImage: ""
     property string errorMessage: ""
 
@@ -22,6 +30,7 @@ Item {
     )
 
     function open(payload) {
+        root.errorMessage = "";
         opened = true;
     }
 
@@ -72,13 +81,46 @@ Item {
         backend.beginSession();
     }
 
+    function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy) session.selectVariant(variant) }
+    function testLive(variant) {
+        if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy) return;
+        errorMessage = ""; previewBusy = true;
+        backend.applyPreview(session.sessionId, session.generationId, variant);
+    }
+
+    function demoVariant(variant) {
+        if (demoActive || demoBusy || previewBusy || cancelBusy || !session.workspaceReady)
+            return;
+
+        errorMessage = "";
+        pendingDemo = true;
+        demoBusy = true;
+        // Omarchy reloads all Ghostty instances as part of applying a theme.
+        // Create the scene first, then apply the selected preview; this is the
+        // same ordering as opening the four applications manually before
+        // switching a theme.
+        opened = false;
+        backend.openDemo(session.sessionId);
+    }
+
+    function dispatchDemo() {
+        if (!demoActive || demoBusy || cancelBusy || session.sessionId === "")
+            return;
+
+        errorMessage = "";
+        demoBusy = true;
+        backend.closeDemo(session.sessionId);
+    }
+
     function cancelSession() {
-        if (!session.active || session.sessionId === "" || cancelBusy)
+        if (!session.active || session.sessionId === "" || cancelBusy || demoBusy)
             return;
 
         errorMessage = "";
         cancelBusy = true;
-        backend.cancelSession(session.sessionId);
+        demoBusy = true;
+        pendingCancelAfterDemo = true;
+        backend.closeDemo(session.sessionId);
     }
 
     function clearSession() {
@@ -88,6 +130,14 @@ Item {
         sourceImage = "";
         errorMessage = "";
         opened = true;
+        generationBusy = false;
+        describeBusy = false;
+        previewBusy = false;
+        demoBusy = false;
+        demoActive = false;
+        pendingDemo = false;
+        pendingCancelAfterDemo = false;
+        pendingApplyAfterDemo = false;
     }
 
     State.SessionState {
@@ -129,6 +179,8 @@ Item {
                 backgroundKind,
                 backgroundPath
             );
+            root.generationBusy = true;
+            backend.generateTheme(sessionId, root.sourceImage);
         }
 
         onSessionBeginFailed: function(message) {
@@ -148,6 +200,87 @@ Item {
         onSessionCancelFailed: function(message) {
             root.cancelBusy = false;
             root.errorMessage = message;
+        }
+
+        onGenerationCompleted: function(generationId) {
+            root.generationBusy = false;
+            root.describeBusy = true;
+            backend.describeGeneration(session.sessionId, generationId);
+        }
+        onGenerationFailed: function(message) { root.generationBusy=false; root.errorMessage=message }
+        onGenerationDescribed: function(generationId, variants) { root.describeBusy=false; session.setGeneration(generationId, variants) }
+        onGenerationDescribeFailed: function(message) { root.describeBusy=false; root.errorMessage=message }
+        onPreviewApplied: function(sessionId, generationId, variant, themeName) {
+            root.previewBusy = false;
+            if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
+            session.markPreviewed(variant);
+
+            if (root.pendingDemo) {
+                root.pendingDemo = false;
+                root.demoBusy = false;
+                root.opened = false;
+                return;
+            }
+
+            root.opened=false;
+        }
+        onPreviewApplyFailed: function(message) {
+            root.previewBusy = false;
+            root.errorMessage = message;
+            if (root.pendingDemo) {
+                root.pendingDemo = false;
+                root.demoBusy = false;
+            }
+        }
+        onDemoOpened: function(sessionId, workspace, reused) {
+            if (sessionId !== session.sessionId) {
+                root.demoBusy = false;
+                root.errorMessage = "Backend opened a different demo session";
+                root.opened = true;
+                return;
+            }
+            root.demoActive = true;
+            if (root.pendingDemo) {
+                root.previewBusy = true;
+                backend.applyPreview(session.sessionId, session.generationId, session.selectedVariant);
+                return;
+            }
+            root.demoBusy = false;
+            root.opened = false;
+        }
+        onDemoOpenFailed: function(message) {
+            root.demoBusy = false;
+            root.demoActive = false;
+            root.pendingDemo = false;
+            root.errorMessage = message;
+            root.opened = true;
+        }
+        onDemoClosed: function(sessionId, closed) {
+            root.demoBusy = false;
+            if (sessionId !== session.sessionId) {
+                root.errorMessage = "Backend closed a different demo session";
+                return;
+            }
+            root.demoActive = false;
+            if (root.pendingCancelAfterDemo) {
+                root.pendingCancelAfterDemo = false;
+                backend.cancelSession(session.sessionId);
+                return;
+            }
+            if (root.pendingApplyAfterDemo) {
+                root.pendingApplyAfterDemo = false;
+                root.commitSelectedVariant();
+            }
+        }
+        onDemoCloseFailed: function(message) {
+            root.demoBusy = false;
+            root.errorMessage = message;
+            if (root.pendingCancelAfterDemo) {
+                root.pendingCancelAfterDemo = false;
+            }
+            // Never restore a theme while Demo windows may still be closing.
+            // The user can retry Demo shutdown after Hyprland has caught up.
+            // Permanent Apply intentionally remains pending for the same reason.
         }
     }
 
@@ -215,8 +348,25 @@ Item {
         originalTheme: session.originalTheme
         originalBackgroundKind: session.originalBackgroundKind
         originalBackgroundPath: session.originalBackgroundPath
+        generationBusy: root.generationBusy || root.describeBusy
+        previewBusy: root.previewBusy
+        demoBusy: root.demoBusy
+        demoActive: root.demoActive
+        workspaceReady: session.workspaceReady
+        generationId: session.generationId
+        selectedVariant: session.selectedVariant
+        previewVariant: session.previewVariant
+        palettes: session.palettes
         errorMessage: root.errorMessage
 
+        onVariantSelected: function(variant) { root.selectVariant(variant) }
+        onTestLiveRequested: function(variant) { root.testLive(variant) }
+        onDemoRequested: function(variant) {
+            if (root.demoActive)
+                root.dispatchDemo();
+            else
+                root.demoVariant(variant);
+        }
         onHideRequested: root.close()
         onCancelRequested: root.cancelSession()
     }

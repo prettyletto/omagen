@@ -3,6 +3,7 @@ package omarchy
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -156,5 +157,40 @@ func TestRestoreCommands(t *testing.T) {
 	}
 	if err := client.RestoreBackground(session.BackgroundRef{Kind: "external", Path: background}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
+	bin := t.TempDir()
+	realCommand := filepath.Join(bin, "omarchy-restart-terminal")
+	if err := os.WriteFile(realCommand, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	sessionDir := t.TempDir()
+	previewLogs := filepath.Join(sessionDir, "preview-logs")
+	if err := os.MkdirAll(previewLogs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sync, err := newTerminalReloadSync(filepath.Join(previewLogs, "preview.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sync.close()
+
+	cmd := exec.Command("/bin/bash", "-lc", "omarchy-restart-terminal")
+	cmd.Env = append(os.Environ(), sync.environment()...)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run shim: %v: %s", err, output)
+	}
+	if err := sync.persist(); err != nil {
+		t.Fatal(err)
+	}
+	if err := WaitForPendingTerminalReload(sessionDir); err != nil {
+		t.Fatalf("wait for demo: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(previewLogs, terminalReloadPendingFile)); !os.IsNotExist(err) {
+		t.Fatalf("pending marker still exists, err=%v", err)
 	}
 }

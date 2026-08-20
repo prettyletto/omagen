@@ -1,0 +1,12 @@
+background
+foreground
+accent
+selection
+muted
+
+red
+yellow
+green
+cyan
+blue
+magenta
