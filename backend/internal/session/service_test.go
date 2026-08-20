@@ -12,6 +12,8 @@ type fakeOmarchy struct {
 	restoredTheme                                                  string
 	restoredDir                                                    string
 	restoredBackground                                             BackgroundRef
+	keepThemeAfterRestore                                          bool
+	keepBackgroundAfterRestore                                     bool
 }
 
 func (f *fakeOmarchy) CurrentTheme() (string, error) { return f.theme, f.themeErr }
@@ -20,14 +22,14 @@ func (f *fakeOmarchy) CurrentBackground() (BackgroundRef, error) {
 }
 func (f *fakeOmarchy) RestoreThemeFast(theme, dir string) error {
 	f.restoredTheme, f.restoredDir = theme, dir
-	if f.restoreThemeErr == nil {
+	if f.restoreThemeErr == nil && !f.keepThemeAfterRestore {
 		f.theme = theme
 	}
 	return f.restoreThemeErr
 }
 func (f *fakeOmarchy) RestoreBackground(background BackgroundRef) error {
 	f.restoredBackground = background
-	if f.restoreBackgroundErr == nil {
+	if f.restoreBackgroundErr == nil && !f.keepBackgroundAfterRestore {
 		f.background = background
 	}
 	return f.restoreBackgroundErr
@@ -59,7 +61,7 @@ func TestCancelCommittedApplyOnlyFinishesCleanup(t *testing.T) {
 	s := testStore(t)
 	fake := &fakeOmarchy{theme: "permanent", background: BackgroundRef{Kind: "external", Path: "/tmp/permanent.png"}}
 	record := testRecord("committed")
-	record.ApplyCommitted = true
+	record.ApplyPhase = ApplyPhaseCommitted
 	record.AppliedTheme = "permanent"
 	if err := s.Save(record); err != nil {
 		t.Fatal(err)
@@ -113,6 +115,48 @@ func TestServiceErrors(t *testing.T) {
 	if err := NewService(s, fake).Cancel("id"); err == nil || !contains(err.Error(), "restore background") {
 		t.Fatalf("error = %v", err)
 	}
+	fake.restoreBackgroundErr = nil
+	if err := NewService(s, fake).Cancel("id"); err != nil {
+		t.Fatalf("retry cancel = %v", err)
+	}
+}
+
+func TestCancelVerificationFailuresKeepSessionActive(t *testing.T) {
+	t.Run("theme", func(t *testing.T) {
+		s := testStore(t)
+		record := testRecord("verify-theme")
+		if err := s.Save(record); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveActive(ActiveRecord{SessionID: record.SessionID, CreatedAt: record.CreatedAt}); err != nil {
+			t.Fatal(err)
+		}
+		fake := &fakeOmarchy{theme: "different", keepThemeAfterRestore: true}
+		if err := NewService(s, fake).Cancel(record.SessionID); err == nil || !contains(err.Error(), "got") {
+			t.Fatalf("expected theme verification error, got %v", err)
+		}
+		if _, exists, err := s.LoadActive(); err != nil || !exists {
+			t.Fatalf("active marker changed: exists=%t err=%v", exists, err)
+		}
+	})
+
+	t.Run("background", func(t *testing.T) {
+		s := testStore(t)
+		record := testRecord("verify-background")
+		if err := s.Save(record); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.SaveActive(ActiveRecord{SessionID: record.SessionID, CreatedAt: record.CreatedAt}); err != nil {
+			t.Fatal(err)
+		}
+		fake := &fakeOmarchy{theme: record.OriginalTheme, background: BackgroundRef{Kind: "external", Path: "/different"}, keepBackgroundAfterRestore: true}
+		if err := NewService(s, fake).Cancel(record.SessionID); err == nil || !contains(err.Error(), "got") {
+			t.Fatalf("expected background verification error, got %v", err)
+		}
+		if _, exists, err := s.LoadActive(); err != nil || !exists {
+			t.Fatalf("active marker changed: exists=%t err=%v", exists, err)
+		}
+	})
 }
 
 var errTest = &testError{}

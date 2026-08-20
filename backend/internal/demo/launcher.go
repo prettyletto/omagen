@@ -318,6 +318,8 @@ func classifyDemoWindows(clients []clientInfo, hints launchHints) map[Slot]strin
 			assign(SlotShell, c)
 		case matchesOwnedSlot(c, hints.OwnerToken, SlotEditor) || (hints.OwnerToken == "demo" && strings.Contains(text, "org.omagen.demo.editor")):
 			assign(SlotEditor, c)
+		case matchesOwnedSlot(c, hints.OwnerToken, SlotFiles) || (hints.OwnerToken == "demo" && strings.Contains(text, "org.omagen.demo.files")):
+			assign(SlotFiles, c)
 		}
 	}
 	for _, c := range clients {

@@ -88,6 +88,8 @@ func (s *Store) SessionDir(sessionID string) string {
 	return primary
 }
 
+func (s *Store) Root() string { return s.root }
+
 func (s *Store) primarySessionDir(sessionID string) string { return filepath.Join(s.root, sessionID) }
 
 func validateRecord(record Record, expectedID string) error {

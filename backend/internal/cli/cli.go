@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
+	"github.com/prettyletto/omagen/backend/internal/cleanup"
 	"github.com/prettyletto/omagen/backend/internal/demo"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
@@ -76,6 +79,11 @@ func Run(
 	if err != nil {
 		return fail(stderr, 1, "initialize apply service: %v", err)
 	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fail(stderr, 1, "resolve user home: %v", err)
+	}
+	cleanupService := cleanup.NewService(store, filepath.Join(home, ".config", "omarchy", "themes"))
 
 	generationService := generation.NewService(
 		store,
@@ -99,6 +107,8 @@ func Run(
 			args[1:],
 			sessionService,
 			previewService,
+			applyService,
+			cleanupService,
 			demoService,
 			generationService,
 			stdout,
@@ -109,6 +119,18 @@ func Run(
 		return runPreview(args[1:], previewService, stdout, stderr)
 	case "apply":
 		return runApply(args[1:], applyService, stdout, stderr)
+	case "cleanup":
+		if len(args) != 1 {
+			return fail(stderr, 2, "cleanup takes no arguments")
+		}
+		result, err := cleanupService.Run()
+		if err != nil {
+			return fail(stderr, 1, "cleanup: %v", err)
+		}
+		for _, warning := range result.Warnings {
+			fmt.Fprintf(stderr, "warning: %s\n", warning)
+		}
+		return writeJSON(stdout, stderr, result)
 
 	case "generate":
 		return runGenerate(
@@ -172,13 +194,15 @@ func runGeneration(args []string, service *generation.Service, stdout, stderr io
 }
 
 func runSession(args []string, service *session.Service, previewService *preview.Service, stdout, stderr io.Writer) int {
-	return runSessionWithDependencies(args, service, previewService, nil, nil, stdout, stderr)
+	return runSessionWithDependencies(args, service, previewService, nil, nil, nil, nil, stdout, stderr)
 }
 
 func runSessionWithDependencies(
 	args []string,
 	service *session.Service,
 	previewService *preview.Service,
+	applyService *apply.Service,
+	cleanupService *cleanup.Service,
 	demoService *demo.Service,
 	generationService *generation.Service,
 	stdout,
@@ -221,6 +245,15 @@ func runSessionWithDependencies(
 		if len(args) != 1 {
 			return fail(stderr, 2, "session begin takes no arguments")
 		}
+		if cleanupService != nil {
+			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
+				fmt.Fprintf(stderr, "warning: cleanup: %v\n", cleanupErr)
+			} else {
+				for _, warning := range result.Warnings {
+					fmt.Fprintf(stderr, "warning: %s\n", warning)
+				}
+			}
+		}
 		result, err := service.Begin()
 		if err != nil {
 			return fail(
@@ -246,21 +279,31 @@ func runSessionWithDependencies(
 			)
 		}
 
-		if err := service.Cancel(
-			args[1],
-		); err != nil {
-			return fail(
-				stderr,
-				1,
-				"%v",
-				err,
-			)
+		var cleanupErrors []error
+		if demoService != nil {
+			if _, closeErr := demoService.Close(args[1]); closeErr != nil {
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("close demo: %w", closeErr))
+			}
+		}
+		handled := false
+		if applyService != nil {
+			var recoverErr error
+			handled, recoverErr = applyService.RecoverPending(args[1])
+			if recoverErr != nil {
+				return fail(stderr, 1, "recover pending apply: %v", recoverErr)
+			}
+		}
+		if !handled {
+			if err := service.Cancel(args[1]); err != nil {
+				return fail(stderr, 1, "cancel session: %v", err)
+			}
 		}
 		if previewService != nil {
 			if err := previewService.CleanupSession(args[1]); err != nil {
-				return fail(stderr, 1, "session cancelled but preview cleanup failed: %v", err)
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("cleanup preview: %w", err))
 			}
 		}
+		writeCleanupWarnings(stderr, cleanupErrors)
 
 		return writeJSON(
 			stdout,
@@ -289,9 +332,25 @@ func runSessionWithDependencies(
 		if statusErr != nil {
 			return fail(stderr, 1, "%v", statusErr)
 		}
+		var cleanupErrors []error
 		if status.Active && demoService != nil {
 			if _, closeErr := demoService.Close(status.SessionID); closeErr != nil {
-				return fail(stderr, 1, "close demo workspace: %v", closeErr)
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("close demo: %w", closeErr))
+			}
+		}
+		if applyService != nil {
+			handled, recoverErr := applyService.RecoverPending(status.SessionID)
+			if recoverErr != nil {
+				return fail(stderr, 1, "recover pending apply: %v", recoverErr)
+			}
+			if handled {
+				if previewService != nil {
+					if err := previewService.CleanupSession(status.SessionID); err != nil {
+						cleanupErrors = append(cleanupErrors, fmt.Errorf("cleanup preview: %w", err))
+					}
+				}
+				writeCleanupWarnings(stderr, cleanupErrors)
+				return writeJSON(stdout, stderr, session.RecoverResult{Recovered: true, SessionID: status.SessionID})
 			}
 		}
 		result, err := service.RecoverActive()
@@ -300,9 +359,10 @@ func runSessionWithDependencies(
 		}
 		if result.Recovered && previewService != nil {
 			if err := previewService.CleanupSession(result.SessionID); err != nil {
-				return fail(stderr, 1, "session recovered but preview cleanup failed: %v", err)
+				cleanupErrors = append(cleanupErrors, fmt.Errorf("cleanup preview: %w", err))
 			}
 		}
+		writeCleanupWarnings(stderr, cleanupErrors)
 		return writeJSON(stdout, stderr, result)
 
 	default:
@@ -312,6 +372,12 @@ func runSessionWithDependencies(
 			"unknown session subcommand: %s",
 			args[0],
 		)
+	}
+}
+
+func writeCleanupWarnings(stderr io.Writer, cleanupErrors []error) {
+	for _, err := range cleanupErrors {
+		fmt.Fprintf(stderr, "warning: %v\n", err)
 	}
 }
 

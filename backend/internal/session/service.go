@@ -117,7 +117,7 @@ func (s *Service) Cancel(sessionID string) error {
 			}
 			return fmt.Errorf("load session: %w", err)
 		}
-		if record.ApplyCommitted {
+		if record.ApplyPhase == ApplyPhaseCommitted {
 			return s.finishRestoredSession(sessionID)
 		}
 		if err := s.restoreAndVerify(record); err != nil {
@@ -144,7 +144,7 @@ func (s *Service) RecoverActive() (RecoverResult, error) {
 		if err != nil {
 			return RecoverResult{}, fmt.Errorf("%w: rollback record: %v", ErrActiveSessionCorrupt, err)
 		}
-		if record.ApplyCommitted {
+		if record.ApplyPhase == ApplyPhaseCommitted {
 			if err := s.finishRestoredSession(active.SessionID); err != nil {
 				return RecoverResult{}, err
 			}
