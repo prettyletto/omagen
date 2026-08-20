@@ -39,7 +39,7 @@ func sourceDark(colors []imageanalysis.RepresentativeColor, surface, accent colo
 	accentL := clampValue(accent.L, 0.58, 0.75)
 	accentC := clampValue(accent.C, 0, 0.22)
 	foregroundC := clampValue(foregroundSource.C*0.20, 0, 0.025)
-	result := temporaryANSI()
+	result := theme.Palette{}
 	result.Mode = "dark"
 	result.Background = semanticColor(backgroundL, backgroundC, surface.H)
 	result.DarkBackground = semanticColor(backgroundL-0.035, backgroundC*0.85, surface.H)
@@ -52,6 +52,7 @@ func sourceDark(colors []imageanalysis.RepresentativeColor, surface, accent colo
 	result.Accent = semanticColor(accentL, accentC, accent.H)
 	result.Selection = semanticColor(backgroundL+0.15, accentC*0.42, accent.H)
 	result.Muted = semanticColor(backgroundL+0.22, clampValue(backgroundC*0.70, 0, 0.040), surface.H)
+	applyANSI(&result, colors, accent)
 	return result
 }
 
@@ -62,7 +63,7 @@ func sourceLight(colors []imageanalysis.RepresentativeColor, surface, accent col
 	accentL := clampValue(accent.L, 0.43, 0.60)
 	accentC := clampValue(accent.C, 0, 0.20)
 	foregroundC := clampValue(foregroundSource.C*0.20, 0, 0.025)
-	result := temporaryANSI()
+	result := theme.Palette{}
 	result.Mode = "light"
 	result.Background = semanticColor(backgroundL, backgroundC, surface.H)
 	result.DarkBackground = semanticColor(backgroundL-0.08, backgroundC*1.10, surface.H)
@@ -75,12 +76,6 @@ func sourceLight(colors []imageanalysis.RepresentativeColor, surface, accent col
 	result.Accent = semanticColor(accentL, accentC, accent.H)
 	result.Selection = semanticColor(0.82, accentC*0.32, accent.H)
 	result.Muted = semanticColor(0.58, clampValue(backgroundC*0.75, 0, 0.035), surface.H)
+	applyANSI(&result, colors, accent)
 	return result
-}
-
-func temporaryANSI() theme.Palette {
-	return theme.Palette{
-		Red: "#f7768e", Yellow: "#e0af68", Orange: "#eb927b", Green: "#9ece6a", Cyan: "#449dab", Blue: "#7aa2f7", Magenta: "#ad8ee6", Brown: "#75493d",
-		BrightRed: "#ff7a93", BrightYellow: "#ff9e64", BrightGreen: "#b9f27c", BrightCyan: "#0db9d7", BrightBlue: "#7da6ff", BrightMagenta: "#bb9af7",
-	}
 }

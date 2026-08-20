@@ -65,6 +65,55 @@ func TestSourceClosestTokyoNightMock(t *testing.T) {
 		t.Fatalf("accent=%s, want #7aa2f7", result.Accent)
 	}
 	t.Logf("mode=%s bg=%s dark=%s darker=%s lighter=%s fg=%s accent=%s selection=%s muted=%s", result.Mode, result.Background, result.DarkBackground, result.DarkerBackground, result.LighterBackground, result.Foreground, result.Accent, result.Selection, result.Muted)
+	t.Logf("red=%s orange=%s yellow=%s green=%s cyan=%s blue=%s magenta=%s brown=%s", result.Red, result.Orange, result.Yellow, result.Green, result.Cyan, result.Blue, result.Magenta, result.Brown)
+}
+
+func TestSourceClosestUsesExistingANSIHues(t *testing.T) {
+	colors := []imageanalysis.RepresentativeColor{
+		testRepresentative(0x1a, 0x1b, 0x26, 0.55),
+		testRepresentative(0x7a, 0xa2, 0xf7, 0.25),
+		testRepresentative(0xbb, 0x9a, 0xf7, 0.15),
+		testRepresentative(0xf7, 0x76, 0x8e, 0.05),
+	}
+	result, err := Source(colors, HarmonyAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Blue != "#7aa2f7" {
+		t.Fatalf("got blue %s, want #7aa2f7", result.Blue)
+	}
+	if result.Red != "#f7768e" {
+		t.Fatalf("got red %s, want #f7768e", result.Red)
+	}
+	if result.Magenta != "#bb9af7" {
+		t.Fatalf("got magenta %s, want #bb9af7", result.Magenta)
+	}
+}
+
+func TestSourceClosestMonochromaticSynthesizesMissingANSI(t *testing.T) {
+	result, err := Source([]imageanalysis.RepresentativeColor{testRepresentative(30, 60, 120, 1)}, HarmonyAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.Validate(); err != nil {
+		t.Fatalf("invalid generated palette: %v", err)
+	}
+	values := []string{result.Red, result.Orange, result.Yellow, result.Green, result.Cyan, result.Blue, result.Magenta, result.Brown, result.BrightRed, result.BrightYellow, result.BrightGreen, result.BrightCyan, result.BrightBlue, result.BrightMagenta}
+	for i, value := range values {
+		if value == "" {
+			t.Fatalf("ANSI color %d was empty", i)
+		}
+	}
+}
+
+func TestSourceClosestGrayscaleSynthesizesANSI(t *testing.T) {
+	result, err := Source([]imageanalysis.RepresentativeColor{testRepresentative(90, 90, 90, 1)}, HarmonyAuto)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := result.Validate(); err != nil {
+		t.Fatalf("invalid grayscale palette: %v", err)
+	}
 }
 
 func TestSourceRejectsUnimplementedHarmony(t *testing.T) {

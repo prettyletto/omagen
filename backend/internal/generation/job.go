@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prettyletto/omagen/backend/internal/contrast"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/theme"
@@ -61,6 +62,10 @@ func (j job) run(
 		)
 		if err != nil {
 			return fmt.Errorf("build source palette: %w", err)
+		}
+		generatedPalette, err = contrast.Enforce(generatedPalette)
+		if err != nil {
+			return fmt.Errorf("enforce source contrast: %w", err)
 		}
 	} else {
 		generatedPalette = fixturePalette(j.variant)
