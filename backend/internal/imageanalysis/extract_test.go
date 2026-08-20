@@ -64,17 +64,7 @@ func TestExtractMockCurrentBackgroundTheme(t *testing.T) {
 	// Mock the broad color structure of the current Tokyo Night theme:
 	// a dominant #1a1b26 surface, blue and purple accents, and a small
 	// red accent population.
-	samples := make([]Sample, 0, 1000)
-	appendSamples := func(count int, r, g, b uint8) {
-		for i := 0; i < count; i++ {
-			samples = append(samples, makeSample(r, g, b, 255))
-		}
-	}
-
-	appendSamples(550, 26, 27, 38)
-	appendSamples(250, 122, 162, 247)
-	appendSamples(150, 187, 154, 247)
-	appendSamples(50, 247, 118, 142)
+	samples := mockTokyoNightSamples()
 
 	representatives, err := extractRepresentativeColors(samples)
 	if err != nil {
@@ -202,6 +192,61 @@ func TestRepresentativeCoverageSumsToOne(t *testing.T) {
 		total += color.Coverage
 	}
 	assertFloatClose(t, total, 1.0)
+}
+
+func TestExtractionReport(t *testing.T) {
+	tests := []struct {
+		name    string
+		samples []Sample
+	}{
+		{
+			name:    "Tokyo Night mock",
+			samples: mockTokyoNightSamples(),
+		},
+		{
+			name: "solid color",
+			samples: []Sample{
+				makeSample(30, 60, 120, 255),
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			representatives, err := extractRepresentativeColors(test.samples)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			t.Logf("samples=%d representatives=%d", len(test.samples), len(representatives))
+			for index, representative := range representatives {
+				t.Logf(
+					"%02d coverage=%.6f L=%.6f C=%.6f H=%.6f",
+					index,
+					representative.Coverage,
+					representative.LCH.L,
+					representative.LCH.C,
+					representative.LCH.H,
+				)
+			}
+		})
+	}
+}
+
+func mockTokyoNightSamples() []Sample {
+	samples := make([]Sample, 0, 1000)
+	appendSamples := func(count int, r, g, b uint8) {
+		for i := 0; i < count; i++ {
+			samples = append(samples, makeSample(r, g, b, 255))
+		}
+	}
+
+	appendSamples(550, 26, 27, 38)
+	appendSamples(250, 122, 162, 247)
+	appendSamples(150, 187, 154, 247)
+	appendSamples(50, 247, 118, 142)
+
+	return samples
 }
 
 func makeSample(r, g, b, a uint8) Sample {
