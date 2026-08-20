@@ -1,12 +1,17 @@
 package generation
 
 import (
+	"bytes"
 	"context"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
@@ -26,11 +31,12 @@ func TestGenerate(t *testing.T) {
 	if err := store.Save(record); err != nil {
 		t.Fatal(err)
 	}
-	image := filepath.Join(t.TempDir(), "source.png")
-	if err := os.WriteFile(image, []byte("image"), 0o644); err != nil {
+	imagePath := filepath.Join(t.TempDir(), "source.xyz")
+	imageData := testPNG(t)
+	if err := os.WriteFile(imagePath, imageData, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	result, err := NewService(store).Generate(context.Background(), Request{SessionID: "session", SourceImage: image})
+	result, err := NewService(store).Generate(context.Background(), Request{SessionID: "session", SourceImage: imagePath})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +48,7 @@ func TestGenerate(t *testing.T) {
 			t.Fatalf("variant %s missing: %v", variant.Variant, err)
 		}
 		background := filepath.Join(variant.Path, "backgrounds", "wallpaper.png")
-		if content, err := os.ReadFile(background); err != nil || string(content) != "image" {
+		if content, err := os.ReadFile(background); err != nil || !bytes.Equal(content, imageData) {
 			t.Fatalf("variant %s has bad background: %v", variant.Variant, err)
 		}
 	}
@@ -58,14 +64,15 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	image := filepath.Join(t.TempDir(), "source.png")
-	if err := os.WriteFile(image, []byte("image"), 0o644); err != nil {
+	imagePath := filepath.Join(t.TempDir(), "source.xyz")
+	imageData := testPNG(t)
+	if err := os.WriteFile(imagePath, imageData, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	result, err := NewService(store).Generate(context.Background(), Request{
 		SessionID:   "session",
-		SourceImage: image,
+		SourceImage: imagePath,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -120,13 +127,26 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 		t.Fatalf("source and deep backgrounds should differ: %q", sourceBackground)
 	}
 
-	cachedSource, err := os.ReadFile(filepath.Join(generationRoot, "input", "source.png"))
+	cachedSource, err := os.ReadFile(filepath.Join(generationRoot, "input", "source"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(cachedSource) != "image" {
+	if !bytes.Equal(cachedSource, imageData) {
 		t.Fatalf("cached source has unexpected content: %q", cachedSource)
 	}
+}
+
+func testPNG(t *testing.T) []byte {
+	t.Helper()
+
+	var buffer bytes.Buffer
+	picture := image.NewRGBA(image.Rect(0, 0, 1, 1))
+	picture.Set(0, 0, color.RGBA{R: 255, A: 255})
+	if err := png.Encode(&buffer, picture); err != nil {
+		t.Fatal(err)
+	}
+
+	return buffer.Bytes()
 }
 
 func paletteValue(content, key string) string {
@@ -160,10 +180,28 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 	}
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := runJobs(cancelled, t.TempDir(), "source.png"); err == nil {
+	if err := runJobs(cancelled, t.TempDir(), "source.png", &imageanalysis.Analysis{
+		Image:           image.NewRGBA(image.Rect(0, 0, 1, 1)),
+		Width:           1,
+		Height:          1,
+		Format:          "png",
+		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
+		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
+	}); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
-	if err := (job{variant: Source}).run(context.Background(), filepath.Join(t.TempDir(), "missing", "nested"), "source.png"); err == nil {
+	if err := (job{
+		variant:     Source,
+		sourceImage: "source.png",
+		analysis: &imageanalysis.Analysis{
+			Image:           image.NewRGBA(image.Rect(0, 0, 1, 1)),
+			Width:           1,
+			Height:          1,
+			Format:          "png",
+			Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
+			Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
+		},
+	}).run(context.Background(), filepath.Join(t.TempDir(), "missing", "nested")); err == nil {
 		t.Fatal("expected mkdir error")
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
@@ -104,10 +105,21 @@ func (s *Service) Generate(
 		return Result{}, err
 	}
 
+	analysis, err := imageanalysis.DecodeFile(
+		cachedSource,
+	)
+	if err != nil {
+		return Result{}, fmt.Errorf(
+			"analyze source image: %w",
+			err,
+		)
+	}
+
 	if err := runJobs(
 		ctx,
 		tmpRoot,
 		cachedSource,
+		analysis,
 	); err != nil {
 		return Result{}, err
 	}
@@ -139,6 +151,7 @@ func runJobs(
 	ctx context.Context,
 	generationRoot string,
 	sourceImage string,
+	analysis *imageanalysis.Analysis,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -159,11 +172,12 @@ func runJobs(
 			defer wg.Done()
 
 			err := (job{
-				variant: variant,
+				variant:     variant,
+				sourceImage: sourceImage,
+				analysis:    analysis,
 			}).run(
 				ctx,
 				generationRoot,
-				sourceImage,
 			)
 			if err != nil {
 				cancel()

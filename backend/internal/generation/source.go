@@ -5,26 +5,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 func cacheSourceImage(
 	generationRoot string,
 	sourcePath string,
 ) (string, error) {
-	extension := strings.ToLower(
-		filepath.Ext(sourcePath),
-	)
-
-	switch extension {
-	case ".png", ".jpg", ".jpeg", ".webp":
-	default:
-		return "", fmt.Errorf(
-			"unsupported image format %q",
-			extension,
-		)
-	}
-
 	inputDir := filepath.Join(
 		generationRoot,
 		"input",
@@ -42,7 +28,7 @@ func cacheSourceImage(
 
 	destination := filepath.Join(
 		inputDir,
-		"source"+extension,
+		"source",
 	)
 
 	if err := copyFile(

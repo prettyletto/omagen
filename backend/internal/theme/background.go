@@ -10,6 +10,7 @@ import (
 func WriteBackground(
 	themeDir string,
 	source string,
+	extension string,
 ) error {
 	backgroundsDir := filepath.Join(
 		themeDir,
@@ -25,8 +26,6 @@ func WriteBackground(
 			err,
 		)
 	}
-
-	extension := filepath.Ext(source)
 
 	destination := filepath.Join(
 		backgroundsDir,

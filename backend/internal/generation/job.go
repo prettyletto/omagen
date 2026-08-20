@@ -6,20 +6,29 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type job struct {
-	variant Variant
+	variant     Variant
+	sourceImage string
+	analysis    *imageanalysis.Analysis
 }
 
 func (j job) run(
 	ctx context.Context,
 	generationRoot string,
-	sourceImage string,
 ) error {
 	if err := ctx.Err(); err != nil {
 		return err
+	}
+
+	if err := j.analysis.Validate(); err != nil {
+		return fmt.Errorf(
+			"invalid image analysis: %w",
+			err,
+		)
 	}
 
 	variantDir := filepath.Join(
@@ -55,13 +64,22 @@ func (j job) run(
 		)
 	}
 
+	extension, err := j.analysis.Extension()
+	if err != nil {
+		return fmt.Errorf(
+			"resolve image extension: %w",
+			err,
+		)
+	}
+
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 
 	if err := theme.WriteBackground(
 		variantDir,
-		sourceImage,
+		j.sourceImage,
+		extension,
 	); err != nil {
 		return fmt.Errorf(
 			"write background: %w",
