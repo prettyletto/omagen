@@ -92,6 +92,10 @@ func Run(
 	demoService := demo.NewService(store)
 
 	switch args[0] {
+	case "--help", "-h", "help":
+		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
+		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, ping")
+		return 0
 	case "ping":
 		return writeJSON(
 			stdout,

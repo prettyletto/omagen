@@ -17,6 +17,8 @@ Item {
     signal sessionCancelFailed(string message)
     signal sessionResumeChecked(var result)
     signal sessionResumeCheckFailed(string message)
+    signal backendReady()
+    signal backendUnavailable(string message)
     signal sessionRecovered()
     signal sessionRecoverFailed(string message)
     signal generationCompleted(string generationId)
@@ -45,6 +47,7 @@ Item {
         ]);
     }
     function checkResumeSession() { resumeProcess.exec([root.executable, "session", "resume"]); }
+    function checkBackend() { pingProcess.exec([root.executable, "ping"]); }
     function recoverSession() { recoverProcess.exec([root.executable, "session", "recover"]); }
 
     function generateTheme(sessionId, imagePath) { generationProcess.exec([root.executable, "generate", sessionId, imagePath]); }
@@ -53,6 +56,22 @@ Item {
     function applyTheme(sessionId, generationId, variant, name) { applyProcess.exec([root.executable, "apply", sessionId, generationId, variant, name]); }
     function openDemo(sessionId) { demoOpenProcess.exec([root.executable, "demo", "open", sessionId]); }
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
+
+    Process {
+        id: pingProcess
+        stdout: StdioCollector { id: pingStdout; waitForEnd: true }
+        stderr: StdioCollector { id: pingStderr; waitForEnd: true }
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                const message = pingStderr.text.trim();
+                root.backendUnavailable(
+                    message !== "" ? message : "Omagen backend is unavailable"
+                );
+                return;
+            }
+            root.backendReady();
+        }
+    }
 
     Process {
         id: resumeProcess

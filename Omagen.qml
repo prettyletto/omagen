@@ -43,7 +43,7 @@ Item {
             return;
         }
         route = "loading";
-        backend.checkResumeSession();
+        backend.checkBackend();
     }
 
     function close() {
@@ -251,6 +251,13 @@ Item {
                 return;
             }
             root.errorMessage = message;
+        }
+
+        onBackendReady: backend.checkResumeSession()
+        onBackendUnavailable: function(message) {
+            root.resumableSession = null;
+            root.route = "setup";
+            root.errorMessage = "Omagen could not start its backend: " + message;
         }
 
         onSessionResumeChecked: function(result) {

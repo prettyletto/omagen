@@ -1,9 +1,6 @@
 # Built backend binary (built into plugin/bin by install.sh)
 plugin/bin/
 
-# Built backend binary
-bin/omagen
-
 # Built backend worker binary
 backend/quattro
 

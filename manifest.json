@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "id": "pretty.omagen",
   "name": "Omagen",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "author": "Prettyletto",
+  "license": "MIT",
   "description": "Generate Omarchy themes from images",
   "kinds": [
     "overlay",
@@ -17,7 +18,7 @@
   "barWidget": {
     "displayName": "Omagen",
     "description": "Open the Omagen image theme generator",
-    "category": "System",
+    "category": "Appearance",
     "allowMultiple": false,
     "defaultSection": "right"
   }

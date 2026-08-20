@@ -65,6 +65,26 @@ func TestRunPing(t *testing.T) {
 	}
 }
 
+func TestHelp(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"--help"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+	if !strings.Contains(stdout.String(), "image-based Omarchy theme generator") {
+		t.Fatalf("unexpected stdout: %q", stdout.String())
+	}
+	if stderr.Len() != 0 {
+		t.Fatalf("unexpected stderr: %q", stderr.String())
+	}
+}
+
+func TestHelpAlias(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if code := Run([]string{"help"}, &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d", code)
+	}
+}
+
 type failingWriter struct{}
 
 func (failingWriter) Write([]byte) (int, error) { return 0, errWrite }
