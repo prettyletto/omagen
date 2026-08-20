@@ -16,7 +16,7 @@ func TestRunCommandValidation(t *testing.T) {
 	}{
 		{nil, 2, "missing command"}, {[]string{"unknown"}, 2, "unknown command"},
 		{[]string{"session"}, 2, "missing session subcommand"}, {[]string{"session", "unknown"}, 2, "unknown session subcommand"},
-		{[]string{"session", "cancel"}, 2, "missing session id"}, {[]string{"generate"}, 2, "usage:"},
+		{[]string{"session", "cancel"}, 2, "usage:"}, {[]string{"generate"}, 2, "usage:"},
 	} {
 		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
 			var out, err bytes.Buffer
@@ -96,16 +96,17 @@ func (cliOmarchy) RestoreBackground(session.BackgroundRef) error { return nil }
 
 func TestSessionHandlers(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_STATE_HOME", t.TempDir())
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)
 	}
 	service := session.NewService(store, cliOmarchy{})
 	var out, stderr bytes.Buffer
-	if code := runSession([]string{"begin"}, service, &out, &stderr); code != 0 {
+	if code := runSession([]string{"begin"}, service, nil, &out, &stderr); code != 0 {
 		t.Fatalf("begin code=%d err=%q", code, stderr.String())
 	}
-	if code := runSession([]string{"cancel", "missing"}, service, &out, &stderr); code != 1 {
+	if code := runSession([]string{"cancel", "missing"}, service, nil, &out, &stderr); code != 1 {
 		t.Fatalf("cancel code=%d", code)
 	}
 	if code := runGenerate([]string{"too-few"}, nil, &out, &stderr); code != 2 {

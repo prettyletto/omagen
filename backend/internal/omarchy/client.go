@@ -67,9 +67,22 @@ func (c *Client) CurrentBackground() (session.BackgroundRef, error) {
 }
 
 func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
+	_, _, err := c.runThemeSetUntilCritical(theme, filepath.Join(sessionDir, "theme-set.log"), []string{
+		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=1",
+	}, 10*time.Second)
+	return err
+}
+
+func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error) {
+	return c.runThemeSetUntilCritical(themeName, logPath, []string{
+		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
+	}, 10*time.Second)
+}
+
+func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
 	current, err := c.CurrentTheme()
 	if err == nil && current == theme {
-		return nil
+		return 0, true, nil
 	}
 
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
@@ -78,32 +91,32 @@ func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
 	}
 	lockFile, err := os.OpenFile(filepath.Join(runtimeDir, "omarchy-theme-set.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
-		return fmt.Errorf("open theme-set lock: %w", err)
+		return 0, false, fmt.Errorf("open theme-set lock: %w", err)
 	}
 	defer lockFile.Close()
 
-	logPath := filepath.Join(sessionDir, "theme-set.log")
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
-		return fmt.Errorf("open theme-set log: %w", err)
+		return 0, false, fmt.Errorf("open theme-set log: %w", err)
 	}
 
 	cmd := exec.Command("omarchy", "theme", "set", theme)
-	cmd.Env = append(os.Environ(), "OMARCHY_THEME_SKIP_BACKGROUND=1")
+	cmd.Env = replaceEnvironment(os.Environ(), environment...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
-		return fmt.Errorf("start omarchy theme set %q: %w", theme, err)
+		return 0, false, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
 	}
+	pid := cmd.Process.Pid
 	_ = logFile.Close()
 
 	waitCh := make(chan error, 1)
 	go func() { waitCh <- cmd.Wait() }()
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
-	timeout := time.NewTimer(10 * time.Second)
+	timeout := time.NewTimer(timeoutDuration)
 	defer timeout.Stop()
 
 	for {
@@ -111,21 +124,47 @@ func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
 		case err := <-waitCh:
 			currentTheme, readErr := c.CurrentTheme()
 			if err == nil && readErr == nil && currentTheme == theme && themeSetLockFree(lockFile) {
-				return nil
+				return pid, false, nil
 			}
 			logData, _ := os.ReadFile(logPath)
-			return fmt.Errorf("theme set exited before critical apply completed: %v: %s", err, strings.TrimSpace(string(logData)))
+			return pid, false, fmt.Errorf("theme set exited before critical apply completed: %v: %s", err, strings.TrimSpace(string(logData)))
 		case <-ticker.C:
 			currentTheme, err := c.CurrentTheme()
 			if err != nil || currentTheme != theme || !themeSetLockFree(lockFile) {
 				continue
 			}
-			return nil
+			return pid, false, nil
 		case <-timeout.C:
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-			return fmt.Errorf("timed out waiting for theme %q to apply", theme)
+			return pid, false, fmt.Errorf("timed out waiting for theme %q critical apply", theme)
 		}
 	}
+}
+
+func replaceEnvironment(base []string, replacements ...string) []string {
+	values := make(map[string]string, len(base)+len(replacements))
+	order := make([]string, 0, len(base)+len(replacements))
+	put := func(entry string) {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			return
+		}
+		if _, exists := values[key]; !exists {
+			order = append(order, key)
+		}
+		values[key] = value
+	}
+	for _, entry := range base {
+		put(entry)
+	}
+	for _, entry := range replacements {
+		put(entry)
+	}
+	result := make([]string, 0, len(order))
+	for _, key := range order {
+		result = append(result, key+"="+values[key])
+	}
+	return result
 }
 
 func (c *Client) RestoreBackground(background session.BackgroundRef) error {

@@ -1,6 +1,10 @@
 package generation
 
-import "github.com/prettyletto/omagen/backend/internal/settings"
+import (
+	"fmt"
+
+	"github.com/prettyletto/omagen/backend/internal/settings"
+)
 
 type Variant string
 
@@ -20,6 +24,16 @@ var orderedVariants = [...]Variant{
 	Deep,
 	Vibrant,
 	Balanced,
+}
+
+func ParseVariant(value string) (Variant, error) {
+	variant := Variant(value)
+	switch variant {
+	case Source, Calm, Mute, Deep, Vibrant, Balanced:
+		return variant, nil
+	default:
+		return "", fmt.Errorf("unknown variant %q", value)
+	}
 }
 
 type Request struct {

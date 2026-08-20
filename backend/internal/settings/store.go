@@ -8,6 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 )
 
 type Store struct {
@@ -48,42 +50,9 @@ func (s *Store) Save(settings Settings) (Settings, error) {
 		return Settings{}, err
 	}
 
-	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return Settings{}, fmt.Errorf("create settings directory: %w", err)
+	if err := fsutil.AtomicWriteJSON(s.path, settings, 0o644); err != nil {
+		return Settings{}, fmt.Errorf("persist settings: %w", err)
 	}
-
-	tmp, err := os.CreateTemp(dir, ".settings-*.tmp")
-	if err != nil {
-		return Settings{}, fmt.Errorf("create temporary settings file: %w", err)
-	}
-	tmpPath := tmp.Name()
-	committed := false
-	defer func() {
-		_ = tmp.Close()
-		if !committed {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	if err := tmp.Chmod(0o644); err != nil {
-		return Settings{}, fmt.Errorf("set settings permissions: %w", err)
-	}
-	encoder := json.NewEncoder(tmp)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(settings); err != nil {
-		return Settings{}, fmt.Errorf("encode settings: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return Settings{}, fmt.Errorf("sync settings: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return Settings{}, fmt.Errorf("close settings: %w", err)
-	}
-	if err := os.Rename(tmpPath, s.path); err != nil {
-		return Settings{}, fmt.Errorf("commit settings: %w", err)
-	}
-	committed = true
 	return settings, nil
 }
 
@@ -102,8 +71,7 @@ func (s *Store) UpdateJSON(raw []byte) (Settings, error) {
 }
 
 func (s *Store) Reset() (Settings, error) {
-	err := os.Remove(s.path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+	if err := fsutil.RemoveFileAndSync(s.path); err != nil {
 		return Settings{}, fmt.Errorf("remove settings: %w", err)
 	}
 	return Defaults(), nil

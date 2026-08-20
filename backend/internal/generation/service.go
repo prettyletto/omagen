@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
@@ -75,14 +76,14 @@ func (s *Service) Generate(
 		"generations",
 	)
 
-	if err := os.MkdirAll(
-		generationsRoot,
-		0o755,
-	); err != nil {
+	if err := fsutil.EnsureDir(generationsRoot, 0o755); err != nil {
 		return Result{}, fmt.Errorf(
 			"create generations directory: %w",
 			err,
 		)
+	}
+	if err := fsutil.CleanupStaleTempDirs(generationsRoot, 24*time.Hour, time.Now().UTC()); err != nil {
+		return Result{}, fmt.Errorf("cleanup stale generations: %w", err)
 	}
 
 	tmpRoot := filepath.Join(
@@ -95,10 +96,7 @@ func (s *Service) Generate(
 		generationID,
 	)
 
-	if err := os.Mkdir(
-		tmpRoot,
-		0o755,
-	); err != nil {
+	if err := fsutil.EnsureDir(tmpRoot, 0o755); err != nil {
 		return Result{}, fmt.Errorf(
 			"create temporary generation: %w",
 			err,
@@ -109,7 +107,7 @@ func (s *Service) Generate(
 
 	defer func() {
 		if !committed {
-			_ = os.RemoveAll(tmpRoot)
+			_ = fsutil.RemoveAllAndSync(tmpRoot)
 		}
 	}()
 
@@ -140,18 +138,20 @@ func (s *Service) Generate(
 	); err != nil {
 		return Result{}, err
 	}
+	if err := fsutil.SyncDir(tmpRoot); err != nil {
+		return Result{}, fmt.Errorf("sync temporary generation: %w", err)
+	}
 
-	if err := os.Rename(
-		tmpRoot,
-		finalRoot,
-	); err != nil {
+	renamed, err := fsutil.RenameAndSyncNoReplace(tmpRoot, finalRoot)
+	if renamed {
+		committed = true
+	}
+	if err != nil {
 		return Result{}, fmt.Errorf(
 			"commit generation: %w",
 			err,
 		)
 	}
-
-	committed = true
 
 	return buildResult(
 		generationID,
@@ -172,6 +172,7 @@ func runJobs(
 	analysis *imageanalysis.Analysis,
 	effectiveSettings settingspkg.Settings,
 ) error {
+	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -213,32 +214,27 @@ func runJobs(
 	wg.Wait()
 	close(results)
 
-	var cancellationError error
-
+	errorsByVariant := make(map[Variant]error, len(orderedVariants))
 	for result := range results {
-		if result.err == nil {
+		errorsByVariant[result.variant] = result.err
+	}
+	parentErr := parentCtx.Err()
+	for _, variant := range orderedVariants {
+		err := errorsByVariant[variant]
+		if err == nil || errors.Is(err, context.Canceled) || (parentErr != nil && errors.Is(err, parentErr)) {
 			continue
 		}
-
-		wrapped := fmt.Errorf(
-			"%s job: %w",
-			result.variant,
-			result.err,
-		)
-
-		if !errors.Is(
-			result.err,
-			context.Canceled,
-		) {
-			return wrapped
-		}
-
-		if cancellationError == nil {
-			cancellationError = wrapped
+		return fmt.Errorf("%s job: %w", variant, err)
+	}
+	if parentErr != nil {
+		return parentErr
+	}
+	for _, variant := range orderedVariants {
+		if err := errorsByVariant[variant]; err != nil {
+			return fmt.Errorf("%s job: %w", variant, err)
 		}
 	}
-
-	return cancellationError
+	return nil
 }
 
 func validateSourceImage(

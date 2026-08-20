@@ -63,15 +63,11 @@ func TestStoreRejectsInvalidAndMalformedRecords(t *testing.T) {
 		t.Fatal("expected malformed JSON error")
 	}
 	for _, record := range []Record{
-		{SessionID: "wrong", OriginalTheme: "x", OriginalBackground: BackgroundRef{Kind: "x", Path: "x"}},
 		{SessionID: "valid", OriginalBackground: BackgroundRef{Kind: "x", Path: "x"}},
 		{SessionID: "valid", OriginalTheme: "x", OriginalBackground: BackgroundRef{Path: "x"}},
 		{SessionID: "valid", OriginalTheme: "x", OriginalBackground: BackgroundRef{Kind: "x"}},
 	} {
-		if err := s.Save(record); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := s.Load("valid"); err == nil {
+		if err := s.Save(record); err == nil {
 			t.Errorf("accepted invalid record: %#v", record)
 		}
 	}

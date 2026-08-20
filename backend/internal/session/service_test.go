@@ -20,10 +20,16 @@ func (f *fakeOmarchy) CurrentBackground() (BackgroundRef, error) {
 }
 func (f *fakeOmarchy) RestoreThemeFast(theme, dir string) error {
 	f.restoredTheme, f.restoredDir = theme, dir
+	if f.restoreThemeErr == nil {
+		f.theme = theme
+	}
 	return f.restoreThemeErr
 }
 func (f *fakeOmarchy) RestoreBackground(background BackgroundRef) error {
 	f.restoredBackground = background
+	if f.restoreBackgroundErr == nil {
+		f.background = background
+	}
 	return f.restoreBackgroundErr
 }
 
@@ -69,8 +75,8 @@ func TestServiceErrors(t *testing.T) {
 	}
 	s := testStore(t)
 	fake := &fakeOmarchy{restoreThemeErr: errTest}
-	if err := NewService(s, fake).Cancel("missing"); err == nil {
-		t.Fatal("expected missing session error")
+	if err := NewService(s, fake).Cancel("missing"); err != nil {
+		t.Fatalf("missing inactive session should be idempotent: %v", err)
 	}
 	record := testRecord("id")
 	if err := s.Save(record); err != nil {

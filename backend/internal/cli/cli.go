@@ -10,6 +10,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
+	"github.com/prettyletto/omagen/backend/internal/preview"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 )
@@ -51,10 +52,12 @@ func Run(
 		return fail(stderr, 1, "initialize settings store: %v", err)
 	}
 
-	sessionService := session.NewService(
-		store,
-		omarchy.NewClient(stderr),
-	)
+	omarchyClient := omarchy.NewClient(stderr)
+	sessionService := session.NewService(store, omarchyClient)
+	previewService, err := preview.NewService(store, omarchyClient)
+	if err != nil {
+		return fail(stderr, 1, "initialize preview service: %v", err)
+	}
 
 	generationService := generation.NewService(
 		store,
@@ -76,9 +79,13 @@ func Run(
 		return runSession(
 			args[1:],
 			sessionService,
+			previewService,
 			stdout,
 			stderr,
 		)
+
+	case "preview":
+		return runPreview(args[1:], previewService, stdout, stderr)
 
 	case "generate":
 		return runGenerate(
@@ -104,6 +111,7 @@ func Run(
 func runSession(
 	args []string,
 	service *session.Service,
+	previewService *preview.Service,
 	stdout,
 	stderr io.Writer,
 ) int {
@@ -117,6 +125,9 @@ func runSession(
 
 	switch args[0] {
 	case "begin":
+		if len(args) != 1 {
+			return fail(stderr, 2, "session begin takes no arguments")
+		}
 		result, err := service.Begin()
 		if err != nil {
 			return fail(
@@ -134,11 +145,11 @@ func runSession(
 		)
 
 	case "cancel":
-		if len(args) < 2 {
+		if len(args) != 2 {
 			return fail(
 				stderr,
 				2,
-				"missing session id",
+				"usage: omagen session cancel <session_id>",
 			)
 		}
 
@@ -152,6 +163,11 @@ func runSession(
 				err,
 			)
 		}
+		if previewService != nil {
+			if err := previewService.CleanupSession(args[1]); err != nil {
+				return fail(stderr, 1, "session cancelled but preview cleanup failed: %v", err)
+			}
+		}
 
 		return writeJSON(
 			stdout,
@@ -162,6 +178,31 @@ func runSession(
 			},
 		)
 
+	case "status":
+		if len(args) != 1 {
+			return fail(stderr, 2, "session status takes no arguments")
+		}
+		result, err := service.Status()
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+
+	case "recover":
+		if len(args) != 1 {
+			return fail(stderr, 2, "session recover takes no arguments")
+		}
+		result, err := service.RecoverActive()
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		if result.Recovered && previewService != nil {
+			if err := previewService.CleanupSession(result.SessionID); err != nil {
+				return fail(stderr, 1, "session recovered but preview cleanup failed: %v", err)
+			}
+		}
+		return writeJSON(stdout, stderr, result)
+
 	default:
 		return fail(
 			stderr,
@@ -169,6 +210,37 @@ func runSession(
 			"unknown session subcommand: %s",
 			args[0],
 		)
+	}
+}
+
+func runPreview(args []string, service *preview.Service, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "missing preview subcommand")
+	}
+	switch args[0] {
+	case "apply":
+		if len(args) != 4 {
+			return fail(stderr, 2, "usage: omagen preview apply <session_id> <generation_id> <variant>")
+		}
+		variant, err := generation.ParseVariant(args[3])
+		if err != nil {
+			return fail(stderr, 2, "%v", err)
+		}
+		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant})
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	case "cleanup":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen preview cleanup <session_id>")
+		}
+		if err := service.CleanupSession(args[1]); err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, map[string]any{"ok": true, "session_id": args[1]})
+	default:
+		return fail(stderr, 2, "unknown preview subcommand: %s", args[0])
 	}
 }
 

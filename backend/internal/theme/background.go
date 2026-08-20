@@ -2,9 +2,9 @@ package theme
 
 import (
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
+
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 )
 
 func WriteBackground(
@@ -17,10 +17,7 @@ func WriteBackground(
 		"backgrounds",
 	)
 
-	if err := os.Mkdir(
-		backgroundsDir,
-		0o755,
-	); err != nil {
+	if err := fsutil.EnsureDir(backgroundsDir, 0o755); err != nil {
 		return fmt.Errorf(
 			"create backgrounds directory: %w",
 			err,
@@ -32,18 +29,7 @@ func WriteBackground(
 		"wallpaper"+extension,
 	)
 
-	if err := os.Link(
-		source,
-		destination,
-	); err == nil {
-		return nil
-	}
-
-	// Fallback in case hardlinks are unavailable.
-	if err := copyBackground(
-		source,
-		destination,
-	); err != nil {
+	if err := fsutil.LinkOrCopyAtomic(source, destination, 0o644); err != nil {
 		return fmt.Errorf(
 			"write wallpaper: %w",
 			err,
@@ -51,37 +37,4 @@ func WriteBackground(
 	}
 
 	return nil
-}
-
-func copyBackground(
-	source string,
-	destination string,
-) error {
-	input, err := os.Open(source)
-	if err != nil {
-		return err
-	}
-	defer input.Close()
-
-	output, err := os.OpenFile(
-		destination,
-		os.O_CREATE|os.O_EXCL|os.O_WRONLY,
-		0o644,
-	)
-	if err != nil {
-		return err
-	}
-
-	_, copyErr := io.Copy(
-		output,
-		input,
-	)
-
-	closeErr := output.Close()
-
-	if copyErr != nil {
-		return copyErr
-	}
-
-	return closeErr
 }

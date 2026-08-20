@@ -2,8 +2,9 @@ package theme
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
+
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 )
 
 func WriteColors(
@@ -88,11 +89,7 @@ bright_magenta = %q
 		palette.BrightMagenta,
 	)
 
-	if err := os.WriteFile(
-		path,
-		[]byte(content),
-		0o644,
-	); err != nil {
+	if err := fsutil.AtomicWriteFile(path, []byte(content), 0o644); err != nil {
 		return fmt.Errorf(
 			"write colors.toml: %w",
 			err,
