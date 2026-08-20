@@ -40,6 +40,14 @@ func (s *Service) Generate(
 		)
 	}
 
+	options := request.Options.Normalize()
+	if err := options.Validate(); err != nil {
+		return Result{}, fmt.Errorf(
+			"validate generation options: %w",
+			err,
+		)
+	}
+
 	if err := validateSourceImage(
 		request.SourceImage,
 	); err != nil {
@@ -120,6 +128,7 @@ func (s *Service) Generate(
 		tmpRoot,
 		cachedSource,
 		analysis,
+		options,
 	); err != nil {
 		return Result{}, err
 	}
@@ -139,6 +148,7 @@ func (s *Service) Generate(
 	return buildResult(
 		generationID,
 		finalRoot,
+		options,
 	), nil
 }
 
@@ -152,6 +162,7 @@ func runJobs(
 	generationRoot string,
 	sourceImage string,
 	analysis *imageanalysis.Analysis,
+	options Options,
 ) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -175,6 +186,7 @@ func runJobs(
 				variant:     variant,
 				sourceImage: sourceImage,
 				analysis:    analysis,
+				options:     options,
 			}).run(
 				ctx,
 				generationRoot,
@@ -268,9 +280,11 @@ func newGenerationID() (string, error) {
 func buildResult(
 	generationID string,
 	root string,
+	options Options,
 ) Result {
 	result := Result{
 		GenerationID: generationID,
+		Options:      options,
 		Variants: make(
 			[]VariantResult,
 			0,

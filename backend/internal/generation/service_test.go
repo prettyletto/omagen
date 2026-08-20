@@ -187,7 +187,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		Format:          "png",
 		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
 		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
-	}); err == nil {
+	}, DefaultOptions()); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
 	if err := (job{
@@ -217,7 +217,7 @@ func TestGenerationHelpers(t *testing.T) {
 			t.Fatal("expected invalid source")
 		}
 	}
-	result := buildResult("id", "/root")
+	result := buildResult("id", "/root", DefaultOptions())
 	if result.Variants[0].Path != filepath.Join("/root", string(Source)) || !strings.Contains(result.GenerationID, "id") {
 		t.Fatalf("bad result: %#v", result)
 	}

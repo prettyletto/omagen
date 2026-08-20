@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
+	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
@@ -167,20 +169,14 @@ func runGenerate(
 	stdout,
 	stderr io.Writer,
 ) int {
-	if len(args) != 2 {
-		return fail(
-			stderr,
-			2,
-			"usage: omagen generate <session_id> <image>",
-		)
+	request, err := parseGenerateArgs(args)
+	if err != nil {
+		return fail(stderr, 2, "%v", err)
 	}
 
 	result, err := service.Generate(
 		context.Background(),
-		generation.Request{
-			SessionID:   args[0],
-			SourceImage: args[1],
-		},
+		request,
 	)
 	if err != nil {
 		return fail(
@@ -196,6 +192,55 @@ func runGenerate(
 		stderr,
 		result,
 	)
+}
+
+func parseGenerateArgs(args []string) (generation.Request, error) {
+	if len(args) < 2 {
+		return generation.Request{}, fmt.Errorf(
+			"usage: omagen generate <session_id> <image> [--harmony <mode>]",
+		)
+	}
+
+	request := generation.Request{
+		SessionID:   args[0],
+		SourceImage: args[1],
+		Options:     generation.DefaultOptions(),
+	}
+	harmonySeen := false
+
+	for i := 2; i < len(args); i++ {
+		arg := args[i]
+		switch {
+		case arg == "--harmony":
+			if harmonySeen {
+				return generation.Request{}, fmt.Errorf("--harmony specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--harmony requires a value")
+			}
+			i++
+			harmony, err := palettecfg.ParseHarmony(args[i])
+			if err != nil {
+				return generation.Request{}, err
+			}
+			request.Options.ColorTheory.Harmony = harmony
+			harmonySeen = true
+		case strings.HasPrefix(arg, "--harmony="):
+			if harmonySeen {
+				return generation.Request{}, fmt.Errorf("--harmony specified more than once")
+			}
+			harmony, err := palettecfg.ParseHarmony(strings.TrimPrefix(arg, "--harmony="))
+			if err != nil {
+				return generation.Request{}, err
+			}
+			request.Options.ColorTheory.Harmony = harmony
+			harmonySeen = true
+		default:
+			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
+		}
+	}
+
+	return request, nil
 }
 
 func writeJSON(

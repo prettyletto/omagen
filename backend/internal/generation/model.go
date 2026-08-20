@@ -8,7 +8,7 @@ const (
 	Mute     Variant = "mute"
 	Deep     Variant = "deep"
 	Vibrant  Variant = "vibrant"
-	Balanced Variant = "Balanced"
+	Balanced Variant = "balanced"
 )
 
 var orderedVariants = [...]Variant{
@@ -23,6 +23,7 @@ var orderedVariants = [...]Variant{
 type Request struct {
 	SessionID   string
 	SourceImage string
+	Options     Options
 }
 
 type VariantResult struct {
@@ -32,5 +33,6 @@ type VariantResult struct {
 
 type Result struct {
 	GenerationID string          `json:"generation_id"`
+	Options      Options         `json:"options"`
 	Variants     []VariantResult `json:"variants"`
 }

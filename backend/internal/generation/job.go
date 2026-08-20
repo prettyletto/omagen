@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
+	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
@@ -14,6 +15,7 @@ type job struct {
 	variant     Variant
 	sourceImage string
 	analysis    *imageanalysis.Analysis
+	options     Options
 }
 
 func (j job) run(
@@ -50,13 +52,23 @@ func (j job) run(
 		return err
 	}
 
-	palette := fixturePalette(
-		j.variant,
-	)
+	var generatedPalette theme.Palette
+	if j.variant == Source {
+		var err error
+		generatedPalette, err = semanticpalette.Source(
+			j.analysis.Representatives,
+			j.options.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build source palette: %w", err)
+		}
+	} else {
+		generatedPalette = fixturePalette(j.variant)
+	}
 
 	if err := theme.WriteColors(
 		variantDir,
-		palette,
+		generatedPalette,
 	); err != nil {
 		return fmt.Errorf(
 			"write colors: %w",

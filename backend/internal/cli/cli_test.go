@@ -27,6 +27,34 @@ func TestRunCommandValidation(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgs(t *testing.T) {
+	for _, args := range [][]string{
+		{"session", "image", "--harmony", "triadic"},
+		{"session", "image", "--harmony=triadic"},
+	} {
+		request, err := parseGenerateArgs(args)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(request.Options.ColorTheory.Harmony) != "triadic" {
+			t.Fatalf("got harmony %q", request.Options.ColorTheory.Harmony)
+		}
+	}
+}
+
+func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
+	for _, args := range [][]string{
+		{"session", "image", "--harmony"},
+		{"session", "image", "--harmony", "random"},
+		{"session", "image", "--harmony=triadic", "--harmony", "auto"},
+		{"session", "image", "--unknown"},
+	} {
+		if _, err := parseGenerateArgs(args); err == nil {
+			t.Fatalf("expected args %v to fail", args)
+		}
+	}
+}
+
 func TestRunPing(t *testing.T) {
 	var out, err bytes.Buffer
 	if code := Run([]string{"ping"}, &out, &err); code != 0 {
