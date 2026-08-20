@@ -359,6 +359,11 @@ func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int
 		return fail(stderr, 2, "missing demo subcommand")
 	}
 	switch args[0] {
+	case "capabilities":
+		if len(args) != 1 {
+			return fail(stderr, 2, "demo capabilities takes no arguments")
+		}
+		return writeJSON(stdout, stderr, demo.ResolveCapabilities())
 	case "open":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen demo open <session_id>")

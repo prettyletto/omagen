@@ -19,52 +19,71 @@ type launchHints struct {
 	terminalExits <-chan processExit
 }
 
+type slotLaunch struct {
+	Slot Slot
+	Cmd  *exec.Cmd
+}
+
 type processExit struct {
 	slot Slot
 	err  error
 }
 
 func launchDemoApps(demoDir string, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
-	editorName, editor := editorCommand(demoDir)
-	launches := []struct {
-		slot Slot
-		cmd  *exec.Cmd
-	}{
-		{SlotEditor, editor}, {SlotBtop, btopCommand(demoDir)}, {SlotShell, shellCommand(demoDir)}, {SlotFiles, filesCommand(demoDir)},
+	launches, hints, err := buildDemoLaunches(demoDir, ResolveCapabilities())
+	if err != nil {
+		return nil, err
 	}
-	terminalExits := make(chan processExit, 3)
-	hints := launchHints{PIDs: map[Slot]int{}, EditorName: editorName, terminalExits: terminalExits}
+	terminalExits := make(chan processExit, 4)
+	hints.terminalExits = terminalExits
 	for _, launch := range launches {
-		if launch.cmd == nil {
-			return nil, fmt.Errorf("no launcher for demo slot %s", launch.slot)
+		if launch.Cmd == nil {
+			return nil, fmt.Errorf("no launcher for demo slot %s", launch.Slot)
 		}
-		resolved, lookErr := exec.LookPath(launch.cmd.Path)
+		resolved, lookErr := exec.LookPath(launch.Cmd.Path)
 		if lookErr != nil {
 			resolved = "<not found: " + lookErr.Error() + ">"
 		}
-		logger.line("launch slot=%s path=%q resolved=%q args=%q dir=%q env_OMAGEN_DEMO_DIR=%q", launch.slot, launch.cmd.Path, resolved, launch.cmd.Args, launch.cmd.Dir, envValue(launch.cmd.Env, "OMAGEN_DEMO_DIR"))
+		logger.line("launch slot=%s path=%q resolved=%q args=%q dir=%q env_OMAGEN_DEMO_DIR=%q", launch.Slot, launch.Cmd.Path, resolved, launch.Cmd.Args, launch.Cmd.Dir, envValue(launch.Cmd.Env, "OMAGEN_DEMO_DIR"))
 		var stdout, stderr bytes.Buffer
-		launch.cmd.Stdout = &stdout
-		launch.cmd.Stderr = &stderr
-		if err := launch.cmd.Start(); err != nil {
-			logger.line("start slot=%s error=%v stdout=%q stderr=%q", launch.slot, err, stdout.String(), stderr.String())
-			return nil, fmt.Errorf("start demo %s: %w", launch.slot, err)
+		launch.Cmd.Stdout = &stdout
+		launch.Cmd.Stderr = &stderr
+		if err := launch.Cmd.Start(); err != nil {
+			logger.line("start slot=%s error=%v stdout=%q stderr=%q", launch.Slot, err, stdout.String(), stderr.String())
+			return nil, fmt.Errorf("start demo %s: %w", launch.Slot, err)
 		}
-		hints.PIDs[launch.slot] = launch.cmd.Process.Pid
-		logger.line("started slot=%s pid=%d", launch.slot, launch.cmd.Process.Pid)
+		hints.PIDs[launch.Slot] = launch.Cmd.Process.Pid
+		logger.line("started slot=%s pid=%d", launch.Slot, launch.Cmd.Process.Pid)
 		go func(slot Slot, cmd *exec.Cmd, out, errOut *bytes.Buffer) {
 			err := cmd.Wait()
 			logger.line("exit slot=%s pid=%d error=%v stdout=%q stderr=%q", slot, cmd.Process.Pid, err, out.String(), errOut.String())
 			if isTerminalSlot(slot) && exitedFromTerminalReload(err) {
 				terminalExits <- processExit{slot: slot, err: err}
 			}
-		}(launch.slot, launch.cmd, &stdout, &stderr)
+		}(launch.Slot, launch.Cmd, &stdout, &stderr)
 	}
 	return waitForDemoWindows(before, hints, 10*time.Second, logger)
 }
 
+func buildDemoLaunches(demoDir string, capabilities Capabilities) ([]slotLaunch, launchHints, error) {
+	if capabilities.Terminal.Command == "" {
+		return nil, launchHints{}, fmt.Errorf("demo requires a terminal capability")
+	}
+	editor, editorName := buildEditorCommand(demoDir, capabilities)
+	monitor := buildMonitorCommand(demoDir, capabilities)
+	shell := buildShellCommand(demoDir, capabilities)
+	files := buildFilesCommand(demoDir, capabilities)
+	launches := []slotLaunch{{Slot: SlotEditor, Cmd: editor}, {Slot: SlotBtop, Cmd: monitor}, {Slot: SlotShell, Cmd: shell}, {Slot: SlotFiles, Cmd: files}}
+	for _, launch := range launches {
+		if launch.Cmd == nil {
+			return nil, launchHints{}, fmt.Errorf("no launcher for demo slot %s", launch.Slot)
+		}
+	}
+	return launches, launchHints{PIDs: map[Slot]int{}, EditorName: editorName}, nil
+}
+
 func isTerminalSlot(slot Slot) bool {
-	return slot == SlotEditor || slot == SlotBtop || slot == SlotShell
+	return slot == SlotEditor || slot == SlotBtop || slot == SlotShell || slot == SlotFiles
 }
 
 func exitedFromTerminalReload(err error) bool {
@@ -85,81 +104,72 @@ func envValue(env []string, key string) string {
 	}
 	return ""
 }
-func editorCommand(demoDir string) (string, *exec.Cmd) {
+func buildEditorCommand(demoDir string, capabilities Capabilities) (*exec.Cmd, string) {
 	sample := filepath.Join(demoDir, "sample.go")
-	editor := configuredEditor()
-	if isTUIEditor(editor) {
-		cmd := exec.Command("omarchy-launch-tui", "--app-id=org.omagen.demo.editor", editor, sample)
-		cmd.Dir = demoDir
-		return filepath.Base(editor), cmd
+	if capabilities.Editor.Command == "" {
+		return terminalCommand(capabilities.Terminal, "org.omagen.demo.editor", demoDir, "/bin/bash", "-lc", sourceViewerScript(sample)), ""
 	}
-	// GUI editors still go through Omarchy's editor launcher so its configured
-	// default and desktop integration remain authoritative.
-	cmd := exec.Command("omarchy-launch-editor", sample)
+	if capabilities.Editor.Kind == "tui" {
+		return terminalCommand(capabilities.Terminal, "org.omagen.demo.editor", demoDir, capabilities.Editor.Command, sample), capabilities.Editor.Command
+	}
+	cmd := exec.Command(capabilities.Editor.Command, sample)
 	cmd.Dir = demoDir
-	return "omarchy-launch-editor", cmd
+	return cmd, capabilities.Editor.Command
 }
-func configuredEditor() string {
-	home, err := os.UserHomeDir()
-	if err == nil {
-		data, err := os.ReadFile(filepath.Join(home, ".local", "state", "omarchy", "defaults", "editor"))
-		if err == nil {
-			fields := strings.Fields(strings.TrimSpace(string(data)))
-			if len(fields) > 0 {
-				if path, lookErr := exec.LookPath(fields[0]); lookErr == nil {
-					return path
-				}
-			}
-		}
+func buildMonitorCommand(dir string, capabilities Capabilities) *exec.Cmd {
+	if capabilities.Monitor.Command != "" {
+		return terminalCommand(capabilities.Terminal, "org.omagen.demo.btop", dir, capabilities.Monitor.Command)
 	}
-	if path, err := exec.LookPath("nvim"); err == nil {
-		return path
-	}
-	return "nvim"
+	return terminalCommand(capabilities.Terminal, "org.omagen.demo.btop", dir, "/bin/bash", "-lc", systemInfoScript())
 }
-func isTUIEditor(editor string) bool {
-	switch strings.ToLower(filepath.Base(editor)) {
-	case "nvim", "vim", "nano", "micro", "hx", "helix", "fresh":
-		return true
-	}
-	return false
-}
-func btopCommand(dir string) *exec.Cmd {
-	cmd := exec.Command("omarchy-launch-tui", "--app-id=org.omagen.demo.btop", firstPresent("btop", "htop", "top"))
-	cmd.Dir = dir
-	return cmd
-}
-func shellCommand(dir string) *exec.Cmd {
+func buildShellCommand(dir string, capabilities Capabilities) *exec.Cmd {
 	script := `cd "$OMAGEN_DEMO_DIR" || exit 1
 printf '\033[1mOmagen demo\033[0m\n\n'
-ls -la --color=always
+if command -v lsd >/dev/null 2>&1; then lsd -la; else ls -la; fi
 printf '\n'
 exec "${SHELL:-/bin/bash}" -l
 `
-	cmd := exec.Command("omarchy-launch-tui", "--app-id=org.omagen.demo.shell", "/bin/bash", "-lc", script)
+	cmd := terminalCommand(capabilities.Terminal, "org.omagen.demo.shell", dir, "/bin/bash", "-lc", script)
+	return cmd
+}
+func buildFilesCommand(dir string, capabilities Capabilities) *exec.Cmd {
+	if capabilities.FileManager.Command != "" {
+		if capabilities.FileManager.Command == "xdg-open" {
+			cmd := exec.Command(capabilities.FileManager.Command, dir)
+			cmd.Dir = dir
+			return cmd
+		}
+		cmd := exec.Command(capabilities.FileManager.Command, "--new-window", dir)
+		cmd.Dir = dir
+		return cmd
+	}
+	return terminalCommand(capabilities.Terminal, "org.omagen.demo.files", dir, "/bin/bash", "-lc", fileListingScript())
+}
+
+func terminalCommand(capability ApplicationCapability, appID, dir string, command string, args ...string) *exec.Cmd {
+	var cmd *exec.Cmd
+	switch capability.Command {
+	case "omarchy-launch-tui":
+		cmd = exec.Command(capability.Command, append([]string{"--app-id=" + appID, command}, args...)...)
+	case "xdg-terminal-exec":
+		cmd = exec.Command(capability.Command, append([]string{"--app-id=" + appID, "-e", command}, args...)...)
+	default:
+		cmd = exec.Command(capability.Command, append([]string{"-e", command}, args...)...)
+	}
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "OMAGEN_DEMO_DIR="+dir)
 	return cmd
 }
-func filesCommand(dir string) *exec.Cmd {
-	if commandExists("nautilus") {
-		cmd := exec.Command("nautilus", "--new-window", dir)
-		cmd.Dir = dir
-		return cmd
-	}
-	cmd := exec.Command("xdg-open", dir)
-	cmd.Dir = dir
-	return cmd
+
+func sourceViewerScript(sample string) string {
+	return fmt.Sprintf("if command -v bat >/dev/null 2>&1; then bat --style=numbers %q; elif command -v less >/dev/null 2>&1; then sed -n '1,120p' %q | less; else sed -n '1,120p' %q; fi\nprintf '\\n'\nexec \"${SHELL:-/bin/bash}\" -l", sample, sample, sample)
 }
-func firstPresent(commands ...string) string {
-	for _, c := range commands {
-		if path, err := exec.LookPath(c); err == nil {
-			return path
-		}
-	}
-	return "top"
+func systemInfoScript() string {
+	return "printf 'SYSTEM\\n\\n'; uptime; printf '\\nMEMORY\\n'; free -h; printf '\\nDISK\\n'; df -h /; printf '\\nPROCESSES\\n'; ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -12; exec \"${SHELL:-/bin/bash}\" -l"
 }
-func commandExists(command string) bool { _, err := exec.LookPath(command); return err == nil }
+func fileListingScript() string {
+	return "cd \"$OMAGEN_DEMO_DIR\" || exit 1; if command -v tree >/dev/null 2>&1; then tree -a -L 2; elif command -v find >/dev/null 2>&1; then find . -maxdepth 2 -print; else ls -la; fi; printf '\\n'; exec \"${SHELL:-/bin/bash}\" -l"
+}
 func waitForDemoWindows(before map[string]clientInfo, hints launchHints, timeout time.Duration, logger *launchLogger) (map[Slot]string, error) {
 	deadline := time.Now().Add(timeout)
 	var last []clientInfo
