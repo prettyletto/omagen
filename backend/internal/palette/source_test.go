@@ -58,6 +58,12 @@ func TestSourceClosestTokyoNightMock(t *testing.T) {
 	if err := result.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	if result.Background != "#1a1b26" {
+		t.Fatalf("background=%s, want #1a1b26", result.Background)
+	}
+	if result.Accent != "#7aa2f7" {
+		t.Fatalf("accent=%s, want #7aa2f7", result.Accent)
+	}
 	t.Logf("mode=%s bg=%s dark=%s darker=%s lighter=%s fg=%s accent=%s selection=%s muted=%s", result.Mode, result.Background, result.DarkBackground, result.DarkerBackground, result.LighterBackground, result.Foreground, result.Accent, result.Selection, result.Muted)
 }
 

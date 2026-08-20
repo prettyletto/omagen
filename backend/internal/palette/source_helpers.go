@@ -9,8 +9,9 @@ import (
 )
 
 const (
-	chromaticThreshold = 0.025
-	lightModeThreshold = 0.68
+	chromaticThreshold  = 0.025
+	surfaceHueThreshold = 0.008
+	lightModeThreshold  = 0.68
 )
 
 func validateRepresentatives(colors []imageanalysis.RepresentativeColor) error {
@@ -41,14 +42,14 @@ func weightedLightness(colors []imageanalysis.RepresentativeColor) float64 {
 
 func chooseSurface(colors []imageanalysis.RepresentativeColor) colorspace.OKLCH {
 	dominant := colors[0].LCH
-	if dominant.C >= chromaticThreshold {
+	if dominant.C >= surfaceHueThreshold {
 		return dominant
 	}
 	for _, candidate := range colors[1:] {
 		if candidate.LCH.C < chromaticThreshold || candidate.Coverage < 0.10 {
 			continue
 		}
-		return colorspace.OKLCH{L: dominant.L, C: math.Min(candidate.LCH.C*0.25, 0.035), H: candidate.LCH.H}
+		return colorspace.OKLCH{L: dominant.L, C: math.Min(candidate.LCH.C*0.20, 0.025), H: candidate.LCH.H}
 	}
 	return colorspace.OKLCH{L: dominant.L, C: 0, H: 0}
 }
