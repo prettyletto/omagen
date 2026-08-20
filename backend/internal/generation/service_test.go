@@ -44,6 +44,93 @@ func TestGenerate(t *testing.T) {
 	}
 }
 
+func TestGenerateWritesSixNativePalettes(t *testing.T) {
+	store := generationStore(t)
+	if err := store.Save(session.Record{
+		SessionID:          "session",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	image := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(image, []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewService(store).Generate(context.Background(), Request{
+		SessionID:   "session",
+		SourceImage: image,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	generationRoot := filepath.Join(
+		store.SessionDir("session"),
+		"generations",
+		result.GenerationID,
+	)
+	files, err := filepath.Glob(filepath.Join(generationRoot, "*", "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 6 {
+		t.Fatalf("expected exactly six colors.toml files, got %d: %v", len(files), files)
+	}
+
+	for _, file := range files {
+		content, err := os.ReadFile(file)
+		if err != nil {
+			t.Fatalf("read %s: %v", file, err)
+		}
+		for _, key := range []string{
+			"mode = ",
+			"background = ",
+			"foreground = ",
+			"red = ",
+			"bright_blue = ",
+		} {
+			if !strings.Contains(string(content), key) {
+				t.Errorf("%s is missing native palette key %q", file, key)
+			}
+		}
+	}
+
+	source, err := os.ReadFile(filepath.Join(generationRoot, string(Source), "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	deep, err := os.ReadFile(filepath.Join(generationRoot, string(Deep), "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sourceBackground := paletteValue(string(source), "background")
+	deepBackground := paletteValue(string(deep), "background")
+	if sourceBackground == "" || deepBackground == "" {
+		t.Fatalf("missing source or deep background: source=%q deep=%q", sourceBackground, deepBackground)
+	}
+	if sourceBackground == deepBackground {
+		t.Fatalf("source and deep backgrounds should differ: %q", sourceBackground)
+	}
+}
+
+func paletteValue(content, key string) string {
+	prefix := key + " = \""
+	start := strings.Index(content, prefix)
+	if start < 0 {
+		return ""
+	}
+	start += len(prefix)
+	end := strings.IndexByte(content[start:], '"')
+	if end < 0 {
+		return ""
+	}
+	return content[start : start+end]
+}
+
 func TestGenerateValidationAndJobErrors(t *testing.T) {
 	store := generationStore(t)
 	svc := NewService(store)

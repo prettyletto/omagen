@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type job struct {
@@ -24,7 +26,10 @@ func (j job) run(
 		string(j.variant),
 	)
 
-	if err := os.Mkdir(variantDir, 0o755); err != nil {
+	if err := os.Mkdir(
+		variantDir,
+		0o755,
+	); err != nil {
 		return fmt.Errorf(
 			"create variant directory: %w",
 			err,
@@ -34,5 +39,24 @@ func (j job) run(
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+
+	palette := fixturePalette(
+		j.variant,
+	)
+
+	if err := theme.WriteColors(
+		variantDir,
+		palette,
+	); err != nil {
+		return fmt.Errorf(
+			"write theme: %w",
+			err,
+		)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	return nil
 }
