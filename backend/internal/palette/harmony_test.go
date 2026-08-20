@@ -6,8 +6,8 @@ func TestHarmonyValidationDistinguishesKnownAndSupported(t *testing.T) {
 	if err := HarmonyTriadic.Validate(); err != nil {
 		t.Fatal(err)
 	}
-	if err := HarmonyTriadic.ValidateSupported(); err == nil {
-		t.Fatal("expected triadic harmony to be unsupported")
+	if err := HarmonyTriadic.ValidateSupported(); err != nil {
+		t.Fatalf("expected triadic harmony to be supported: %v", err)
 	}
 	if err := HarmonyAuto.ValidateSupported(); err != nil {
 		t.Fatal(err)

@@ -6,6 +6,12 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
+type backgroundRule struct {
+	name   string
+	color  *string
+	target float64
+}
+
 func Enforce(
 	palette theme.Palette,
 	targets Targets,
@@ -43,117 +49,60 @@ func Enforce(
 		)
 	}
 
-	var err error
-
-	palette.Foreground, err =
-		adjustLightness(
-			palette.Foreground,
-			palette.Background,
-			targets.PrimaryText,
-			textDirection,
-		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"foreground contrast: %w",
-			err,
-		)
+	rules := []backgroundRule{
+		{name: "foreground", color: &palette.Foreground, target: targets.PrimaryText},
+		{name: "light_foreground", color: &palette.LightForeground, target: targets.PrimaryText},
+		{name: "bright_foreground", color: &palette.BrightForeground, target: targets.BrightText},
+		{name: "dark_foreground", color: &palette.DarkForeground, target: targets.SecondaryText},
+		{name: "muted", color: &palette.Muted, target: targets.SecondaryText},
+		{name: "accent", color: &palette.Accent, target: targets.UIElement},
+		{name: "red", color: &palette.Red, target: targets.ANSI},
+		{name: "orange", color: &palette.Orange, target: targets.ANSI},
+		{name: "yellow", color: &palette.Yellow, target: targets.ANSI},
+		{name: "green", color: &palette.Green, target: targets.ANSI},
+		{name: "cyan", color: &palette.Cyan, target: targets.ANSI},
+		{name: "blue", color: &palette.Blue, target: targets.ANSI},
+		{name: "magenta", color: &palette.Magenta, target: targets.ANSI},
+		{name: "brown", color: &palette.Brown, target: targets.ANSI},
+		{name: "bright_red", color: &palette.BrightRed, target: targets.BrightANSI},
+		{name: "bright_yellow", color: &palette.BrightYellow, target: targets.BrightANSI},
+		{name: "bright_green", color: &palette.BrightGreen, target: targets.BrightANSI},
+		{name: "bright_cyan", color: &palette.BrightCyan, target: targets.BrightANSI},
+		{name: "bright_blue", color: &palette.BrightBlue, target: targets.BrightANSI},
+		{name: "bright_magenta", color: &palette.BrightMagenta, target: targets.BrightANSI},
 	}
 
-	palette.LightForeground, err =
-		adjustLightness(
-			palette.LightForeground,
+	for _, rule := range rules {
+		adjusted, err := adjustLightness(
+			*rule.color,
 			palette.Background,
-			targets.PrimaryText,
+			rule.target,
 			textDirection,
 		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"light_foreground contrast: %w",
-			err,
-		)
+		if err != nil {
+			return theme.Palette{}, fmt.Errorf(
+				"%s contrast: %w",
+				rule.name,
+				err,
+			)
+		}
+		*rule.color = adjusted
 	}
 
-	palette.BrightForeground, err =
-		adjustLightness(
-			palette.BrightForeground,
-			palette.Background,
-			targets.BrightText,
-			textDirection,
-		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"bright_foreground contrast: %w",
-			err,
-		)
-	}
-
-	palette.DarkForeground, err =
-		adjustLightness(
-			palette.DarkForeground,
-			palette.Background,
-			targets.SecondaryText,
-			textDirection,
-		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"dark_foreground contrast: %w",
-			err,
-		)
-	}
-
-	palette.Muted, err =
-		adjustLightness(
-			palette.Muted,
-			palette.Background,
-			targets.SecondaryText,
-			textDirection,
-		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"muted contrast: %w",
-			err,
-		)
-	}
-
-	palette.Accent, err =
-		adjustLightness(
-			palette.Accent,
-			palette.Background,
-			targets.UIElement,
-			textDirection,
-		)
-
-	if err != nil {
-		return theme.Palette{}, fmt.Errorf(
-			"accent contrast: %w",
-			err,
-		)
-	}
-
-	// Selection behaves like another surface.
-	//
-	// In dark mode it should remain on the dark side of the
-	// foreground. In light mode it should remain on the
-	// light side.
-	palette.Selection, err =
-		adjustLightness(
-			palette.Selection,
-			palette.Foreground,
-			targets.SelectionText,
-			surfaceDirection,
-		)
-
+	// Quattro renders bright_foreground on top of selection.
+	selection, err := adjustLightness(
+		palette.Selection,
+		palette.BrightForeground,
+		targets.SelectionText,
+		surfaceDirection,
+	)
 	if err != nil {
 		return theme.Palette{}, fmt.Errorf(
 			"selection contrast: %w",
 			err,
 		)
 	}
+	palette.Selection = selection
 
 	if err := palette.Validate(); err != nil {
 		return theme.Palette{}, fmt.Errorf(

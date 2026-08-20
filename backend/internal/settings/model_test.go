@@ -1,18 +1,19 @@
 package settings
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/prettyletto/omagen/backend/internal/palette"
 )
 
-func TestValidateRejectsKnownButUnsupportedHarmony(t *testing.T) {
-	settings := Defaults()
-	settings.ColorTheory.Harmony = palette.HarmonyTriadic
-
-	err := settings.Validate()
-	if err == nil || !strings.Contains(err.Error(), "unsupported color harmony") {
-		t.Fatalf("got error %v, want unsupported harmony error", err)
+func TestValidateAcceptsAllKnownHarmonies(t *testing.T) {
+	for _, harmony := range []palette.Harmony{palette.HarmonyAuto, palette.HarmonyMonochromatic, palette.HarmonyAnalogous, palette.HarmonyComplementary, palette.HarmonySplitComplementary, palette.HarmonyTriadic} {
+		t.Run(string(harmony), func(t *testing.T) {
+			current := Defaults()
+			current.ColorTheory.Harmony = harmony
+			if err := current.Validate(); err != nil {
+				t.Fatalf("harmony %q should be supported: %v", harmony, err)
+			}
+		})
 	}
 }

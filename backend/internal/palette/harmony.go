@@ -39,16 +39,7 @@ func (h Harmony) Validate() error {
 }
 
 func (h Harmony) ValidateSupported() error {
-	if err := h.Validate(); err != nil {
-		return err
-	}
-
-	if h != HarmonyAuto {
-		return fmt.Errorf(
-			"unsupported color harmony %q",
-			h,
-		)
-	}
-
-	return nil
+	return h.Validate()
 }
+
+func (h Harmony) Supported() bool { return h.Validate() == nil }

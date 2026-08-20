@@ -8,6 +8,8 @@ type Targets struct {
 	SecondaryText float64 `json:"secondary_text"`
 	UIElement     float64 `json:"ui_element"`
 	SelectionText float64 `json:"selection_text"`
+	ANSI          float64 `json:"ansi"`
+	BrightANSI    float64 `json:"bright_ansi"`
 }
 
 func (t Targets) Validate() error {
@@ -20,6 +22,8 @@ func (t Targets) Validate() error {
 		{"secondary_text", t.SecondaryText},
 		{"ui_element", t.UIElement},
 		{"selection_text", t.SelectionText},
+		{"ansi", t.ANSI},
+		{"bright_ansi", t.BrightANSI},
 	}
 
 	for _, item := range values {

@@ -8,7 +8,7 @@
   "kinds": [
     "overlay"
   ],
-  "keeploaded": true,
+  "keepLoaded": true,
   "entryPoints": {
     "overlay": "Omagen.qml"
   }

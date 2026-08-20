@@ -6,27 +6,28 @@ Item {
 
     property string executable: ""
 
-    signal loaded(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText)
+    signal loaded(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText, real ansi, real brightAnsi)
     signal loadFailed(string message)
-    signal saved(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText)
+    signal saved(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText, real ansi, real brightAnsi)
     signal saveFailed(string message)
-    signal resetCompleted(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText)
+    signal resetCompleted(string harmony, real primaryText, real brightText, real secondaryText, real uiElement, real selectionText, real ansi, real brightAnsi)
     signal resetFailed(string message)
 
     function get() {
         getProcess.exec([root.executable, "settings", "get"]);
     }
 
-    function save(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+    function save(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
         const value = JSON.stringify({
-            schema_version: 1,
             color_theory: { harmony: harmony },
             contrast: {
                 primary_text: Number(primaryText),
                 bright_text: Number(brightText),
                 secondary_text: Number(secondaryText),
                 ui_element: Number(uiElement),
-                selection_text: Number(selectionText)
+                selection_text: Number(selectionText),
+                ansi: Number(ansi),
+                bright_ansi: Number(brightAnsi)
             }
         });
         saveProcess.exec([root.executable, "settings", "set", value]);
@@ -40,24 +41,10 @@ Item {
         const result = JSON.parse(text);
         const colorTheory = result.color_theory || {};
         const contrast = result.contrast || {};
-        if (
-            !colorTheory.harmony ||
-            contrast.primary_text === undefined ||
-            contrast.bright_text === undefined ||
-            contrast.secondary_text === undefined ||
-            contrast.ui_element === undefined ||
-            contrast.selection_text === undefined
-        ) {
+        if (!colorTheory.harmony || contrast.primary_text === undefined || contrast.bright_text === undefined || contrast.secondary_text === undefined || contrast.ui_element === undefined || contrast.selection_text === undefined || contrast.ansi === undefined || contrast.bright_ansi === undefined) {
             throw new Error("incomplete settings");
         }
-        return [
-            colorTheory.harmony,
-            contrast.primary_text,
-            contrast.bright_text,
-            contrast.secondary_text,
-            contrast.ui_element,
-            contrast.selection_text
-        ];
+        return [colorTheory.harmony, contrast.primary_text, contrast.bright_text, contrast.secondary_text, contrast.ui_element, contrast.selection_text, contrast.ansi, contrast.bright_ansi];
     }
 
     Process {
@@ -70,8 +57,7 @@ Item {
                 return;
             }
             try {
-                const values = root.parseSettings(getStdout.text);
-                root.loaded.apply(root, values);
+                root.loaded.apply(root, root.parseSettings(getStdout.text));
             } catch (error) {
                 root.loadFailed("Backend returned invalid settings JSON");
             }
@@ -88,8 +74,7 @@ Item {
                 return;
             }
             try {
-                const values = root.parseSettings(saveStdout.text);
-                root.saved.apply(root, values);
+                root.saved.apply(root, root.parseSettings(saveStdout.text));
             } catch (error) {
                 root.saveFailed("Backend returned invalid settings JSON");
             }
@@ -106,8 +91,7 @@ Item {
                 return;
             }
             try {
-                const values = root.parseSettings(resetStdout.text);
-                root.resetCompleted.apply(root, values);
+                root.resetCompleted.apply(root, root.parseSettings(resetStdout.text));
             } catch (error) {
                 root.resetFailed("Backend returned invalid settings JSON");
             }

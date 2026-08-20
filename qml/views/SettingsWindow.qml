@@ -14,24 +14,36 @@ PanelWindow {
     property string secondaryText: "3.0"
     property string uiElement: "3.0"
     property string selectionText: "4.5"
+    property string ansi: "3.0"
+    property string brightAnsi: "4.5"
     property string errorMessage: ""
+    property var harmonyOptions: [
+        { label: "Closest to source", value: "auto", description: "Preserve the wallpaper's natural color relationships" },
+        { label: "Monochromatic", value: "monochromatic", description: "Use one primary hue across the palette" },
+        { label: "Analogous", value: "analogous", description: "Use neighboring hues around the source accent" },
+        { label: "Complementary", value: "complementary", description: "Use the source accent and its opposite hue" },
+        { label: "Split complementary", value: "split_complementary", description: "Use the source accent with two neighboring opposite hues" },
+        { label: "Triadic", value: "triadic", description: "Use three evenly spaced hue families" }
+    ]
 
-    signal saveRequested(string harmony, string primaryText, string brightText, string secondaryText, string uiElement, string selectionText)
+    signal saveRequested(string harmony, string primaryText, string brightText, string secondaryText, string uiElement, string selectionText, string ansi, string brightAnsi)
     signal resetRequested()
-    signal hideRequested()
+    signal closeRequested()
 
-    function loadValues(loadedHarmony, loadedPrimaryText, loadedBrightText, loadedSecondaryText, loadedUiElement, loadedSelectionText) {
+    function loadValues(loadedHarmony, loadedPrimaryText, loadedBrightText, loadedSecondaryText, loadedUiElement, loadedSelectionText, loadedAnsi, loadedBrightAnsi) {
         harmony = loadedHarmony;
         primaryText = Number(loadedPrimaryText).toFixed(1);
         brightText = Number(loadedBrightText).toFixed(1);
         secondaryText = Number(loadedSecondaryText).toFixed(1);
         uiElement = Number(loadedUiElement).toFixed(1);
         selectionText = Number(loadedSelectionText).toFixed(1);
+        ansi = Number(loadedAnsi).toFixed(1);
+        brightAnsi = Number(loadedBrightAnsi).toFixed(1);
     }
 
     visible: active
     implicitWidth: 560
-    implicitHeight: 720
+    implicitHeight: 800
     color: "transparent"
     WlrLayershell.namespace: "omagen-settings"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -48,7 +60,7 @@ PanelWindow {
 
         Keys.onPressed: function(event) {
             if (event.key === Qt.Key_Escape && !root.busy) {
-                root.hideRequested();
+                root.closeRequested();
                 event.accepted = true;
             }
         }
@@ -82,14 +94,7 @@ PanelWindow {
                 spacing: 4
 
                 Repeater {
-                    model: [
-                        { label: "Closest to source", value: "auto", enabled: true },
-                        { label: "Monochromatic", value: "monochromatic", enabled: false },
-                        { label: "Analogous", value: "analogous", enabled: false },
-                        { label: "Complementary", value: "complementary", enabled: false },
-                        { label: "Split complementary", value: "split_complementary", enabled: false },
-                        { label: "Triadic", value: "triadic", enabled: false }
-                    ]
+                    model: root.harmonyOptions
 
                     delegate: Rectangle {
                         required property var modelData
@@ -97,13 +102,13 @@ PanelWindow {
                         height: 30
                         radius: 6
                         color: root.harmony === modelData.value ? Util.alpha(Color.accent, 0.25) : "transparent"
-                        opacity: modelData.enabled ? 1 : 0.4
+                        opacity: 1
 
                         Text {
                             anchors.left: parent.left
                             anchors.leftMargin: 12
                             anchors.verticalCenter: parent.verticalCenter
-                            text: modelData.label + (modelData.enabled ? "" : "  (coming soon)")
+                            text: modelData.label
                             color: Color.foreground
                             font.pixelSize: 14
                         }
@@ -119,7 +124,7 @@ PanelWindow {
 
                         MouseArea {
                             anchors.fill: parent
-                            enabled: modelData.enabled && !root.busy
+                            enabled: !root.busy
                             onClicked: root.harmony = modelData.value
                         }
                     }
@@ -142,7 +147,9 @@ PanelWindow {
                         { label: "Bright text", key: "brightText" },
                         { label: "Secondary text", key: "secondaryText" },
                         { label: "UI elements", key: "uiElement" },
-                        { label: "Selection text", key: "selectionText" }
+                        { label: "Selection text", key: "selectionText" },
+                        { label: "ANSI colors", key: "ansi" },
+                        { label: "Bright ANSI", key: "brightAnsi" }
                     ]
 
                     delegate: Row {
@@ -173,6 +180,8 @@ PanelWindow {
                                 anchors.rightMargin: 8
                                 verticalAlignment: TextInput.AlignVCenter
                                 text: root[modelData.key]
+                                validator: DoubleValidator { bottom: 1.0; top: 21.0; decimals: 2 }
+                                inputMethodHints: Qt.ImhFormattedNumbersOnly
                                 color: Color.foreground
                                 font.pixelSize: 14
                                 selectByMouse: true
@@ -217,7 +226,7 @@ PanelWindow {
                     MouseArea {
                         anchors.fill: parent
                         enabled: !root.busy
-                        onClicked: root.saveRequested(root.harmony, root.primaryText, root.brightText, root.secondaryText, root.uiElement, root.selectionText)
+                        onClicked: root.saveRequested(root.harmony, root.primaryText, root.brightText, root.secondaryText, root.uiElement, root.selectionText, root.ansi, root.brightAnsi)
                     }
                 }
             }

@@ -12,14 +12,18 @@ func Source(colors []imageanalysis.RepresentativeColor, harmony Harmony) (theme.
 	if err := validateRepresentatives(colors); err != nil {
 		return theme.Palette{}, err
 	}
-	switch harmony {
-	case HarmonyAuto:
-		return sourceClosest(colors), nil
-	case HarmonyMonochromatic, HarmonyAnalogous, HarmonyComplementary, HarmonySplitComplementary, HarmonyTriadic:
-		return theme.Palette{}, fmt.Errorf("color harmony %q is not implemented yet", harmony)
-	default:
-		return theme.Palette{}, fmt.Errorf("unsupported color harmony %q", harmony)
+	if err := harmony.ValidateSupported(); err != nil {
+		return theme.Palette{}, err
 	}
+	base := sourceClosest(colors)
+	if harmony == HarmonyAuto {
+		return base, nil
+	}
+	result, err := ApplyHarmony(base, harmony)
+	if err != nil {
+		return theme.Palette{}, fmt.Errorf("apply %s harmony: %w", harmony, err)
+	}
+	return result, nil
 }
 
 func sourceClosest(colors []imageanalysis.RepresentativeColor) theme.Palette {

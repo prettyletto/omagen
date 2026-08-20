@@ -55,21 +55,104 @@ func (j job) run(
 	}
 
 	var generatedPalette theme.Palette
-	if j.variant == Source {
-		var err error
-		generatedPalette, err = semanticpalette.Source(
+	switch j.variant {
+	case Source:
+		basePalette, err := semanticpalette.Source(
 			j.analysis.Representatives,
 			j.settings.ColorTheory.Harmony,
 		)
 		if err != nil {
 			return fmt.Errorf("build source palette: %w", err)
 		}
+		generatedPalette = basePalette
+
+	case Calm:
+		basePalette, err := semanticpalette.Source(
+			j.analysis.Representatives,
+			j.settings.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build calm base palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.Calm(basePalette)
+		if err != nil {
+			return fmt.Errorf("build calm palette: %w", err)
+		}
+
+	case Mute:
+		basePalette, err := semanticpalette.Source(
+			j.analysis.Representatives,
+			j.settings.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build mute base palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.Mute(basePalette)
+		if err != nil {
+			return fmt.Errorf("build mute palette: %w", err)
+		}
+
+	case Deep:
+		basePalette, err := semanticpalette.Source(
+			j.analysis.Representatives,
+			j.settings.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build deep base palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.Deep(basePalette)
+		if err != nil {
+			return fmt.Errorf("build deep palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.NormalizeSurfaceHierarchy(generatedPalette)
+		if err != nil {
+			return fmt.Errorf("normalize deep surfaces: %w", err)
+		}
+
+	case Vibrant:
+		basePalette, err := semanticpalette.Source(
+			j.analysis.Representatives,
+			j.settings.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build vibrant base palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.Vibrant(basePalette)
+		if err != nil {
+			return fmt.Errorf("build vibrant palette: %w", err)
+		}
+
+	case Balanced:
+		basePalette, err := semanticpalette.Source(
+			j.analysis.Representatives,
+			j.settings.ColorTheory.Harmony,
+		)
+		if err != nil {
+			return fmt.Errorf("build balanced base palette: %w", err)
+		}
+		generatedPalette, err = semanticpalette.Balanced(basePalette)
+		if err != nil {
+			return fmt.Errorf("build balanced palette: %w", err)
+		}
+
+	default:
+		return fmt.Errorf("unsupported generation variant %q", j.variant)
+	}
+
+	if j.variant == Source || j.variant == Calm || j.variant == Mute || j.variant == Deep || j.variant == Vibrant || j.variant == Balanced {
+		var err error
 		generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
 		if err != nil {
-			return fmt.Errorf("enforce source contrast: %w", err)
+			return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
 		}
-	} else {
-		generatedPalette = fixturePalette(j.variant)
+		generatedPalette, err = semanticpalette.EnsureANSIDistinctAfterContrast(
+			generatedPalette,
+			j.settings.Contrast.ANSI,
+			j.settings.Contrast.BrightANSI,
+		)
+		if err != nil {
+			return fmt.Errorf("finalize ANSI palette for %s: %w", j.variant, err)
+		}
 	}
 
 	if err := theme.WriteColors(

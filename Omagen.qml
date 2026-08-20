@@ -40,9 +40,13 @@ Item {
         settings.get();
     }
 
-    function saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+    function saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
+        if (settingsBusy)
+            return;
+
         settingsBusy = true;
-        settings.save(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+        errorMessage = "";
+        settings.save(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
     }
 
     function resetSettings() {
@@ -155,10 +159,10 @@ Item {
         id: settings
         executable: root.backendPath
 
-        onLoaded: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+        onLoaded: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
             settingsBusy = false;
-            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
-            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
+            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
         }
 
         onLoadFailed: function(message) {
@@ -166,11 +170,11 @@ Item {
             errorMessage = message;
         }
 
-        onSaved: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+        onSaved: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
             settingsBusy = false;
-            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
-            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
             settingsOpen = false;
+            errorMessage = "";
         }
 
         onSaveFailed: function(message) {
@@ -178,10 +182,11 @@ Item {
             errorMessage = message;
         }
 
-        onResetCompleted: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
+        onResetCompleted: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
             settingsBusy = false;
-            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
-            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+            settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
+            settingsWindow.loadValues(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
+            errorMessage = "";
         }
 
         onResetFailed: function(message) {
@@ -218,20 +223,19 @@ Item {
 
     Views.SettingsWindow {
         id: settingsWindow
-        active: root.settingsOpen
+        active: root.opened && !session.active && root.settingsOpen
         busy: root.settingsBusy
-        harmony: settingsState.harmony
-        primaryText: settingsState.primaryText
-        brightText: settingsState.brightText
-        secondaryText: settingsState.secondaryText
-        uiElement: settingsState.uiElement
-        selectionText: settingsState.selectionText
         errorMessage: root.errorMessage
 
-        onSaveRequested: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText) {
-            root.saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText);
+        onSaveRequested: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
+            root.saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
         }
         onResetRequested: root.resetSettings()
-        onHideRequested: root.close()
+        onCloseRequested: {
+            if (root.settingsBusy)
+                return;
+            root.settingsOpen = false;
+            root.errorMessage = "";
+        }
     }
 }

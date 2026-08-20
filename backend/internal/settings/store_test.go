@@ -67,12 +67,45 @@ func TestResetRemovesPersistedSettings(t *testing.T) {
 func TestApplyOverrides(t *testing.T) {
 	base := Defaults()
 	harmony := palette.HarmonyTriadic
-	if _, err := ApplyOverrides(base, Overrides{
+	got, err := ApplyOverrides(base, Overrides{
 		ColorTheory: ColorTheoryOverrides{Harmony: &harmony},
-	}); err == nil {
-		t.Fatal("expected unsupported harmony override to fail")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ColorTheory.Harmony != harmony {
+		t.Fatalf("got harmony %q, want %q", got.ColorTheory.Harmony, harmony)
 	}
 	if base.ColorTheory.Harmony != palette.HarmonyAuto {
 		t.Fatal("override mutated base settings")
+	}
+}
+
+func TestLoadBackfillsNewContrastDefaults(t *testing.T) {
+	store := testStore(t)
+	raw := `{
+		"schema_version": 1,
+		"color_theory": {"harmony": "auto"},
+		"contrast": {
+			"primary_text": 4.5,
+			"bright_text": 7.0,
+			"secondary_text": 3.0,
+			"ui_element": 3.0,
+			"selection_text": 4.5
+		}
+	}`
+	if err := os.WriteFile(store.path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defaults := Defaults()
+	if got.Contrast.ANSI != defaults.Contrast.ANSI {
+		t.Fatalf("ANSI = %.2f, want default %.2f", got.Contrast.ANSI, defaults.Contrast.ANSI)
+	}
+	if got.Contrast.BrightANSI != defaults.Contrast.BrightANSI {
+		t.Fatalf("BrightANSI = %.2f, want default %.2f", got.Contrast.BrightANSI, defaults.Contrast.BrightANSI)
 	}
 }

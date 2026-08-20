@@ -17,6 +17,8 @@ func Defaults() Settings {
 			SecondaryText: 3.0,
 			UIElement:     3.0,
 			SelectionText: 4.5,
+			ANSI:          3.0,
+			BrightANSI:    4.5,
 		},
 	}
 }

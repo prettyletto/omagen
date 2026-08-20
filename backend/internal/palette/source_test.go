@@ -116,10 +116,22 @@ func TestSourceClosestGrayscaleSynthesizesANSI(t *testing.T) {
 	}
 }
 
-func TestSourceRejectsUnimplementedHarmony(t *testing.T) {
-	_, err := Source([]imageanalysis.RepresentativeColor{testRepresentative(30, 60, 120, 1)}, HarmonyTriadic)
-	if err == nil {
-		t.Fatal("expected unimplemented harmony to fail")
+func TestSourceSupportsEveryHarmony(t *testing.T) {
+	colors := []imageanalysis.RepresentativeColor{
+		testRepresentative(30, 60, 120, 0.5),
+		testRepresentative(180, 60, 90, 0.3),
+		testRepresentative(220, 180, 80, 0.2),
+	}
+	for _, harmony := range []Harmony{HarmonyAuto, HarmonyMonochromatic, HarmonyAnalogous, HarmonyComplementary, HarmonySplitComplementary, HarmonyTriadic} {
+		t.Run(string(harmony), func(t *testing.T) {
+			got, err := Source(colors, harmony)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := got.Validate(); err != nil {
+				t.Fatalf("invalid %s palette: %v", harmony, err)
+			}
+		})
 	}
 }
 
