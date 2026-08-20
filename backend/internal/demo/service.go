@@ -24,48 +24,73 @@ func (s *Service) Open(sessionID string) (OpenResult, error) {
 		return OpenResult{}, fmt.Errorf("load session: %w", err)
 	}
 	state, stateErr := s.loadState(sessionID)
-	if stateErr == nil && allOwnedWindowsExist(state) {
-		m, err := monitorByName(state.DemoMonitor)
-		if err != nil {
-			return OpenResult{}, err
-		}
-		if err = focusMonitor(state.DemoMonitor); err != nil {
-			return OpenResult{}, err
-		}
-		if err = switchWorkspace(state.Workspace); err != nil {
-			return OpenResult{}, err
-		}
-		if err = placeDemoWindows(state, m); err != nil {
-			return OpenResult{}, err
-		}
-		return s.openResult(state, true), nil
-	}
 	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
 		return OpenResult{}, fmt.Errorf("load demo state: %w", stateErr)
 	}
 	if stateErr == nil {
-		if err := closeDemoWindows(state.Windows, 3*time.Second, nil); err != nil {
-			return OpenResult{}, fmt.Errorf("close previous demo before opening another: %w", err)
-		}
+		return s.reopenDemo(state)
 	}
-	var origin State
-	if stateErr == nil {
-		origin = state
-	} else {
-		m, err := focusedMonitor()
-		if err != nil {
-			return OpenResult{}, err
-		}
-		origin = State{SessionID: sessionID, DemoMonitor: m.Name, OriginMonitor: m.Name, OriginWorkspaceID: m.ActiveWorkspace.ID, OriginWorkspaceName: m.ActiveWorkspace.Name}
+	return s.createDemo(sessionID)
+}
+
+func (s *Service) reopenDemo(state State) (OpenResult, error) {
+	if state.OwnerToken == "" {
+		state.OwnerToken = makeOwnerToken(state.SessionID)
 	}
-	demoMonitor := origin.DemoMonitor
-	if demoMonitor == "" {
-		demoMonitor = origin.OriginMonitor
-	}
-	m, err := monitorByName(demoMonitor)
+	monitor, err := resolveDemoMonitor(state)
 	if err != nil {
 		return OpenResult{}, err
 	}
+	state.DemoMonitor = monitor.Name
+	if err = focusMonitor(monitor.Name); err != nil {
+		return OpenResult{}, err
+	}
+	if err = switchWorkspace(state.Workspace); err != nil {
+		return OpenResult{}, err
+	}
+	surviving, err := survivingWindows(state)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	missing := missingSlots(surviving)
+	if len(missing) > 0 {
+		before, err := windowAddresses()
+		if err != nil {
+			return OpenResult{}, err
+		}
+		logger := appendLaunchLogger(s.launchLogPath(state.SessionID))
+		created, err := launchDemoSlots(state.DemoDir, state.OwnerToken, missing, ResolveCapabilities(), before, logger)
+		if err != nil {
+			return OpenResult{}, fmt.Errorf("recreate demo slots: %w", err)
+		}
+		surviving = mergeWindows(surviving, created)
+	}
+	state.Windows = surviving
+	if err = placeDemoWindows(state, monitor); err != nil {
+		return OpenResult{}, err
+	}
+	if err = s.saveState(state); err != nil {
+		return OpenResult{}, fmt.Errorf("persist demo state: %w", err)
+	}
+	return s.openResult(state, len(missing) == 0), nil
+}
+
+func resolveDemoMonitor(state State) (monitorInfo, error) {
+	if state.DemoMonitor != "" {
+		if monitor, err := monitorByName(state.DemoMonitor); err == nil {
+			return monitor, nil
+		}
+	}
+	return focusedMonitor()
+}
+
+func (s *Service) createDemo(sessionID string) (OpenResult, error) {
+	m, err := focusedMonitor()
+	if err != nil {
+		return OpenResult{}, err
+	}
+	origin := State{SessionID: sessionID, DemoMonitor: m.Name, OriginMonitor: m.Name, OriginWorkspaceID: m.ActiveWorkspace.ID, OriginWorkspaceName: m.ActiveWorkspace.Name}
+	demoMonitor := origin.DemoMonitor
 	dir, err := s.prepareDemoDir(sessionID)
 	if err != nil {
 		return OpenResult{}, err
@@ -74,6 +99,10 @@ func (s *Service) Open(sessionID string) (OpenResult, error) {
 		return OpenResult{}, err
 	}
 	workspace := workspacePrefix + shortID(sessionID)
+	state := State{SessionID: sessionID, Workspace: workspace, DemoMonitor: demoMonitor, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, OwnerToken: makeOwnerToken(sessionID), Windows: map[Slot]string{}, CreatedAt: time.Now().UTC()}
+	if err = s.saveState(state); err != nil {
+		return OpenResult{}, err
+	}
 	if err = switchWorkspace(workspace); err != nil {
 		return OpenResult{}, err
 	}
@@ -95,31 +124,38 @@ func (s *Service) Open(sessionID string) (OpenResult, error) {
 		_ = restoreWorkspace(origin)
 		return OpenResult{}, fmt.Errorf("wait for preview terminal reload: %w (demo launch log: %s)", err, logPath)
 	}
-	windows, err := launchDemoApps(dir, before, logger)
+	windows, err := launchDemoSlots(dir, state.OwnerToken, allDemoSlots(), ResolveCapabilities(), before, logger)
 	if err != nil {
 		logger.line("launch failed error=%v; cleaning up classified windows", err)
-		if closeErr := closeDemoWindows(windows, 3*time.Second, logger); closeErr != nil {
-			logger.line("launch cleanup error=%v", closeErr)
+		state.Windows = cloneWindows(windows)
+		_ = s.saveState(state)
+		closeErr := closeDemoWindows(windows, 3*time.Second, logger)
+		restoreErr := restoreWorkspace(origin)
+		if closeErr == nil && restoreErr == nil {
+			_ = os.RemoveAll(dir)
+			_ = os.Remove(s.statePath(sessionID))
 		}
-		_ = restoreWorkspace(origin)
-		_ = os.RemoveAll(dir)
-		return OpenResult{}, fmt.Errorf("%w (demo launch log: %s)", err, logPath)
+		return OpenResult{}, fmt.Errorf("%w (demo launch log: %s): cleanup=%v restore=%v", err, logPath, closeErr, restoreErr)
 	}
-	state = State{SessionID: sessionID, Workspace: workspace, DemoMonitor: demoMonitor, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, Windows: cloneWindows(windows), CreatedAt: time.Now().UTC()}
-	cleanup := func() {
-		if closeErr := closeDemoWindows(windows, 3*time.Second, logger); closeErr != nil {
-			logger.line("open cleanup error=%v", closeErr)
+	state.Windows = cloneWindows(windows)
+	cleanup := func() error {
+		closeErr := closeDemoWindows(windows, 3*time.Second, logger)
+		restoreErr := restoreWorkspace(origin)
+		if closeErr == nil && restoreErr == nil {
+			if err := os.RemoveAll(dir); err != nil {
+				return err
+			}
+			if err := os.Remove(s.statePath(sessionID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
 		}
-		_ = restoreWorkspace(origin)
-		_ = os.RemoveAll(dir)
+		return errors.Join(closeErr, restoreErr)
 	}
 	if err = placeDemoWindows(state, m); err != nil {
-		cleanup()
-		return OpenResult{}, err
+		return OpenResult{}, errors.Join(err, cleanup())
 	}
 	if err = s.saveState(state); err != nil {
-		cleanup()
-		return OpenResult{}, err
+		return OpenResult{}, errors.Join(err, cleanup())
 	}
 	return s.openResult(state, false), nil
 }
@@ -132,7 +168,11 @@ func (s *Service) Close(sessionID string) (CloseResult, error) {
 		return CloseResult{}, fmt.Errorf("load demo state: %w", err)
 	}
 	logger := appendLaunchLogger(s.launchLogPath(sessionID))
-	if err := closeDemoWindows(state.Windows, 3*time.Second, logger); err != nil {
+	surviving, err := survivingWindows(state)
+	if err != nil {
+		return CloseResult{}, fmt.Errorf("find demo windows: %w", err)
+	}
+	if err := closeDemoWindows(surviving, 3*time.Second, logger); err != nil {
 		return CloseResult{}, fmt.Errorf("close demo windows: %w", err)
 	}
 	if err = restoreWorkspace(state); err != nil {

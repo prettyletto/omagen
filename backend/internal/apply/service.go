@@ -59,8 +59,16 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if !exists || active.SessionID != r.SessionID {
 		return Result{}, session.ErrSessionNotActive
 	}
-	if _, err := s.sessions.Load(r.SessionID); err != nil {
+	record, err := s.sessions.Load(r.SessionID)
+	if err != nil {
 		return Result{}, fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyCommitted {
+		if err := s.finishCommitted(r.SessionID); err != nil {
+			return Result{}, err
+		}
+		variant, _ := generation.ParseVariant(record.AppliedVariant)
+		return Result{SessionID: r.SessionID, GenerationID: record.AppliedGeneration, Variant: variant, ThemeName: record.AppliedTheme, DisplayName: record.AppliedDisplayName, ThemePath: filepath.Join(s.themesRoot, record.AppliedTheme)}, nil
 	}
 	candidate := filepath.Join(s.sessions.SessionDir(r.SessionID), "generations", r.GenerationID, string(r.Variant))
 	if err := validateCandidate(candidate, s.sessions.SessionDir(r.SessionID)); err != nil {
@@ -80,13 +88,33 @@ func (s *Service) Apply(r Request) (Result, error) {
 		_ = os.RemoveAll(destination)
 		return Result{}, fmt.Errorf("apply theme %q: %w", name.Display, err)
 	}
-	if err := s.sessions.ClearActive(r.SessionID); err != nil {
-		return Result{}, fmt.Errorf("clear active session: %w", err)
+	record.ApplyCommitted = true
+	record.AppliedTheme = name.Slug
+	record.AppliedGeneration = r.GenerationID
+	record.AppliedVariant = string(r.Variant)
+	record.AppliedDisplayName = name.Display
+	if err := s.sessions.Save(record); err != nil {
+		return Result{}, fmt.Errorf("persist committed apply: %w", err)
 	}
-	if err := s.sessions.Delete(r.SessionID); err != nil {
-		return Result{}, fmt.Errorf("remove session: %w", err)
+	if err := s.finishCommitted(r.SessionID); err != nil {
+		return Result{}, err
 	}
 	return Result{SessionID: r.SessionID, GenerationID: r.GenerationID, Variant: r.Variant, ThemeName: name.Slug, DisplayName: name.Display, ThemePath: destination}, nil
+}
+
+func (s *Service) finishCommitted(sessionID string) error {
+	record, err := s.sessions.Load(sessionID)
+	if err != nil {
+		return fmt.Errorf("load committed session: %w", err)
+	}
+	if err := s.sessions.ClearActive(sessionID); err != nil {
+		return fmt.Errorf("clear active session: %w", err)
+	}
+	if err := s.sessions.Delete(sessionID); err != nil {
+		_ = s.sessions.SaveActive(session.ActiveRecord{SessionID: sessionID, CreatedAt: record.CreatedAt})
+		return fmt.Errorf("remove committed session: %w", err)
+	}
+	return nil
 }
 func validComponent(label, value string) error {
 	if value == "" || value == "." || value == ".." || filepath.Base(value) != value {

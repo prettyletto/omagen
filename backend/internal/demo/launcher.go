@@ -16,6 +16,7 @@ import (
 type launchHints struct {
 	PIDs          map[Slot]int
 	EditorName    string
+	OwnerToken    string
 	terminalExits <-chan processExit
 }
 
@@ -30,7 +31,13 @@ type processExit struct {
 }
 
 func launchDemoApps(demoDir string, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
-	launches, hints, err := buildDemoLaunches(demoDir, ResolveCapabilities())
+	return launchDemoSlots(demoDir, "demo", allDemoSlots(), ResolveCapabilities(), before, logger)
+}
+
+func allDemoSlots() []Slot { return []Slot{SlotEditor, SlotBtop, SlotShell, SlotFiles} }
+
+func launchDemoSlots(demoDir, ownerToken string, slots []Slot, capabilities Capabilities, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
+	launches, hints, err := buildDemoLaunchesForSlots(demoDir, ownerToken, slots, capabilities)
 	if err != nil {
 		return nil, err
 	}
@@ -66,20 +73,37 @@ func launchDemoApps(demoDir string, before map[string]clientInfo, logger *launch
 }
 
 func buildDemoLaunches(demoDir string, capabilities Capabilities) ([]slotLaunch, launchHints, error) {
+	return buildDemoLaunchesForSlots(demoDir, "demo", allDemoSlots(), capabilities)
+}
+
+func buildDemoLaunchesForSlots(demoDir, ownerToken string, slots []Slot, capabilities Capabilities) ([]slotLaunch, launchHints, error) {
 	if capabilities.Terminal.Command == "" {
 		return nil, launchHints{}, fmt.Errorf("demo requires a terminal capability")
 	}
-	editor, editorName := buildEditorCommand(demoDir, capabilities)
-	monitor := buildMonitorCommand(demoDir, capabilities)
-	shell := buildShellCommand(demoDir, capabilities)
-	files := buildFilesCommand(demoDir, capabilities)
-	launches := []slotLaunch{{Slot: SlotEditor, Cmd: editor}, {Slot: SlotBtop, Cmd: monitor}, {Slot: SlotShell, Cmd: shell}, {Slot: SlotFiles, Cmd: files}}
+	launches := make([]slotLaunch, 0, len(slots))
+	var editorName string
+	for _, slot := range slots {
+		var cmd *exec.Cmd
+		switch slot {
+		case SlotEditor:
+			cmd, editorName = buildEditorCommandFor(demoDir, ownerToken, capabilities)
+		case SlotBtop:
+			cmd = buildMonitorCommandFor(demoDir, ownerToken, capabilities)
+		case SlotShell:
+			cmd = buildShellCommandFor(demoDir, ownerToken, capabilities)
+		case SlotFiles:
+			cmd = buildFilesCommandFor(demoDir, ownerToken, capabilities)
+		default:
+			return nil, launchHints{}, fmt.Errorf("unknown demo slot %s", slot)
+		}
+		launches = append(launches, slotLaunch{Slot: slot, Cmd: cmd})
+	}
 	for _, launch := range launches {
 		if launch.Cmd == nil {
 			return nil, launchHints{}, fmt.Errorf("no launcher for demo slot %s", launch.Slot)
 		}
 	}
-	return launches, launchHints{PIDs: map[Slot]int{}, EditorName: editorName}, nil
+	return launches, launchHints{PIDs: map[Slot]int{}, EditorName: editorName, OwnerToken: ownerToken}, nil
 }
 
 func isTerminalSlot(slot Slot) bool {
@@ -104,35 +128,51 @@ func envValue(env []string, key string) string {
 	}
 	return ""
 }
+func demoAppID(token string, slot Slot) string {
+	return fmt.Sprintf("org.omagen.demo.%s.%s", token, slot)
+}
+
 func buildEditorCommand(demoDir string, capabilities Capabilities) (*exec.Cmd, string) {
+	return buildEditorCommandFor(demoDir, "demo", capabilities)
+}
+func buildEditorCommandFor(demoDir, token string, capabilities Capabilities) (*exec.Cmd, string) {
 	sample := filepath.Join(demoDir, "sample.go")
 	if capabilities.Editor.Command == "" {
-		return terminalCommand(capabilities.Terminal, "org.omagen.demo.editor", demoDir, "/bin/bash", "-lc", sourceViewerScript(sample)), ""
+		return terminalCommand(capabilities.Terminal, demoAppID(token, SlotEditor), demoDir, "/bin/bash", "-lc", sourceViewerScript(sample)), ""
 	}
 	if capabilities.Editor.Kind == "tui" {
-		return terminalCommand(capabilities.Terminal, "org.omagen.demo.editor", demoDir, capabilities.Editor.Command, sample), capabilities.Editor.Command
+		return terminalCommand(capabilities.Terminal, demoAppID(token, SlotEditor), demoDir, capabilities.Editor.Command, sample), capabilities.Editor.Command
 	}
 	cmd := exec.Command(capabilities.Editor.Command, sample)
 	cmd.Dir = demoDir
 	return cmd, capabilities.Editor.Command
 }
 func buildMonitorCommand(dir string, capabilities Capabilities) *exec.Cmd {
+	return buildMonitorCommandFor(dir, "demo", capabilities)
+}
+func buildMonitorCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.Monitor.Command != "" {
-		return terminalCommand(capabilities.Terminal, "org.omagen.demo.btop", dir, capabilities.Monitor.Command)
+		return terminalCommand(capabilities.Terminal, demoAppID(token, SlotBtop), dir, capabilities.Monitor.Command)
 	}
-	return terminalCommand(capabilities.Terminal, "org.omagen.demo.btop", dir, "/bin/bash", "-lc", systemInfoScript())
+	return terminalCommand(capabilities.Terminal, demoAppID(token, SlotBtop), dir, "/bin/bash", "-lc", systemInfoScript())
 }
 func buildShellCommand(dir string, capabilities Capabilities) *exec.Cmd {
+	return buildShellCommandFor(dir, "demo", capabilities)
+}
+func buildShellCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	script := `cd "$OMAGEN_DEMO_DIR" || exit 1
 printf '\033[1mOmagen demo\033[0m\n\n'
 if command -v lsd >/dev/null 2>&1; then lsd -la; else ls -la; fi
 printf '\n'
 exec "${SHELL:-/bin/bash}" -l
 `
-	cmd := terminalCommand(capabilities.Terminal, "org.omagen.demo.shell", dir, "/bin/bash", "-lc", script)
+	cmd := terminalCommand(capabilities.Terminal, demoAppID(token, SlotShell), dir, "/bin/bash", "-lc", script)
 	return cmd
 }
 func buildFilesCommand(dir string, capabilities Capabilities) *exec.Cmd {
+	return buildFilesCommandFor(dir, "demo", capabilities)
+}
+func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.FileManager.Command != "" {
 		if capabilities.FileManager.Command == "xdg-open" {
 			cmd := exec.Command(capabilities.FileManager.Command, dir)
@@ -143,7 +183,7 @@ func buildFilesCommand(dir string, capabilities Capabilities) *exec.Cmd {
 		cmd.Dir = dir
 		return cmd
 	}
-	return terminalCommand(capabilities.Terminal, "org.omagen.demo.files", dir, "/bin/bash", "-lc", fileListingScript())
+	return terminalCommand(capabilities.Terminal, demoAppID(token, SlotFiles), dir, "/bin/bash", "-lc", fileListingScript())
 }
 
 func terminalCommand(capability ApplicationCapability, appID, dir string, command string, args ...string) *exec.Cmd {
@@ -231,6 +271,25 @@ func terminalReloadExit(hints launchHints, windows map[Slot]string) *processExit
 func formatWindows(windows map[Slot]string) string {
 	return fmt.Sprintf("editor=%q btop=%q shell=%q files=%q", windows[SlotEditor], windows[SlotBtop], windows[SlotShell], windows[SlotFiles])
 }
+func matchesOwnedSlot(client clientInfo, token string, slot Slot) bool {
+	expected := strings.ToLower(demoAppID(token, slot))
+	return strings.ToLower(client.Class) == expected || strings.ToLower(client.InitialClass) == expected
+}
+func discoverOwnedWindows(token string) (map[Slot]string, error) {
+	current, err := clients()
+	if err != nil {
+		return nil, err
+	}
+	result := map[Slot]string{}
+	for _, client := range current {
+		for _, slot := range allDemoSlots() {
+			if client.Address != "" && matchesOwnedSlot(client, token, slot) {
+				result[slot] = client.Address
+			}
+		}
+	}
+	return result, nil
+}
 func classifyDemoWindows(clients []clientInfo, hints launchHints) map[Slot]string {
 	result := map[Slot]string{}
 	used := map[string]bool{}
@@ -253,11 +312,11 @@ func classifyDemoWindows(clients []clientInfo, hints launchHints) map[Slot]strin
 		}
 		text := strings.ToLower(strings.Join([]string{c.Class, c.InitialClass, c.Title, c.InitialTitle}, " "))
 		switch {
-		case strings.Contains(text, "org.omagen.demo.btop"):
+		case matchesOwnedSlot(c, hints.OwnerToken, SlotBtop) || (hints.OwnerToken == "demo" && strings.Contains(text, "org.omagen.demo.btop")):
 			assign(SlotBtop, c)
-		case strings.Contains(text, "org.omagen.demo.shell"):
+		case matchesOwnedSlot(c, hints.OwnerToken, SlotShell) || (hints.OwnerToken == "demo" && strings.Contains(text, "org.omagen.demo.shell")):
 			assign(SlotShell, c)
-		case strings.Contains(text, "org.omagen.demo.editor"):
+		case matchesOwnedSlot(c, hints.OwnerToken, SlotEditor) || (hints.OwnerToken == "demo" && strings.Contains(text, "org.omagen.demo.editor")):
 			assign(SlotEditor, c)
 		}
 	}

@@ -15,6 +15,11 @@ type Record struct {
 	SourceImage        string        `json:"source_image,omitempty"`
 	GenerationID       string        `json:"generation_id,omitempty"`
 	PreviewVariant     string        `json:"preview_variant,omitempty"`
+	ApplyCommitted     bool          `json:"apply_committed,omitempty"`
+	AppliedTheme       string        `json:"applied_theme,omitempty"`
+	AppliedGeneration  string        `json:"applied_generation,omitempty"`
+	AppliedVariant     string        `json:"applied_variant,omitempty"`
+	AppliedDisplayName string        `json:"applied_display_name,omitempty"`
 }
 
 type BeginResult struct {

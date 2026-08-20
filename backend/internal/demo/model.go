@@ -21,8 +21,16 @@ type State struct {
 	OriginWorkspaceID   int             `json:"origin_workspace_id"`
 	OriginWorkspaceName string          `json:"origin_workspace_name"`
 	DemoDir             string          `json:"demo_dir"`
+	OwnerToken          string          `json:"owner_token"`
 	Windows             map[Slot]string `json:"windows"`
 	CreatedAt           time.Time       `json:"created_at"`
+}
+
+func makeOwnerToken(sessionID string) string {
+	if value := shortID(sessionID); value != "" {
+		return value
+	}
+	return "session"
 }
 
 type OpenResult struct {

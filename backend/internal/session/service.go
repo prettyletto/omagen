@@ -117,6 +117,9 @@ func (s *Service) Cancel(sessionID string) error {
 			}
 			return fmt.Errorf("load session: %w", err)
 		}
+		if record.ApplyCommitted {
+			return s.finishRestoredSession(sessionID)
+		}
 		if err := s.restoreAndVerify(record); err != nil {
 			return err
 		}
@@ -140,6 +143,12 @@ func (s *Service) RecoverActive() (RecoverResult, error) {
 		record, err := s.store.Load(active.SessionID)
 		if err != nil {
 			return RecoverResult{}, fmt.Errorf("%w: rollback record: %v", ErrActiveSessionCorrupt, err)
+		}
+		if record.ApplyCommitted {
+			if err := s.finishRestoredSession(active.SessionID); err != nil {
+				return RecoverResult{}, err
+			}
+			return RecoverResult{Recovered: true, SessionID: active.SessionID}, nil
 		}
 		if err := s.restoreAndVerify(record); err != nil {
 			return RecoverResult{}, err
@@ -176,10 +185,15 @@ func (s *Service) restoreAndVerify(record Record) error {
 }
 
 func (s *Service) finishRestoredSession(sessionID string) error {
+	record, err := s.store.Load(sessionID)
+	if err != nil {
+		return fmt.Errorf("load completed session: %w", err)
+	}
 	if err := s.store.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)
 	}
 	if err := s.store.Delete(sessionID); err != nil {
+		_ = s.store.SaveActive(ActiveRecord{SessionID: sessionID, CreatedAt: record.CreatedAt})
 		return fmt.Errorf("remove session: %w", err)
 	}
 	return nil

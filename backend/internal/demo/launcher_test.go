@@ -73,3 +73,27 @@ func TestBuildDemoLaunchesRequiresTerminal(t *testing.T) {
 		t.Fatal("expected missing terminal error")
 	}
 }
+
+func TestDemoAppIDIsSessionSpecific(t *testing.T) {
+	if got := demoAppID("abc123", SlotEditor); got != "org.omagen.demo.abc123.editor" {
+		t.Fatalf("app id = %q", got)
+	}
+	if matchesOwnedSlot(clientInfo{Class: "org.omagen.demo.other.editor"}, "abc123", SlotEditor) {
+		t.Fatal("accepted another session's window")
+	}
+	if !matchesOwnedSlot(clientInfo{InitialClass: "org.omagen.demo.abc123.editor"}, "abc123", SlotEditor) {
+		t.Fatal("did not accept exact initial class")
+	}
+}
+
+func TestMissingSlotsAndMergeWindows(t *testing.T) {
+	base := map[Slot]string{SlotEditor: "editor-address", SlotShell: "shell-address"}
+	missing := missingSlots(base)
+	if len(missing) != 2 || missing[0] != SlotBtop || missing[1] != SlotFiles {
+		t.Fatalf("missing slots = %#v", missing)
+	}
+	merged := mergeWindows(base, map[Slot]string{SlotBtop: "btop-address", SlotFiles: "files-address"})
+	if len(merged) != 4 || merged[SlotEditor] != "editor-address" || merged[SlotFiles] != "files-address" {
+		t.Fatalf("merged windows = %#v", merged)
+	}
+}

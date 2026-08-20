@@ -227,6 +227,20 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("omarchy theme bg set %q: %w", path, err)
 	}
+	// Theme restoration can put the current/background symlink back at the
+	// same path that the preview used. The shell's normal background IPC
+	// deliberately ignores an unchanged path, even when the symlink now
+	// points at a different inode. Force a fresh image load so Cancel cannot
+	// leave the preview bitmap cached on screen.
+	if _, err := exec.LookPath("omarchy-shell"); err != nil {
+		return nil
+	}
+	refresh := exec.Command("omarchy-shell", "-q", "background", "setInstant", path)
+	refresh.Stdout = c.stderr
+	refresh.Stderr = c.stderr
+	if err := refresh.Run(); err != nil {
+		return fmt.Errorf("refresh restored background %q: %w", path, err)
+	}
 	return nil
 }
 

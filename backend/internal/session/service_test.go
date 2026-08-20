@@ -55,6 +55,29 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 }
 
+func TestCancelCommittedApplyOnlyFinishesCleanup(t *testing.T) {
+	s := testStore(t)
+	fake := &fakeOmarchy{theme: "permanent", background: BackgroundRef{Kind: "external", Path: "/tmp/permanent.png"}}
+	record := testRecord("committed")
+	record.ApplyCommitted = true
+	record.AppliedTheme = "permanent"
+	if err := s.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveActive(ActiveRecord{SessionID: record.SessionID, CreatedAt: record.CreatedAt}); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewService(s, fake).Cancel(record.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if fake.restoredTheme != "" || fake.restoredBackground.Path != "" {
+		t.Fatalf("committed apply was rolled back: %#v", fake)
+	}
+	if _, exists, err := s.LoadActive(); err != nil || exists {
+		t.Fatalf("active marker remains: exists=%t err=%v", exists, err)
+	}
+}
+
 func TestServiceErrors(t *testing.T) {
 	cases := []struct {
 		name  string

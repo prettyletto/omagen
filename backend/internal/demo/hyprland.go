@@ -171,22 +171,59 @@ func windowAddresses() (map[string]clientInfo, error) {
 	return result, nil
 }
 func allOwnedWindowsExist(s State) bool {
-	if len(s.Windows) != 4 {
-		return false
-	}
+	windows, err := survivingWindows(s)
+	return err == nil && len(missingSlots(windows)) == 0
+}
+
+func survivingWindows(s State) (map[Slot]string, error) {
 	current, err := windowAddresses()
 	if err != nil {
-		return false
+		return nil, err
 	}
-	for _, slot := range []Slot{SlotEditor, SlotBtop, SlotShell, SlotFiles} {
-		if s.Windows[slot] == "" {
-			return false
-		}
-		if _, ok := current[s.Windows[slot]]; !ok {
-			return false
+	result := map[Slot]string{}
+	for slot, address := range s.Windows {
+		if address != "" {
+			if _, ok := current[address]; ok {
+				result[slot] = address
+			}
 		}
 	}
-	return true
+	if s.OwnerToken != "" {
+		discovered, discoverErr := discoverOwnedWindows(s.OwnerToken)
+		if discoverErr == nil {
+			for slot, address := range discovered {
+				if result[slot] == "" {
+					result[slot] = address
+				}
+			}
+		}
+	}
+	return result, nil
+}
+
+func missingSlots(windows map[Slot]string) []Slot {
+	var result []Slot
+	for _, slot := range allDemoSlots() {
+		if windows[slot] == "" {
+			result = append(result, slot)
+		}
+	}
+	return result
+}
+
+func mergeWindows(base, added map[Slot]string) map[Slot]string {
+	result := make(map[Slot]string, 4)
+	for slot, address := range base {
+		if address != "" {
+			result[slot] = address
+		}
+	}
+	for slot, address := range added {
+		if address != "" {
+			result[slot] = address
+		}
+	}
+	return result
 }
 
 // closeDemoWindows waits until Hyprland has confirmed every owned window is

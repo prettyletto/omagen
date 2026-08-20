@@ -139,6 +139,11 @@ func TestRestoreCommands(t *testing.T) {
 	if err := os.WriteFile(script, []byte(contents), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	refreshScript := filepath.Join(bin, "omarchy-shell")
+	refreshContents := "#!/bin/sh\nprintf '%s %s %s %s\\n' \"$1\" \"$2\" \"$3\" \"$4\" > \"$HOME/refresh.log\"\n"
+	if err := os.WriteFile(refreshScript, []byte(refreshContents), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", bin)
 	current := filepath.Join(home, ".local/state/omarchy/current")
 	if err := os.MkdirAll(filepath.Join(current, "theme"), 0o755); err != nil {
@@ -157,6 +162,13 @@ func TestRestoreCommands(t *testing.T) {
 	}
 	if err := client.RestoreBackground(session.BackgroundRef{Kind: "external", Path: background}); err != nil {
 		t.Fatal(err)
+	}
+	refreshLog, err := os.ReadFile(filepath.Join(home, "refresh.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(refreshLog); got != "-q background setInstant "+background+"\n" {
+		t.Fatalf("refresh command = %q", got)
 	}
 }
 
