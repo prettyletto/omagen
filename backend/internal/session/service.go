@@ -22,6 +22,8 @@ type Service struct {
 	omarchy Omarchy
 }
 
+func (s *Service) Store() *Store { return s.store }
+
 func NewService(store *Store, omarchy Omarchy) *Service {
 	return &Service{store: store, omarchy: omarchy}
 }

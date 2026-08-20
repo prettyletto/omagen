@@ -90,6 +90,14 @@ func (s *Service) applyLocked(request Request) (Result, error) {
 	if err != nil {
 		return Result{}, fmt.Errorf("apply preview theme %s: %w", themeName, err)
 	}
+	record, err := s.sessions.Load(request.SessionID)
+	if err != nil {
+		return Result{}, fmt.Errorf("reload session after preview: %w", err)
+	}
+	record.PreviewVariant = string(request.Variant)
+	if err := s.sessions.Save(record); err != nil {
+		return Result{}, fmt.Errorf("persist preview progress: %w", err)
+	}
 	return Result{SessionID: request.SessionID, GenerationID: request.GenerationID, Variant: request.Variant, ThemeName: themeName, PID: pid, AlreadyActive: already, LogPath: logPath}, nil
 }
 

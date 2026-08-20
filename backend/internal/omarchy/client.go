@@ -100,6 +100,13 @@ func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error)
 	return pid, false, nil
 }
 
+func (c *Client) ApplyTheme(themeName, logPath string) error {
+	_, _, err := c.runThemeSetUntilCritical(themeName, logPath, []string{
+		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
+	}, 10*time.Second)
+	return err
+}
+
 func (c *Client) startThemeSet(theme, logPath string, environment []string) (int, error) {
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {

@@ -15,11 +15,17 @@ Item {
     property bool generationBusy: false
     property bool describeBusy: false
     property bool previewBusy: false
+    property bool applyBusy: false
     property bool demoBusy: false
     property bool demoActive: false
     property bool pendingDemo: false
     property bool pendingCancelAfterDemo: false
     property bool pendingApplyAfterDemo: false
+    property bool recoveryBusy: false
+    property string route: "unknown"
+    property var resumableSession: null
+    property string pendingApplyVariant: ""
+    property string pendingApplyName: ""
     property string sourceImage: ""
     property string errorMessage: ""
 
@@ -32,11 +38,38 @@ Item {
     function open(payload) {
         root.errorMessage = "";
         opened = true;
+        if (session.active) {
+            route = "workspace";
+            return;
+        }
+        route = "loading";
+        backend.checkResumeSession();
     }
 
     function close() {
         opened = false;
         settingsOpen = false;
+    }
+
+    function resumePreviousSession() {
+        if (!resumableSession || recoveryBusy)
+            return;
+        session.resume(resumableSession);
+        sourceImage = resumableSession.source_image || "";
+        resumableSession = null;
+        route = "workspace";
+    }
+
+    function restorePreviousSession() {
+        if (recoveryBusy)
+            return;
+        recoveryBusy = true;
+        errorMessage = "";
+        // Release the exclusive layer-shell keyboard focus immediately.
+        // Recovery continues in the backend; if it fails, the durable session
+        // remains and the next Omagen launch will offer recovery again.
+        opened = false;
+        backend.recoverSession();
     }
 
     function openSettings() {
@@ -81,15 +114,35 @@ Item {
         backend.beginSession();
     }
 
-    function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy) session.selectVariant(variant) }
+    function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy && !applyBusy) session.selectVariant(variant) }
     function testLive(variant) {
-        if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy) return;
+        if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
         errorMessage = ""; previewBusy = true;
         backend.applyPreview(session.sessionId, session.generationId, variant);
     }
+    function suggestedThemeName() {
+        let filename = root.sourceImage || ""
+        if (filename === "") return "Omagen Theme"
+        filename = filename.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim()
+        if (filename === "") return "Omagen Theme"
+        return filename.split(/\s+/).map(function(word) { return word.length ? word.charAt(0).toUpperCase() + word.slice(1) : word }).join(" ")
+    }
+    function applyTheme(variant, name) {
+        if (!session.workspaceReady || applyBusy || previewBusy || cancelBusy || demoBusy) return
+        errorMessage = ""; applyBusy = true
+        if (demoActive) {
+            pendingApplyAfterDemo = true
+            pendingApplyVariant = variant
+            pendingApplyName = name
+            demoBusy = true
+            backend.closeDemo(session.sessionId)
+            return
+        }
+        backend.applyTheme(session.sessionId, session.generationId, variant, name)
+    }
 
     function demoVariant(variant) {
-        if (demoActive || demoBusy || previewBusy || cancelBusy || !session.workspaceReady)
+        if (demoActive || demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
             return;
 
         errorMessage = "";
@@ -138,6 +191,12 @@ Item {
         pendingDemo = false;
         pendingCancelAfterDemo = false;
         pendingApplyAfterDemo = false;
+        pendingApplyVariant = "";
+        pendingApplyName = "";
+        applyBusy = false;
+        route = "setup";
+        resumableSession = null;
+        recoveryBusy = false;
     }
 
     State.SessionState {
@@ -179,13 +238,46 @@ Item {
                 backgroundKind,
                 backgroundPath
             );
+            root.route = "workspace";
             root.generationBusy = true;
             backend.generateTheme(sessionId, root.sourceImage);
         }
 
         onSessionBeginFailed: function(message) {
             root.sessionBusy = false;
+            if (message.indexOf("already active") !== -1 || message.indexOf("active session") !== -1) {
+                root.route = "loading";
+                backend.checkResumeSession();
+                return;
+            }
             root.errorMessage = message;
+        }
+
+        onSessionResumeChecked: function(result) {
+            if (!result || result.active !== true) {
+                root.resumableSession = null;
+                root.route = "setup";
+                return;
+            }
+            root.resumableSession = result;
+            root.route = "recovery";
+        }
+        onSessionResumeCheckFailed: function(message) { root.resumableSession = null; root.route = "setup"; root.errorMessage = message }
+        onSessionRecovered: {
+            root.recoveryBusy = false;
+            root.resumableSession = null;
+            root.session.clear();
+            root.sourceImage = "";
+            root.route = "setup";
+            root.settingsOpen = false;
+            root.opened = false;
+        }
+        onSessionRecoverFailed: function(message) {
+            root.recoveryBusy = false;
+            root.errorMessage = message;
+            root.resumableSession = null;
+            root.route = "setup";
+            root.opened = false;
         }
 
         onSessionCancelled: function(sessionId) {
@@ -269,7 +361,17 @@ Item {
             }
             if (root.pendingApplyAfterDemo) {
                 root.pendingApplyAfterDemo = false;
-                root.commitSelectedVariant();
+                const variant = root.pendingApplyVariant;
+                const name = root.pendingApplyName;
+                root.pendingApplyVariant = "";
+                root.pendingApplyName = "";
+                backend.applyTheme(
+                    session.sessionId,
+                    session.generationId,
+                    variant,
+                    name
+                );
+                return;
             }
         }
         onDemoCloseFailed: function(message) {
@@ -282,6 +384,12 @@ Item {
             // The user can retry Demo shutdown after Hyprland has caught up.
             // Permanent Apply intentionally remains pending for the same reason.
         }
+        onThemeApplied: function(sessionId, generationId, variant, themeName) {
+            applyBusy = false
+            if (sessionId !== session.sessionId || generationId !== session.generationId) { errorMessage = "Backend applied a different generation"; return }
+            root.clearSession()
+        }
+        onThemeApplyFailed: function(message) { applyBusy = false; errorMessage = message }
     }
 
     State.SettingsState {
@@ -329,7 +437,7 @@ Item {
     }
 
     Views.SetupWindow {
-        active: root.opened && !session.active && !root.settingsOpen
+        active: root.opened && root.route === "setup" && !root.settingsOpen
         busy: root.sessionBusy
         sourceImage: root.sourceImage
         errorMessage: root.errorMessage
@@ -340,8 +448,18 @@ Item {
         onHideRequested: root.close()
     }
 
+    Views.RecoveryWindow {
+        active: root.opened && root.route === "recovery"
+        busy: root.recoveryBusy
+        generationId: root.resumableSession ? root.resumableSession.generation_id || "" : ""
+        previewVariant: root.resumableSession ? root.resumableSession.preview_variant || "" : ""
+        onResumeRequested: root.resumePreviousSession()
+        onRestoreRequested: root.restorePreviousSession()
+        onCloseRequested: { root.recoveryBusy = false; root.opened = false }
+    }
+
     Views.WorkspaceWindow {
-        active: root.opened && session.active
+        active: root.opened && root.route === "workspace" && session.active
         cancelBusy: root.cancelBusy
         sourceImage: root.sourceImage
         sessionId: session.sessionId
@@ -350,6 +468,8 @@ Item {
         originalBackgroundPath: session.originalBackgroundPath
         generationBusy: root.generationBusy || root.describeBusy
         previewBusy: root.previewBusy
+        applyBusy: root.applyBusy
+        suggestedThemeName: root.suggestedThemeName()
         demoBusy: root.demoBusy
         demoActive: root.demoActive
         workspaceReady: session.workspaceReady
@@ -369,6 +489,7 @@ Item {
         }
         onHideRequested: root.close()
         onCancelRequested: root.cancelSession()
+        onApplyRequested: function(variant, name) { root.applyTheme(variant, name) }
     }
 
     Views.SettingsWindow {

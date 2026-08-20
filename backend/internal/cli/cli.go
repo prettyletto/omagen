@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/prettyletto/omagen/backend/internal/apply"
 	"github.com/prettyletto/omagen/backend/internal/demo"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
@@ -24,6 +25,18 @@ type pingResponse struct {
 type cancelResponse struct {
 	OK        bool   `json:"ok"`
 	SessionID string `json:"session_id"`
+}
+
+type resumeResponse struct {
+	Active                 bool                          `json:"active"`
+	SessionID              string                        `json:"session_id,omitempty"`
+	SourceImage            string                        `json:"source_image,omitempty"`
+	GenerationID           string                        `json:"generation_id,omitempty"`
+	PreviewVariant         string                        `json:"preview_variant,omitempty"`
+	OriginalTheme          string                        `json:"original_theme,omitempty"`
+	OriginalBackgroundKind string                        `json:"original_background_kind,omitempty"`
+	OriginalBackgroundPath string                        `json:"original_background_path,omitempty"`
+	Variants               []generation.DescribedVariant `json:"variants,omitempty"`
 }
 
 func Run(
@@ -59,6 +72,10 @@ func Run(
 	if err != nil {
 		return fail(stderr, 1, "initialize preview service: %v", err)
 	}
+	applyService, err := apply.NewService(store, omarchyClient)
+	if err != nil {
+		return fail(stderr, 1, "initialize apply service: %v", err)
+	}
 
 	generationService := generation.NewService(
 		store,
@@ -78,16 +95,20 @@ func Run(
 		)
 
 	case "session":
-		return runSession(
+		return runSessionWithDependencies(
 			args[1:],
 			sessionService,
 			previewService,
+			demoService,
+			generationService,
 			stdout,
 			stderr,
 		)
 
 	case "preview":
 		return runPreview(args[1:], previewService, stdout, stderr)
+	case "apply":
+		return runApply(args[1:], applyService, stdout, stderr)
 
 	case "generate":
 		return runGenerate(
@@ -116,6 +137,21 @@ func Run(
 	}
 }
 
+func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
+	if len(args) != 4 {
+		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name>")
+	}
+	variant, err := generation.ParseVariant(args[2])
+	if err != nil {
+		return fail(stderr, 2, "%v", err)
+	}
+	result, err := service.Apply(apply.Request{SessionID: args[0], GenerationID: args[1], Variant: variant, ThemeName: args[3]})
+	if err != nil {
+		return fail(stderr, 1, "%v", err)
+	}
+	return writeJSON(stdout, stderr, result)
+}
+
 func runGeneration(args []string, service *generation.Service, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		return fail(stderr, 2, "missing generation subcommand")
@@ -135,10 +171,16 @@ func runGeneration(args []string, service *generation.Service, stdout, stderr io
 	}
 }
 
-func runSession(
+func runSession(args []string, service *session.Service, previewService *preview.Service, stdout, stderr io.Writer) int {
+	return runSessionWithDependencies(args, service, previewService, nil, nil, stdout, stderr)
+}
+
+func runSessionWithDependencies(
 	args []string,
 	service *session.Service,
 	previewService *preview.Service,
+	demoService *demo.Service,
+	generationService *generation.Service,
 	stdout,
 	stderr io.Writer,
 ) int {
@@ -151,6 +193,30 @@ func runSession(
 	}
 
 	switch args[0] {
+	case "resume":
+		if len(args) != 1 {
+			return fail(stderr, 2, "session resume takes no arguments")
+		}
+		active, exists, err := serviceStoreActive(service)
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		if !exists {
+			return writeJSON(stdout, stderr, resumeResponse{Active: false})
+		}
+		record, err := serviceStoreRecord(service, active.SessionID)
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		if record.GenerationID != "" {
+			described, err := generationService.Describe(record.SessionID, record.GenerationID)
+			if err != nil {
+				return fail(stderr, 1, "describe resumable generation: %v", err)
+			}
+			result.Variants = described.Variants
+		}
+		return writeJSON(stdout, stderr, result)
 	case "begin":
 		if len(args) != 1 {
 			return fail(stderr, 2, "session begin takes no arguments")
@@ -219,6 +285,15 @@ func runSession(
 		if len(args) != 1 {
 			return fail(stderr, 2, "session recover takes no arguments")
 		}
+		status, statusErr := service.Status()
+		if statusErr != nil {
+			return fail(stderr, 1, "%v", statusErr)
+		}
+		if status.Active && demoService != nil {
+			if _, closeErr := demoService.Close(status.SessionID); closeErr != nil {
+				return fail(stderr, 1, "close demo workspace: %v", closeErr)
+			}
+		}
 		result, err := service.RecoverActive()
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
@@ -238,6 +313,14 @@ func runSession(
 			args[0],
 		)
 	}
+}
+
+func serviceStoreActive(service *session.Service) (session.ActiveRecord, bool, error) {
+	return service.Store().LoadActive()
+}
+
+func serviceStoreRecord(service *session.Service, sessionID string) (session.Record, error) {
+	return service.Store().Load(sessionID)
 }
 
 func runPreview(args []string, service *preview.Service, stdout, stderr io.Writer) int {

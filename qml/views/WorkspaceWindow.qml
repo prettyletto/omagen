@@ -12,6 +12,8 @@ PanelWindow {
     property bool cancelBusy: false
     property bool demoBusy: false
     property bool demoActive: false
+    property bool applyBusy: false
+    property string suggestedThemeName: ""
     property bool workspaceReady: false
     property string sourceImage: ""
     property string sessionId: ""
@@ -23,7 +25,7 @@ PanelWindow {
     property string previewVariant: ""
     property var palettes: ({})
     property string errorMessage: ""
-    signal hideRequested(); signal cancelRequested(); signal variantSelected(string variant); signal testLiveRequested(string variant); signal demoRequested(string variant)
+    signal hideRequested(); signal cancelRequested(); signal variantSelected(string variant); signal testLiveRequested(string variant); signal demoRequested(string variant); signal applyRequested(string variant, string name)
     visible: active; color: "transparent"
     WlrLayershell.namespace: "omagen-workspace"; WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
@@ -52,30 +54,37 @@ PanelWindow {
                 Text { visible:root.errorMessage!==""; anchors.left:parent.left; anchors.verticalCenter:parent.verticalCenter; width:parent.width*.5; text:root.errorMessage; color:Color.urgent; font.pixelSize:11; elide:Text.ElideRight }
                 Row { anchors.right:parent.right; anchors.verticalCenter:parent.verticalCenter; spacing:10
                     Rectangle {
+                        width: 110; height: 40; radius: 8; color: Color.accent
+                        opacity: root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy ? 1 : .45
+                        Text { anchors.centerIn: parent; text: root.applyBusy ? "Applying…" : "Apply"; color: Color.background; font.pixelSize: 13; font.bold: true }
+                        MouseArea { anchors.fill: parent; enabled: root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy; onClicked: themeNameDialog.openWith(root.suggestedThemeName) }
+                    }
+                    Rectangle {
                         width: 110; height: 40; radius: 8
                         color: Util.alpha(Color.background, .6)
                         border.width: 1; border.color: Color.muted
                         opacity: root.cancelBusy ? .45 : 1
                         Text { anchors.centerIn: parent; text: root.cancelBusy ? "Restoring…" : "Cancel"; color: Color.foreground; font.pixelSize: 13 }
-                        MouseArea { anchors.fill: parent; enabled: !root.cancelBusy && !root.previewBusy; onClicked: root.cancelRequested() }
+                        MouseArea { anchors.fill: parent; enabled: !root.cancelBusy && !root.previewBusy && !root.applyBusy; onClicked: root.cancelRequested() }
                     }
                     Rectangle {
                         width: 145; height: 40; radius: 8
                         color: Color.accent
-                        opacity: root.workspaceReady && !root.previewBusy && !root.cancelBusy ? 1 : .45
+                        opacity: root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy ? 1 : .45
                         Text { anchors.centerIn: parent; text: root.previewBusy ? "Applying…" : "Test Live"; color: Color.background; font.pixelSize: 13; font.bold: true }
-                        MouseArea { anchors.fill: parent; enabled: root.workspaceReady && !root.previewBusy && !root.cancelBusy; onClicked: root.testLiveRequested(root.selectedVariant) }
+                        MouseArea { anchors.fill: parent; enabled: root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy; onClicked: root.testLiveRequested(root.selectedVariant) }
                     }
                     Rectangle {
                         width: 100; height: 40; radius: 8
                         color: Color.accent
                         opacity: root.workspaceReady && !root.previewBusy && !root.cancelBusy ? 1 : .45
                         Text { anchors.centerIn: parent; text: root.demoBusy ? (root.demoActive ? "Dispatching…" : "Opening…") : (root.demoActive ? "Dispatch" : "Demo"); color: Color.background; font.pixelSize: 13; font.bold: true }
-                        MouseArea { anchors.fill: parent; enabled: root.demoActive ? !root.demoBusy && !root.cancelBusy : root.workspaceReady && !root.previewBusy && !root.cancelBusy; onClicked: root.demoRequested(root.selectedVariant) }
+                        MouseArea { anchors.fill: parent; enabled: root.demoActive ? !root.demoBusy && !root.cancelBusy && !root.applyBusy : root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy; onClicked: root.demoRequested(root.selectedVariant) }
                     }
                 }
             }
         }
         Rectangle { anchors.centerIn:parent; visible:root.generationBusy || (root.active&&!root.workspaceReady&&root.errorMessage===""); width:260; height:80; radius:12; color:Color.background; border.width:1; border.color:Color.muted; Text { anchors.centerIn:parent; text:root.generationBusy?"Generating themes…":"Loading palettes…"; color:Color.foreground; font.pixelSize:14 } }
     }
+    Components.ThemeNameDialog { id: themeNameDialog; anchors.fill: parent; busy: root.applyBusy; onConfirmed: function(name) { root.applyRequested(root.selectedVariant, name) } }
 }

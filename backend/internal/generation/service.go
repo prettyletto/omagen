@@ -152,6 +152,16 @@ func (s *Service) Generate(
 			err,
 		)
 	}
+	record, err := s.sessions.Load(request.SessionID)
+	if err != nil {
+		return Result{}, fmt.Errorf("reload session after generation: %w", err)
+	}
+	record.SourceImage = request.SourceImage
+	record.GenerationID = generationID
+	record.PreviewVariant = ""
+	if err := s.sessions.Save(record); err != nil {
+		return Result{}, fmt.Errorf("persist generation progress: %w", err)
+	}
 
 	return buildResult(
 		generationID,

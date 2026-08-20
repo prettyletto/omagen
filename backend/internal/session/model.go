@@ -12,6 +12,9 @@ type Record struct {
 	OriginalTheme      string        `json:"original_theme"`
 	OriginalBackground BackgroundRef `json:"original_background"`
 	CreatedAt          time.Time     `json:"created_at"`
+	SourceImage        string        `json:"source_image,omitempty"`
+	GenerationID       string        `json:"generation_id,omitempty"`
+	PreviewVariant     string        `json:"preview_variant,omitempty"`
 }
 
 type BeginResult struct {
