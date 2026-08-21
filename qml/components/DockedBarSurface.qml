@@ -55,7 +55,13 @@ PanelWindow {
         watchChanges: true
         printErrors: false
         onLoaded: root.applyMetadata(text())
-        onLoadFailed: root.applyMetadata("")
+        // A missing sidecar is not the same as an explicit Continuous value.
+        // Keep the legacy shell.bar.toml fallback available for themes that
+        // were generated before Omagen moved form metadata to its own file.
+        onLoadFailed: {
+            root.omagenBarForm = "continuous"
+            root.metadataResolved = false
+        }
         onFileChanged: reload()
         Component.onCompleted: reload()
     }
