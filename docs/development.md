@@ -26,6 +26,31 @@ The plugin manifest declares the ID <code>pretty.omagen</code>, the
 and the default right-side bar section. See the root
 [manifest.json](../manifest.json).
 
+## Bundled backend provenance
+
+The runtime binary is intentionally checked into the plugin because users do
+not need Go installed to use Omagen. It must be produced from the reviewed
+backend sources with the canonical builder:
+
+~~~sh
+./scripts/build-backend.sh
+./scripts/verify-bundled-backend.sh
+~~~
+
+The builder pins the source-to-binary settings that affect reproducibility:
+the Go version declared by <code>backend/go.mod</code>, the Linux
+<code>amd64</code>/<code>GOAMD64=v1</code> target, <code>CGO_ENABLED=0</code>,
+the Go <code>nodwarf5</code> experiment used by that pinned toolchain,
+<code>-trimpath</code>, disabled VCS stamping, a cleared Go build ID, and
+read-only module resolution. The verifier rebuilds into a temporary directory
+and compares the result byte-for-byte with <code>bin/omagen</code>.
+
+The same verifier runs on every relevant pull request and push in
+<code>.github/workflows/verify-bundled-backend.yml</code>. Pushes to
+<code>main</code> also receive a GitHub build-provenance attestation for the
+verified executable. A binary change without a matching source build fails
+the check.
+
 The root <code>preview.png</code> is a marketplace showcase image. It is not a
 runtime entry point and is not required by the Omarchy shell loader; the
 community marketplace can resize and optimize it for plugin listings.
@@ -80,6 +105,8 @@ The gate checks:
 
 - Go formatting, unit tests, race tests, and vet.
 - The bundled root <code>bin/omagen</code> binary and CLI smoke commands.
+- A byte-for-byte deterministic rebuild of <code>bin/omagen</code> from
+  <code>backend/</code>.
 - Manifest and binary version consistency.
 - Native <code>omarchy plugin validate</code> when Omarchy is available.
 - Required plugin files and deterministic Demo assets.

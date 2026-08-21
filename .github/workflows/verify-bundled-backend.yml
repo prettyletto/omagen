@@ -1,0 +1,48 @@
+name: Verify bundled backend
+
+on:
+  push:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-bundled-backend.yml"
+      - "backend/**"
+      - "bin/omagen"
+      - "install.sh"
+      - "scripts/build-backend.sh"
+      - "scripts/verify-bundled-backend.sh"
+      - "backend/go.mod"
+      - "backend/go.sum"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up the pinned Go toolchain
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Verify the bundled executable
+        run: ./scripts/verify-bundled-backend.sh
+
+      - name: Record build provenance
+        run: |
+          go version
+          git rev-parse HEAD
+          sha256sum bin/omagen
+          go version -m bin/omagen
+
+      - name: Attest the verified package executable
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: bin/omagen
