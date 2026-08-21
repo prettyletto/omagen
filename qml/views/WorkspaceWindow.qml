@@ -125,7 +125,7 @@ PanelWindow {
                             spacing: Style.space(3)
 
                             Text {
-                                text: "QUATTRO THEME STUDIO  /  PALETTE GALLERY"
+                                text: "QUATTRO THEME STUDIO  /  DESKTOP COMPOSITION  /  STEP 2 OF 2"
                                 color: Color.accent
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.caption
@@ -134,7 +134,7 @@ PanelWindow {
                             }
 
                             Text {
-                                text: "Omagen"
+                                text: "Choose a palette direction"
                                 color: Color.foreground
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.title
@@ -159,7 +159,7 @@ PanelWindow {
 
                         Text {
                             width: parent.width
-                            text: "6 DIRECTIONS"
+                            text: "STEP 2  /  6 DIRECTIONS"
                             horizontalAlignment: Text.AlignRight
                             color: Color.accent
                             font.family: Style.font.family

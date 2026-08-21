@@ -162,7 +162,7 @@ PanelWindow {
                         spacing: Style.space(3)
 
                         Text {
-                            text: "QUATTRO THEME STUDIO  /  DESKTOP COMPOSITION"
+                            text: "QUATTRO THEME STUDIO  /  DESKTOP COMPOSITION  /  STEP 1 OF 2"
                             color: Color.accent
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
@@ -177,7 +177,7 @@ PanelWindow {
                             font.bold: true
                         }
                         Text {
-                            text: "Tune the window, shell, and bar before generating your palette directions."
+                            text: "Tune the window, shell, and bar. The next step generates palette directions from these choices."
                             color: Color.foreground
                             opacity: 0.56
                             font.family: Style.font.family
@@ -192,7 +192,7 @@ PanelWindow {
                         spacing: 3
                         Text {
                             anchors.right: parent.right
-                            text: "SOURCE CARD"
+                            text: "STEP 1  /  CONFIGURATION"
                             color: Color.accent
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
@@ -200,7 +200,7 @@ PanelWindow {
                         }
                         Text {
                             anchors.right: parent.right
-                            text: "Choices apply when you continue"
+                            text: "Choices apply to the next step"
                             color: Color.foreground
                             opacity: 0.42
                             font.family: Style.font.family
@@ -437,7 +437,7 @@ PanelWindow {
                         spacing: Style.space(8)
                         Button { text: "Back"; foreground: Color.foreground; bordered: true; onClicked: root.backRequested() }
                         Button {
-                            text: root.busy ? "Starting…" : "Continue to preview"
+                            text: root.busy ? "Starting…" : "Continue to directions"
                             foreground: Color.background
                             accent: Color.foreground
                             background: Color.foreground
