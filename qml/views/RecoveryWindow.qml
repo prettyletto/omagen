@@ -1,48 +1,151 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
+import qs.Ui
 
 PanelWindow {
     id: root
+
     property bool active: false
     property bool busy: false
     property string generationId: ""
     property string previewVariant: ""
+    property int cursorIndex: 0
+
     signal resumeRequested()
     signal restoreRequested()
     signal closeRequested()
+
     visible: active
-    implicitWidth: 520
-    implicitHeight: 330
     color: "transparent"
     WlrLayershell.namespace: "omagen-recovery"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
+    anchors { top: true; bottom: true; left: true; right: true }
+
+    function activateCursor() {
+        if (busy) return;
+        if (cursorIndex === 0) restoreRequested();
+        else resumeRequested();
+    }
+
+    onActiveChanged: if (active) Qt.callLater(function() { keyCatcher.forceActiveFocus(); });
+
+    MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
 
     Rectangle {
-        anchors.fill: parent; color: Color.background; radius: 16; border.width: 1; border.color: Color.muted; focus: root.visible
-        Keys.onPressed: function(event) {
-            if (event.key === Qt.Key_Escape) {
-                root.closeRequested()
-                event.accepted = true
+        id: card
+        anchors.centerIn: parent
+        width: Math.min(Style.space(560), parent.width - Style.space(48))
+        height: Style.space(360)
+        radius: Style.cornerRadius
+        color: Color.popups.background
+        border.width: 1
+        border.color: Color.popups.border
+        z: 1
+
+        PanelKeyCatcher {
+            id: keyCatcher
+            anchors.fill: parent
+            onCloseRequested: root.closeRequested()
+            onMoveRequested: function(dx, dy) {
+                if (dy !== 0) root.cursorIndex = (root.cursorIndex + (dy > 0 ? 1 : -1) + 2) % 2;
             }
-        }
-        Column {
-            anchors.centerIn: parent; width: parent.width - 64; spacing: 16
-            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Omagen"; color: Color.foreground; font.pixelSize: 30; font.bold: true }
-            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Previous session found"; color: Color.foreground; font.pixelSize: 18; font.bold: true }
-            Text { width: parent.width; text: "A previous Omagen preview is still active.\nYou can continue where you left off or restore the desktop to its original theme."; color: Color.foreground; opacity: .7; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; wrapMode: Text.WordWrap }
-            Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Variant: " + (root.previewVariant || "Source") + "   Generation: " + (root.generationId || "unknown"); color: Color.foreground; opacity: .55; font.pixelSize: 11; elide: Text.ElideMiddle }
-            Row { anchors.horizontalCenter: parent.horizontalCenter; spacing: 12
-                Rectangle { width: 150; height: 42; radius: 8; color: Util.alpha(Color.background, .6); border.width: 1; border.color: Color.muted; opacity: root.busy ? .45 : 1
-                    Text { anchors.centerIn: parent; text: root.busy ? "Restoring…" : "Restore & Close"; color: Color.foreground; font.pixelSize: 12 }
-                    MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.restoreRequested() }
+            onActivateRequested: root.activateCursor()
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: Style.space(30)
+                spacing: Style.space(14)
+
+                Item {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Style.space(38)
+                    Text {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "Recover Omagen"
+                        color: Color.popups.text
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.heading
+                        font.bold: true
+                    }
+                    Button {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: Style.space(36)
+                        height: Style.space(36)
+                        text: "×"
+                        fontSize: Style.font.title
+                        foreground: Color.popups.text
+                        onClicked: root.closeRequested()
+                    }
                 }
-                Rectangle { width: 110; height: 42; radius: 8; color: Color.accent; opacity: root.busy ? .55 : 1
-                    Text { anchors.centerIn: parent; text: "Resume"; color: Color.background; font.pixelSize: 12; font.bold: true }
-                    MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.resumeRequested() }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "A previous preview session is still active."
+                    color: Color.popups.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.subtitle
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Resume where you left off, or restore the original desktop theme and close Omagen."
+                    color: Color.popups.text
+                    opacity: 0.7
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: "Variant: " + (root.previewVariant || "Source") + "   ·   Generation: " + (root.generationId || "unknown")
+                    color: Color.popups.text
+                    opacity: 0.52
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    elide: Text.ElideMiddle
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(6)
+                    Button {
+                        Layout.fillWidth: true
+                        text: root.busy ? "Restoring…" : "Restore & close"
+                        iconText: "󰁪"
+                        leftAlign: true
+                        foreground: Color.popups.text
+                        hasCursor: root.cursorIndex === 0
+                        enabled: !root.busy
+                        onClicked: root.restoreRequested()
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        text: "Resume"
+                        iconText: "󰐕"
+                        leftAlign: true
+                        foreground: Color.popups.text
+                        hasCursor: root.cursorIndex === 1
+                        enabled: !root.busy
+                        onClicked: root.resumeRequested()
+                    }
+                }
+
+                Item { Layout.fillHeight: true }
+                Text {
+                    Layout.fillWidth: true
+                    text: "↑/↓ or j/k to move   ·   Enter to select   ·   Esc to close"
+                    color: Color.popups.text
+                    opacity: 0.48
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    horizontalAlignment: Text.AlignHCenter
                 }
             }
         }

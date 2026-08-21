@@ -36,13 +36,20 @@ func (s *Service) Generate(
 	ctx context.Context,
 	request Request,
 ) (Result, error) {
-	if _, err := s.sessions.Load(
+	record, err := s.sessions.Load(
 		request.SessionID,
-	); err != nil {
+	)
+	if err != nil {
 		return Result{}, fmt.Errorf(
 			"load session: %w",
 			err,
 		)
+	}
+	panelStyle := string(record.PanelStyle)
+	if !record.ExtraConfigs {
+		panelStyle = ""
+	} else if panelStyle == "" {
+		panelStyle = "solid"
 	}
 
 	effectiveSettings, err := s.settings.Load()
@@ -135,6 +142,7 @@ func (s *Service) Generate(
 		cachedSource,
 		analysis,
 		effectiveSettings,
+		panelStyle,
 	); err != nil {
 		return Result{}, err
 	}
@@ -152,7 +160,7 @@ func (s *Service) Generate(
 			err,
 		)
 	}
-	record, err := s.sessions.Load(request.SessionID)
+	record, err = s.sessions.Load(request.SessionID)
 	if err != nil {
 		return Result{}, fmt.Errorf("reload session after generation: %w", err)
 	}
@@ -181,7 +189,12 @@ func runJobs(
 	sourceImage string,
 	analysis *imageanalysis.Analysis,
 	effectiveSettings settingspkg.Settings,
+	panelStyles ...string,
 ) error {
+	panelStyle := ""
+	if len(panelStyles) > 0 && panelStyles[0] != "" {
+		panelStyle = panelStyles[0]
+	}
 	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -206,6 +219,7 @@ func runJobs(
 				sourceImage: sourceImage,
 				analysis:    analysis,
 				settings:    effectiveSettings,
+				panelStyle:  panelStyle,
 			}).run(
 				ctx,
 				generationRoot,

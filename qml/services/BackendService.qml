@@ -10,7 +10,9 @@ Item {
         string sessionId,
         string originalTheme,
         string backgroundKind,
-        string backgroundPath
+        string backgroundPath,
+        string panelStyle,
+        bool extraConfigs
     )
     signal sessionBeginFailed(string message)
     signal sessionCancelled(string sessionId)
@@ -34,8 +36,11 @@ Item {
     signal demoClosed(string sessionId, bool closed)
     signal demoCloseFailed(string message)
 
-    function beginSession() {
-        sessionBeginProcess.exec([root.executable, "session", "begin"]);
+    function beginSession(panelStyle) {
+        const args = [root.executable, "session", "begin"];
+        if (panelStyle)
+            args.push("--panel-style", panelStyle);
+        sessionBeginProcess.exec(args);
     }
 
     function cancelSession(sessionId) {
@@ -139,7 +144,9 @@ Item {
                     sessionId,
                     originalTheme,
                     backgroundKind,
-                    backgroundPath
+                    backgroundPath,
+                    result.panel_style || "solid",
+                    result.extra_configs === true
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");

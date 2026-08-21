@@ -10,7 +10,9 @@ Item {
     property bool opened: false
     property bool sessionBusy: false
     property bool cancelBusy: false
+    property bool closeAfterCancel: false
     property bool settingsOpen: false
+    property string settingsReturnRoute: "setup"
     property bool settingsBusy: false
     property bool generationBusy: false
     property bool describeBusy: false
@@ -27,6 +29,8 @@ Item {
     property string pendingApplyVariant: ""
     property string pendingApplyName: ""
     property string sourceImage: ""
+    property bool extraConfigsEnabled: false
+    property string panelStyle: "solid"
     property string errorMessage: ""
 
     readonly property string backendPath: decodeURIComponent(
@@ -36,8 +40,30 @@ Item {
     )
 
     function open(payload) {
+        let action = "open";
+        try {
+            let parsed = ({});
+            if (typeof payload === "string")
+                parsed = JSON.parse(payload || "{}");
+            else if (payload)
+                parsed = payload;
+            action = parsed.action || "open";
+        } catch (error) {
+            action = "open";
+        }
+
+        if (action === "quit") {
+            quitSession();
+            return;
+        }
+
         root.errorMessage = "";
         opened = true;
+        if (action === "settings") {
+            openSettings();
+            return;
+        }
+        settingsOpen = false;
         if (session.active) {
             route = "workspace";
             return;
@@ -51,11 +77,21 @@ Item {
         settingsOpen = false;
     }
 
+    function closeSettings() {
+        if (settingsBusy)
+            return;
+        settingsOpen = false;
+        route = settingsReturnRoute;
+        errorMessage = "";
+    }
+
     function resumePreviousSession() {
         if (!resumableSession || recoveryBusy)
             return;
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
+        panelStyle = resumableSession.panel_style || "solid";
+        extraConfigsEnabled = resumableSession.extra_configs === true;
         resumableSession = null;
         route = "workspace";
     }
@@ -77,9 +113,51 @@ Item {
             return;
 
         errorMessage = "";
+        if (!settingsOpen)
+            settingsReturnRoute = route === "settings" ? "setup" : route;
         settingsOpen = true;
+        route = "settings";
+        opened = true;
         settingsBusy = true;
         settings.get();
+    }
+
+    // Quit is intentionally different from hiding the overlay: an active
+    // session owns a temporary theme and must be cancelled so the backend
+    // restores the original theme and removes its durable session state.
+    function quitSession() {
+        if (cancelBusy || recoveryBusy)
+            return;
+
+        // Keep the cleanup intent alive even if session begin is still in
+        // flight.  onSessionBegan will immediately hand the new id to the
+        // same backend cancel path instead of starting generation.
+        if (sessionBusy && !session.active) {
+            closeAfterCancel = true;
+            settingsOpen = false;
+            opened = false;
+            return;
+        }
+
+        if (session.active && session.sessionId !== "") {
+            closeAfterCancel = true;
+            settingsOpen = false;
+            opened = false;
+            cancelSession();
+            return;
+        }
+
+        if (resumableSession && !recoveryBusy) {
+            restorePreviousSession();
+            return;
+        }
+
+        // The shell can reload after a session was created, leaving the QML
+        // object unaware of the durable backend record. Probe the backend so
+        // Quit still restores that session; if none exists, the handler below
+        // leaves the current UI untouched and this remains a no-op.
+        closeAfterCancel = true;
+        backend.checkResumeSession();
     }
 
     function saveSettings(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
@@ -111,7 +189,16 @@ Item {
 
         errorMessage = "";
         sessionBusy = true;
-        backend.beginSession();
+        backend.beginSession(extraConfigsEnabled ? panelStyle : "");
+    }
+
+    function continueFromSetup() {
+        if (extraConfigsEnabled) {
+            route = "preview-config";
+            errorMessage = "";
+            return;
+        }
+        beginSession();
     }
 
     function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy && !applyBusy) session.selectVariant(variant) }
@@ -166,23 +253,33 @@ Item {
     }
 
     function cancelSession() {
-        if (!session.active || session.sessionId === "" || cancelBusy || demoBusy)
+        if (!session.active || session.sessionId === "" || cancelBusy)
             return;
 
         errorMessage = "";
         cancelBusy = true;
-        demoBusy = true;
-        pendingCancelAfterDemo = true;
-        backend.closeDemo(session.sessionId);
+        demoBusy = false;
+        pendingCancelAfterDemo = false;
+        pendingDemo = false;
+        pendingApplyAfterDemo = false;
+        // The backend cancel command closes any demo, recovers an interrupted
+        // Apply, restores the original theme/background, and removes the
+        // session.  It is deliberately the single cleanup path for Quit and
+        // Cancel, independent of which frontend operation was in flight.
+        backend.cancelSession(session.sessionId);
     }
 
     function clearSession() {
+        const shouldClose = closeAfterCancel;
         session.clear();
         sessionBusy = false;
         cancelBusy = false;
+        closeAfterCancel = false;
         sourceImage = "";
+        extraConfigsEnabled = false;
+        panelStyle = "solid";
         errorMessage = "";
-        opened = true;
+        opened = !shouldClose;
         generationBusy = false;
         describeBusy = false;
         previewBusy = false;
@@ -229,7 +326,9 @@ Item {
             sessionId,
             originalTheme,
             backgroundKind,
-            backgroundPath
+            backgroundPath,
+            backendPanelStyle,
+            backendExtraConfigs
         ) {
             root.sessionBusy = false;
             session.activate(
@@ -238,6 +337,12 @@ Item {
                 backgroundKind,
                 backgroundPath
             );
+            root.panelStyle = backendPanelStyle || "solid";
+            root.extraConfigsEnabled = backendExtraConfigs;
+            if (root.closeAfterCancel) {
+                root.cancelSession();
+                return;
+            }
             root.route = "workspace";
             root.generationBusy = true;
             backend.generateTheme(sessionId, root.sourceImage);
@@ -250,6 +355,14 @@ Item {
                 backend.checkResumeSession();
                 return;
             }
+            if (root.closeAfterCancel) {
+                // Quit may arrive while begin is still in flight. There is
+                // no session to cancel in this case, but the setup state
+                // (including the selected image) must still be discarded.
+                root.clearSession();
+                return;
+            }
+            root.closeAfterCancel = false;
             root.errorMessage = message;
         }
 
@@ -263,18 +376,39 @@ Item {
         onSessionResumeChecked: function(result) {
             if (!result || result.active !== true) {
                 root.resumableSession = null;
+                if (root.closeAfterCancel) {
+                    // A selected image is part of the temporary workspace,
+                    // even when generation never started. Quit must return
+                    // all the way to the initial setup state.
+                    root.clearSession();
+                    return;
+                }
                 root.route = "setup";
                 return;
             }
             root.resumableSession = result;
+            if (root.closeAfterCancel) {
+                root.restorePreviousSession();
+                return;
+            }
             root.route = "recovery";
         }
-        onSessionResumeCheckFailed: function(message) { root.resumableSession = null; root.route = "setup"; root.errorMessage = message }
+        onSessionResumeCheckFailed: function(message) {
+            root.resumableSession = null;
+            if (root.closeAfterCancel) {
+                root.closeAfterCancel = false;
+                root.errorMessage = message;
+                return;
+            }
+            root.route = "setup";
+            root.errorMessage = message;
+        }
         onSessionRecovered: {
             root.recoveryBusy = false;
             root.resumableSession = null;
             root.session.clear();
             root.sourceImage = "";
+            root.closeAfterCancel = false;
             root.route = "setup";
             root.settingsOpen = false;
             root.opened = false;
@@ -282,9 +416,8 @@ Item {
         onSessionRecoverFailed: function(message) {
             root.recoveryBusy = false;
             root.errorMessage = message;
-            root.resumableSession = null;
-            root.route = "setup";
-            root.opened = false;
+            root.route = "recovery";
+            root.opened = true;
         }
 
         onSessionCancelled: function(sessionId) {
@@ -298,18 +431,30 @@ Item {
 
         onSessionCancelFailed: function(message) {
             root.cancelBusy = false;
+            root.closeAfterCancel = false;
             root.errorMessage = message;
+            root.opened = true;
+            root.route = "workspace";
         }
 
         onGenerationCompleted: function(generationId) {
+            if (root.closeAfterCancel)
+                return;
             root.generationBusy = false;
             root.describeBusy = true;
             backend.describeGeneration(session.sessionId, generationId);
         }
         onGenerationFailed: function(message) { root.generationBusy=false; root.errorMessage=message }
-        onGenerationDescribed: function(generationId, variants) { root.describeBusy=false; session.setGeneration(generationId, variants) }
+        onGenerationDescribed: function(generationId, variants) {
+            if (root.closeAfterCancel)
+                return;
+            root.describeBusy=false;
+            session.setGeneration(generationId, variants);
+        }
         onGenerationDescribeFailed: function(message) { root.describeBusy=false; root.errorMessage=message }
         onPreviewApplied: function(sessionId, generationId, variant, themeName) {
+            if (root.closeAfterCancel)
+                return;
             root.previewBusy = false;
             if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
             session.markPreviewed(variant);
@@ -324,6 +469,8 @@ Item {
             root.opened=false;
         }
         onPreviewApplyFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
             root.previewBusy = false;
             root.errorMessage = message;
             if (root.pendingDemo) {
@@ -332,6 +479,8 @@ Item {
             }
         }
         onDemoOpened: function(sessionId, workspace, reused) {
+            if (root.closeAfterCancel)
+                return;
             if (sessionId !== session.sessionId) {
                 root.demoBusy = false;
                 root.errorMessage = "Backend opened a different demo session";
@@ -348,6 +497,8 @@ Item {
             root.opened = false;
         }
         onDemoOpenFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
             root.demoBusy = false;
             root.demoActive = false;
             root.pendingDemo = false;
@@ -392,11 +543,18 @@ Item {
             // Permanent Apply intentionally remains pending for the same reason.
         }
         onThemeApplied: function(sessionId, generationId, variant, themeName) {
+            if (root.closeAfterCancel)
+                return;
             applyBusy = false
             if (sessionId !== session.sessionId || generationId !== session.generationId) { errorMessage = "Backend applied a different generation"; return }
             root.clearSession()
         }
-        onThemeApplyFailed: function(message) { applyBusy = false; errorMessage = message }
+        onThemeApplyFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
+            applyBusy = false;
+            errorMessage = message;
+        }
     }
 
     State.SettingsState {
@@ -421,7 +579,7 @@ Item {
         onSaved: function(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi) {
             settingsBusy = false;
             settingsState.load(harmony, primaryText, brightText, secondaryText, uiElement, selectionText, ansi, brightAnsi);
-            settingsOpen = false;
+            closeSettings();
             errorMessage = "";
         }
 
@@ -444,14 +602,26 @@ Item {
     }
 
     Views.SetupWindow {
-        active: root.opened && root.route === "setup" && !root.settingsOpen
+        active: root.opened && root.route === "setup"
         busy: root.sessionBusy
         sourceImage: root.sourceImage
+        extraConfigsEnabled: root.extraConfigsEnabled
         errorMessage: root.errorMessage
 
         onChooseImageRequested: root.chooseImage()
         onSettingsRequested: root.openSettings()
+        onExtraConfigsToggled: function(enabled) { root.extraConfigsEnabled = enabled }
+        onContinueRequested: root.continueFromSetup()
+        onHideRequested: root.close()
+    }
+
+    Views.PreviewConfigWindow {
+        active: root.opened && root.route === "preview-config"
+        busy: root.sessionBusy
+        selectedStyle: root.panelStyle
+        onStyleSelected: function(style) { root.panelStyle = style }
         onContinueRequested: root.beginSession()
+        onBackRequested: root.route = "setup"
         onHideRequested: root.close()
     }
 
@@ -469,6 +639,7 @@ Item {
         active: root.opened && root.route === "workspace" && session.active
         cancelBusy: root.cancelBusy
         sourceImage: root.sourceImage
+        panelStyle: root.panelStyle
         sessionId: session.sessionId
         originalTheme: session.originalTheme
         originalBackgroundKind: session.originalBackgroundKind
@@ -501,7 +672,7 @@ Item {
 
     Views.SettingsWindow {
         id: settingsWindow
-        active: root.opened && !session.active && root.settingsOpen
+        active: root.opened && root.route === "settings" && root.settingsOpen
         busy: root.settingsBusy
         errorMessage: root.errorMessage
 
@@ -510,10 +681,7 @@ Item {
         }
         onResetRequested: root.resetSettings()
         onCloseRequested: {
-            if (root.settingsBusy)
-                return;
-            root.settingsOpen = false;
-            root.errorMessage = "";
+            root.closeSettings();
         }
     }
 }

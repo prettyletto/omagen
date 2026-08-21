@@ -28,7 +28,16 @@ func NewService(store *Store, omarchy Omarchy) *Service {
 	return &Service{store: store, omarchy: omarchy}
 }
 
-func (s *Service) Begin() (BeginResult, error) {
+func (s *Service) Begin(panelStyles ...string) (BeginResult, error) {
+	panelStyle := PanelStyleSolid
+	extraConfigs := len(panelStyles) > 0 && panelStyles[0] != ""
+	if len(panelStyles) > 0 && panelStyles[0] != "" {
+		parsed, ok := ParsePanelStyle(panelStyles[0])
+		if !ok {
+			return BeginResult{}, fmt.Errorf("invalid panel style %q", panelStyles[0])
+		}
+		panelStyle = parsed
+	}
 	return withMutationLock(s.store, func() (BeginResult, error) {
 		exists, err := s.store.ActiveSessionExists()
 		if err != nil {
@@ -58,7 +67,7 @@ func (s *Service) Begin() (BeginResult, error) {
 			return BeginResult{}, fmt.Errorf("create session id: %w", err)
 		}
 		now := time.Now().UTC()
-		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, CreatedAt: now}
+		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, PanelStyle: panelStyle, CreatedAt: now}
 		if err := s.store.Save(record); err != nil {
 			return BeginResult{}, fmt.Errorf("persist session: %w", err)
 		}
@@ -66,7 +75,7 @@ func (s *Service) Begin() (BeginResult, error) {
 			_ = s.store.Delete(sessionID)
 			return BeginResult{}, fmt.Errorf("persist active session: %w", err)
 		}
-		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background}, nil
+		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, PanelStyle: panelStyle, ExtraConfigs: extraConfigs}, nil
 	})
 }
 

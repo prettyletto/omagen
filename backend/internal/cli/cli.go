@@ -36,6 +36,8 @@ type resumeResponse struct {
 	SourceImage            string                        `json:"source_image,omitempty"`
 	GenerationID           string                        `json:"generation_id,omitempty"`
 	PreviewVariant         string                        `json:"preview_variant,omitempty"`
+	PanelStyle             session.PanelStyle            `json:"panel_style,omitempty"`
+	ExtraConfigs           bool                          `json:"extra_configs,omitempty"`
 	OriginalTheme          string                        `json:"original_theme,omitempty"`
 	OriginalBackgroundKind string                        `json:"original_background_kind,omitempty"`
 	OriginalBackgroundPath string                        `json:"original_background_path,omitempty"`
@@ -236,7 +238,7 @@ func runSessionWithDependencies(
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
-		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, PanelStyle: record.PanelStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
 		if record.GenerationID != "" {
 			described, err := generationService.Describe(record.SessionID, record.GenerationID)
 			if err != nil {
@@ -246,8 +248,8 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) != 1 {
-			return fail(stderr, 2, "session begin takes no arguments")
+		if len(args) > 3 || (len(args) == 2 && !strings.HasPrefix(args[1], "--panel-style=")) || (len(args) == 3 && args[1] != "--panel-style") {
+			return fail(stderr, 2, "usage: omagen session begin [--panel-style <solid|split|cycle|neon>]")
 		}
 		if cleanupService != nil {
 			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
@@ -258,7 +260,13 @@ func runSessionWithDependencies(
 				}
 			}
 		}
-		result, err := service.Begin()
+		panelStyle := ""
+		if len(args) == 2 {
+			panelStyle = strings.TrimPrefix(args[1], "--panel-style=")
+		} else if len(args) == 3 {
+			panelStyle = args[2]
+		}
+		result, err := service.Begin(panelStyle)
 		if err != nil {
 			return fail(
 				stderr,

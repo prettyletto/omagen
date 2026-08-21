@@ -18,6 +18,7 @@ type job struct {
 	sourceImage string
 	analysis    *imageanalysis.Analysis
 	settings    settingspkg.Settings
+	panelStyle  string
 }
 
 func (j job) run(
@@ -163,6 +164,11 @@ func (j job) run(
 			"write colors: %w",
 			err,
 		)
+	}
+	if j.panelStyle != "" {
+		if err := theme.WriteHyprland(variantDir, generatedPalette, j.panelStyle); err != nil {
+			return fmt.Errorf("write hyprland panel style: %w", err)
+		}
 	}
 
 	extension, err := j.analysis.Extension()

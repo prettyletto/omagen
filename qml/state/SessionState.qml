@@ -7,6 +7,7 @@ QtObject {
     property string originalTheme: ""
     property string originalBackgroundKind: ""
     property string originalBackgroundPath: ""
+    property string panelStyle: "solid"
     property string generationId: ""
     property var palettes: ({})
     property var variantPaths: ({})
@@ -16,11 +17,11 @@ QtObject {
 
     function activate(id, theme, backgroundKind, backgroundPath) { sessionId=id; originalTheme=theme; originalBackgroundKind=backgroundKind; originalBackgroundPath=backgroundPath; clearGeneration(); active=true }
     function setGeneration(id, variants) { var next={}, paths={}; for (var i=0;i<variants.length;++i) { var e=variants[i]; if (e && e.variant && e.palette) { next[e.variant]=e.palette; paths[e.variant]=e.path||"" } } generationId=id; palettes=next; variantPaths=paths; if (!hasPalette(selectedVariant)) selectedVariant="source" }
-    function resume(data) { var next={}, paths={}; var variants=data.variants||[]; for (var i=0;i<variants.length;++i) { var e=variants[i]; if (e && e.variant && e.palette) { next[e.variant]=e.palette; paths[e.variant]=e.path||"" } } active=true; sessionId=data.session_id||""; originalTheme=data.original_theme||""; originalBackgroundKind=data.original_background_kind||""; originalBackgroundPath=data.original_background_path||""; generationId=data.generation_id||""; palettes=next; variantPaths=paths; previewVariant=data.preview_variant||""; selectedVariant=previewVariant!=="" ? previewVariant : "source" }
+    function resume(data) { var next={}, paths={}; var variants=data.variants||[]; for (var i=0;i<variants.length;++i) { var e=variants[i]; if (e && e.variant && e.palette) { next[e.variant]=e.palette; paths[e.variant]=e.path||"" } } active=true; sessionId=data.session_id||""; originalTheme=data.original_theme||""; originalBackgroundKind=data.original_background_kind||""; originalBackgroundPath=data.original_background_path||""; panelStyle=data.panel_style||"solid"; generationId=data.generation_id||""; palettes=next; variantPaths=paths; previewVariant=data.preview_variant||""; selectedVariant=previewVariant!=="" ? previewVariant : "source" }
     function paletteFor(variant) { return palettes[variant] || null }
     function hasPalette(variant) { return paletteFor(variant) !== null }
     function selectVariant(variant) { if (hasPalette(variant)) selectedVariant=variant }
     function markPreviewed(variant) { previewVariant=variant; selectedVariant=variant }
     function clearGeneration() { generationId=""; palettes=({}); variantPaths=({}); selectedVariant="source"; previewVariant="" }
-    function clear() { active=false; sessionId=""; originalTheme=""; originalBackgroundKind=""; originalBackgroundPath=""; clearGeneration() }
+    function clear() { active=false; sessionId=""; originalTheme=""; originalBackgroundKind=""; originalBackgroundPath=""; panelStyle="solid"; clearGeneration() }
 }
