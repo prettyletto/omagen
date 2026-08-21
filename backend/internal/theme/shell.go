@@ -37,11 +37,17 @@ func WriteShell(themeDir string, palette Palette, surface, detail, barSurface, b
 	case "contrast":
 		popup, control, selected = palette.LighterBackground, palette.LighterBackground, palette.Accent
 	case "accent":
+		// Accent is a state treatment, not a full-bleed surface.  The shell
+		// keeps its neutral card background while using the generated accent for
+		// selected rows and focus chrome below.
 		popup, control, selected = palette.DarkBackground, palette.LighterBackground, palette.Accent
 	}
 	if surface != "flat" {
 		fmt.Fprintf(&b, "[popups]\nbackground = %q\n\n", popup)
 		fmt.Fprintf(&b, "[menu]\nbackground = %q\nselected-background = %q\n", popup, selected)
+		if surface == "accent" {
+			fmt.Fprintf(&b, "selected-background-alpha = 0.18\nselected-text = %q\n", palette.Accent)
+		}
 		if detail == "edge" {
 			b.WriteString("selected-border-width = \"0 0 0 3\"\n")
 		}
@@ -49,8 +55,17 @@ func WriteShell(themeDir string, palette Palette, surface, detail, barSurface, b
 			b.WriteString("selected-border-width = 1\n")
 		}
 		b.WriteString("\n")
-		fmt.Fprintf(&b, "[launcher]\nbackground = %q\nselected-background = %q\n\n", popup, selected)
-		fmt.Fprintf(&b, "[controls]\nnormal-color = %q\nnormal-fill-alpha = 1.0\nselected-color = %q\nselected-fill-alpha = 1.0\n", control, selected)
+		fmt.Fprintf(&b, "[launcher]\nbackground = %q\nselected-background = %q\n", popup, selected)
+		if surface == "accent" {
+			fmt.Fprintf(&b, "selected-background-alpha = 0.18\nselected-text = %q\n", palette.Accent)
+		}
+		b.WriteString("\n")
+		fmt.Fprintf(&b, "[controls]\nnormal-color = %q\nnormal-fill-alpha = 1.0\nselected-color = %q\n", control, selected)
+		if surface == "accent" {
+			fmt.Fprintf(&b, "selected-fill-alpha = 0.18\nselected-border = %q\nselected-border-alpha = 0.78\n", palette.Accent)
+		} else {
+			b.WriteString("selected-fill-alpha = 1.0\n")
+		}
 		controlsSection = true
 	}
 

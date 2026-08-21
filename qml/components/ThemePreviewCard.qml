@@ -44,8 +44,10 @@ Item {
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
     readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
     readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
-        : root.desktopStyle.shape === "rounded" ? 17
-        : root.desktopStyle.shape === "soft" ? 6 : 10
+        // Match the Hyprland output: Native inherits Omarchy's square
+        // baseline, Soft writes rounding=3, Rounded writes rounding=8.
+        : root.desktopStyle.shape === "rounded" ? 10
+        : root.desktopStyle.shape === "soft" ? 4 : 0
     readonly property real windowMargin: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 14
         : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 5 : 8
     readonly property real paneGap: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 12
@@ -66,26 +68,26 @@ Item {
     function shellControlSurface() {
         var surface = root.shellStyle.surface || "flat"
         if (surface === "contrast") return root.darkBg
-        if (surface === "accent") return root.selection
+        if (surface === "accent") return root.lighterBg
         return root.lighterBg
     }
 
     function shellSelectedSurface() {
-        return root.shellStyle.surface === "accent" || root.shellStyle.surface === "contrast"
-            ? root.accent : root.selection
+        if (root.shellStyle.surface === "accent") return Util.alpha(root.accent, 0.18)
+        return root.shellStyle.surface === "contrast" ? root.accent : root.selection
     }
 
     function barSurface() {
         switch (root.barStyle.surface) {
-        case "dark": return root.darkerBg
-        case "light": return root.lighterBg
+        case "dark": return root.darkBg
+        case "light": return root.fg
         case "accent": return root.accent
         default: return root.bg
         }
     }
 
     function barForeground() {
-        return root.barStyle.surface === "accent" ? root.bg : root.fg
+        return root.barStyle.surface === "light" || root.barStyle.surface === "accent" ? root.bg : root.fg
     }
 
     Rectangle {
@@ -263,6 +265,26 @@ Item {
                     }
                 }
 
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: Math.max(74, parent.width * 0.25)
+                    height: Math.max(14, parent.height - 10)
+                    radius: Math.min(5, height / 3)
+                    color: Util.alpha(root.barForeground(), 0.10)
+                    border.width: 1
+                    border.color: Util.alpha(root.barForeground(), 0.16)
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: "◌  omagen"
+                        color: root.barForeground()
+                        opacity: 0.78
+                        font.family: Style.font.family
+                        font.pixelSize: 8
+                        font.bold: true
+                    }
+                }
+
                 Row {
                     anchors.right: parent.right
                     anchors.rightMargin: 9
@@ -303,27 +325,45 @@ Item {
                 anchors.bottomMargin: root.windowMargin
                 radius: root.windowRadius
                 color: root.bg
-                border.width: root.configurationPreview ? (root.activeSection === 0 ? 3 : 2) : 0
+                border.width: root.configurationPreview && (root.activeBorderStyle === "solid" || root.activeBorderStyle === "neon") ? 2 : 0
                 border.color: root.activeBorderStyle === "neon" ? root.magenta
-                    : root.activeBorderStyle === "split_bottom" ? root.fg : root.accent
+                    : root.accent
                 opacity: root.configurationPreview && root.activeSection === 1 ? 0.34
-                    : root.configurationPreview && root.activeSection === 2 ? 0.58
+                    : root.configurationPreview && root.activeSection === 2 ? 0.78
                     : root.configurationPreview && root.desktopStyle.depth === "flat" ? 0.94 : 1
 
                 Behavior on radius { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
                 Rectangle {
-                    visible: root.configurationPreview && (root.activeBorderStyle === "split_top" || root.activeBorderStyle === "blend" || root.activeBorderStyle === "neon")
-                    anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                    width: 3; radius: parent.radius
+                    visible: root.configurationPreview && root.activeBorderStyle === "split_top"
+                    anchors.left: parent.left; anchors.top: parent.top; anchors.right: parent.right
+                    height: 3; radius: parent.radius
                     color: root.accent
                 }
                 Rectangle {
-                    visible: root.configurationPreview && (root.activeBorderStyle === "split_bottom" || root.activeBorderStyle === "blend" || root.activeBorderStyle === "neon")
-                    anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
-                    width: 3; radius: parent.radius
-                    color: root.activeBorderStyle === "split_bottom" ? root.accent : root.activeBorderStyle === "blend" ? root.blue : root.magenta
+                    visible: root.configurationPreview && root.activeBorderStyle === "split_bottom"
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 3; radius: parent.radius
+                    color: root.accent
+                }
+                Rectangle {
+                    visible: root.configurationPreview && root.activeBorderStyle === "blend"
+                    anchors.left: parent.left; anchors.top: parent.top; anchors.right: parent.right
+                    height: 3; radius: parent.radius
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: root.accent }
+                        GradientStop { position: 1; color: root.blue }
+                    }
+                }
+                Rectangle {
+                    visible: root.configurationPreview && root.activeBorderStyle === "blend"
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 3; radius: parent.radius
+                    gradient: Gradient {
+                        GradientStop { position: 0; color: root.blue }
+                        GradientStop { position: 1; color: root.accent }
+                    }
                 }
 
                 Rectangle {
@@ -627,9 +667,9 @@ Item {
                                 anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
                                 width: 3; radius: parent.radius; color: root.accent
                             }
-                            Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.icon; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.accent; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
-                            Text { anchors.left: parent.left; anchors.leftMargin: 34; anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.fg; font.family: Style.font.family; font.pixelSize: 9; font.bold: index === 1 }
-                            Text { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.hint; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.muted; opacity: 0.75; font.family: Style.font.family; font.pixelSize: 7 }
+                            Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.icon; color: root.accent; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
+                            Text { anchors.left: parent.left; anchors.leftMargin: 34; anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: root.fg; font.family: Style.font.family; font.pixelSize: 9; font.bold: index === 1 }
+                            Text { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.hint; color: root.muted; opacity: 0.75; font.family: Style.font.family; font.pixelSize: 7 }
                         }
                     }
 
@@ -649,14 +689,14 @@ Item {
                 color: root.selected ? Color.foreground : Util.alpha(Color.background, 0.82)
                 border.width: root.selected ? 0 : 1
                 border.color: Util.alpha(Color.foreground, 0.72)
-                visible: root.selected || root.previewed
+                visible: root.selected
                 z: 10
 
                 Text {
                     id: selectedBadge
                     anchors.centerIn: parent
-                    text: root.selected ? "✓  SELECTED" : "●  LIVE"
-                    color: root.selected ? Color.background : Color.accent
+                    text: "✓  SELECTED"
+                    color: Color.background
                     font.family: Style.font.family
                     font.pixelSize: 9
                     font.bold: true

@@ -9,7 +9,7 @@ import (
 
 func TestWriteShellEmitsSurfaceAndDetailOverrides(t *testing.T) {
 	dir := t.TempDir()
-	p := Palette{Background: "#101112", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
+	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
 	if err := WriteShell(dir, p, "layered", "edge", "light", "comfortable", "accent"); err != nil {
 		t.Fatal(err)
 	}
@@ -18,7 +18,7 @@ func TestWriteShellEmitsSurfaceAndDetailOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"[bar]", `background = "#222426"`, "size-horizontal = 30", "size-vertical = 32", `active = "#aa33cc"`, "[menu]", `selected-background = "#334455"`, `selected-border-width = "0 0 0 3"`} {
+	for _, want := range []string{"[bar]", `background = "#e5e7eb"`, `text = "#101112"`, "size-horizontal = 30", "size-vertical = 32", `active = "#aa33cc"`, "[menu]", `selected-background = "#334455"`, `selected-border-width = "0 0 0 3"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
 		}
@@ -47,7 +47,7 @@ func TestWriteShellEmitsSurfaceAndDetailOverrides(t *testing.T) {
 
 func TestWriteShellUsesActualAccentForBarSurface(t *testing.T) {
 	dir := t.TempDir()
-	p := Palette{Background: "#101112", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
+	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
 	if err := WriteShell(dir, p, "flat", "native", "accent", "compact", "semantic"); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,25 @@ func TestWriteShellUsesActualAccentForBarSurface(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{`background = "#aa33cc"`, "size-horizontal = 22", "size-vertical = 24"} {
+	for _, want := range []string{`background = "#aa33cc"`, `text = "#101112"`, "size-horizontal = 22", "size-vertical = 24"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestWriteShellKeepsAccentSurfaceRestrained(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
+	if err := WriteShell(dir, p, "accent", "focus", "native", "native", "semantic"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "shell.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{`selected-background = "#aa33cc"`, "selected-background-alpha = 0.18", `selected-border = "#aa33cc"`, "selected-fill-alpha = 0.18"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
 		}

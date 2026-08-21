@@ -46,7 +46,7 @@ func WriteHyprland(themeDir string, p Palette, borderStyle, shape, spacing, dept
 			b.WriteString("    shadow = { enabled = false },\n")
 		}
 		if depth == "shadow" {
-			fmt.Fprintf(&b, "    shadow = { enabled = true, render_power = 4, range = 16, color = %q },\n", hyprRGBA(p.DarkerBackground, "b3"))
+			fmt.Fprintf(&b, "    shadow = { enabled = true, render_power = 3, range = 18, color = %q },\n", hyprRGBA(p.DarkerBackground, "e6"))
 		}
 		b.WriteString("  },\n")
 	}

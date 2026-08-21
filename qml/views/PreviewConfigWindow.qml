@@ -189,7 +189,7 @@ PanelWindow {
                         spacing: 3
                         Text {
                             anchors.right: parent.right
-                            text: "LIVE SOURCE CARD"
+                            text: "SOURCE CARD"
                             color: Color.accent
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
@@ -197,7 +197,7 @@ PanelWindow {
                         }
                         Text {
                             anchors.right: parent.right
-                            text: "Changes stay local until you continue"
+                            text: "Choices apply when you continue"
                             color: Color.foreground
                             opacity: 0.42
                             font.family: Style.font.family

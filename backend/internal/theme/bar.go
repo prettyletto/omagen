@@ -18,11 +18,14 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 	b.WriteString("\n[bar]\n")
 	switch surface {
 	case "dark":
-		fmt.Fprintf(b, "background = %q\n", p.DarkerBackground)
+		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.DarkBackground, p.Foreground)
 	case "light":
-		fmt.Fprintf(b, "background = %q\n", p.LighterBackground)
+		// LighterBackground can still be nearly black in a dark palette.  The
+		// foreground neutral is the palette's actual light surface, and paired
+		// text keeps the native bar legible.
+		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.Foreground, p.Background)
 	case "accent":
-		fmt.Fprintf(b, "background = %q\n", p.Accent)
+		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.Accent, p.Background)
 	}
 	if density == "compact" {
 		b.WriteString("size-horizontal = 22\nsize-vertical = 24\n")
