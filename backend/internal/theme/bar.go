@@ -26,10 +26,15 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 	case "dark":
 		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.DarkBackground, p.Foreground)
 	case "light":
-		// LighterBackground can still be nearly black in a dark palette.  The
-		// foreground neutral is the palette's actual light surface, and paired
-		// text keeps the native bar legible.
-		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.Foreground, p.Background)
+		// In a dark palette, foreground is the lightest available neutral. In
+		// a light palette foreground is intentionally dark, so use the actual
+		// light background instead. Pairing these values keeps text glyphs and
+		// icons legible in both palette modes.
+		background, text := p.Foreground, p.Background
+		if p.Mode == "light" {
+			background, text = p.Background, p.Foreground
+		}
+		fmt.Fprintf(b, "background = %q\ntext = %q\n", background, text)
 	case "accent":
 		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.Accent, p.Background)
 	}

@@ -82,6 +82,20 @@ func TestWriteShellUsesActualAccentForBarSurface(t *testing.T) {
 	}
 }
 
+func TestWriteShellKeepsLightBarLegibleForLightPalette(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Mode: "light", Background: "#f7f4ec", Foreground: "#24211d", DarkBackground: "#e4dfd5", DarkerBackground: "#d4cec3", LighterBackground: "#fffdf8", Selection: "#d8cfbf", Accent: "#8e5f32"}
+	if err := WriteShell(dir, p, "flat", "native", "light", "native", "semantic", "continuous"); err != nil {
+		t.Fatal(err)
+	}
+	text := readShellSection(t, dir, "bar")
+	for _, want := range []string{`background = "#f7f4ec"`, `text = "#24211d"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("shell.bar.toml missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestWriteShellKeepsAccentSurfaceRestrained(t *testing.T) {
 	dir := t.TempDir()
 	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
