@@ -8,9 +8,8 @@ import (
 )
 
 const (
-	sourceRoleMinCoverage         = 0.005
-	sourceRoleRelativeCoverage    = 0.03
-	sourceRoleDistinctHueDistance = 18.0
+	sourceRoleMinCoverage      = 0.005
+	sourceRoleRelativeCoverage = 0.03
 )
 
 type sourceRoles struct{ Surface, Foreground, Accent, Selection, Muted colorspace.OKLCH }

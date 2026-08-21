@@ -30,10 +30,6 @@ type processExit struct {
 	err  error
 }
 
-func launchDemoApps(demoDir string, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
-	return launchDemoSlots(demoDir, "demo", allDemoSlots(), ResolveCapabilities(), before, logger)
-}
-
 func allDemoSlots() []Slot { return []Slot{SlotEditor, SlotBtop, SlotShell, SlotFiles} }
 
 func launchDemoSlots(demoDir, ownerToken string, slots []Slot, capabilities Capabilities, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
@@ -132,9 +128,6 @@ func demoAppID(token string, slot Slot) string {
 	return fmt.Sprintf("org.omagen.demo.%s.%s", token, slot)
 }
 
-func buildEditorCommand(demoDir string, capabilities Capabilities) (*exec.Cmd, string) {
-	return buildEditorCommandFor(demoDir, "demo", capabilities)
-}
 func buildEditorCommandFor(demoDir, token string, capabilities Capabilities) (*exec.Cmd, string) {
 	sample := filepath.Join(demoDir, "sample.go")
 	if capabilities.Editor.Command == "" {
@@ -147,17 +140,11 @@ func buildEditorCommandFor(demoDir, token string, capabilities Capabilities) (*e
 	cmd.Dir = demoDir
 	return cmd, capabilities.Editor.Command
 }
-func buildMonitorCommand(dir string, capabilities Capabilities) *exec.Cmd {
-	return buildMonitorCommandFor(dir, "demo", capabilities)
-}
 func buildMonitorCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.Monitor.Command != "" {
 		return terminalCommand(capabilities.Terminal, demoAppID(token, SlotBtop), dir, capabilities.Monitor.Command)
 	}
 	return terminalCommand(capabilities.Terminal, demoAppID(token, SlotBtop), dir, "/bin/bash", "-lc", systemInfoScript())
-}
-func buildShellCommand(dir string, capabilities Capabilities) *exec.Cmd {
-	return buildShellCommandFor(dir, "demo", capabilities)
 }
 func buildShellCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	script := `cd "$OMAGEN_DEMO_DIR" || exit 1
@@ -168,9 +155,6 @@ exec "${SHELL:-/bin/bash}" -l
 `
 	cmd := terminalCommand(capabilities.Terminal, demoAppID(token, SlotShell), dir, "/bin/bash", "-lc", script)
 	return cmd
-}
-func buildFilesCommand(dir string, capabilities Capabilities) *exec.Cmd {
-	return buildFilesCommandFor(dir, "demo", capabilities)
 }
 func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.FileManager.Command != "" {

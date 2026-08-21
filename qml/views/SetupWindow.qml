@@ -18,7 +18,6 @@ PanelWindow {
 
     signal chooseImageRequested()
     signal extraConfigsToggled(bool enabled)
-    signal settingsRequested()
     signal continueRequested()
     signal hideRequested()
 
@@ -168,7 +167,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     visible: root.sourceImage !== ""
                     label: "Enable extra configs on preview"
-                    description: "Choose an active-window panel style before generating."
+                    description: "Choose window, shell, and bar styling before generating."
                     checked: root.extraConfigsEnabled
                     hasCursor: root.sourceImage !== "" && root.cursorIndex === 1
                     foreground: Color.popups.text

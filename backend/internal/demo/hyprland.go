@@ -172,11 +172,6 @@ func windowAddresses() (map[string]clientInfo, error) {
 	}
 	return result, nil
 }
-func allOwnedWindowsExist(s State) bool {
-	windows, err := survivingWindows(s)
-	return err == nil && len(missingSlots(windows)) == 0
-}
-
 func survivingWindows(s State) (map[Slot]string, error) {
 	current, err := windowAddresses()
 	if err != nil {

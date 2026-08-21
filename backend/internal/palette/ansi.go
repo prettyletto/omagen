@@ -44,22 +44,6 @@ func buildIdentityANSI(identity sourceIdentity, mode string) identityANSISet {
 	}
 }
 
-func accentFamilyANSISet(anchor colorspace.OKLCH, mode string) identityANSISet {
-	return identityANSISet{Red: narrowFamilyANSI(anchor, ansiRoles.Red, mode), Orange: narrowFamilyANSI(anchor, ansiRoles.Orange, mode), Yellow: narrowFamilyANSI(anchor, ansiRoles.Yellow, mode), Green: narrowFamilyANSI(anchor, ansiRoles.Green, mode), Cyan: narrowFamilyANSI(anchor, ansiRoles.Cyan, mode), Blue: narrowFamilyANSI(anchor, ansiRoles.Blue, mode), Magenta: narrowFamilyANSI(anchor, ansiRoles.Magenta, mode), Brown: narrowFamilyANSI(anchor, ansiRoles.Brown, mode)}
-}
-
-func narrowFamilyANSI(anchor colorspace.OKLCH, role ansiRole, mode string) colorspace.OKLCH {
-	l := role.darkL
-	if mode == "light" {
-		l = role.lightL
-	}
-	c := clampValue(anchor.C*role.chromaScale, .055, .20)
-	if role == ansiRoles.Brown {
-		c = clampValue(anchor.C*role.chromaScale, .035, .095)
-	}
-	return colorspace.OKLCH{L: l, C: c, H: normalizeHue(anchor.H + role.familyShift)}
-}
-
 func sourceFamilyANSI(identity sourceIdentity, role ansiRole, mode string, usage []int) colorspace.OKLCH {
 	i := nearestIdentityFamily(identity.families, role.targetHue, usage)
 	usage[i]++

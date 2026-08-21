@@ -15,8 +15,6 @@ BarWidget {
     moduleName: "pretty.omagen"
     property bool menuOpen: false
     property int menuIndex: 0
-    property string pendingMethod: ""
-    property int pendingAttempts: 0
     property bool quitBusy: false
     property bool sessionActive: false
     property color animatedIconColor: normalIconColor
@@ -73,9 +71,8 @@ BarWidget {
         if (!root.bar || !root.bar.shell)
             return;
 
-        // Open must go through summon so the lazy overlay loader is created
-        // after a shell restart. Settings calls the loaded QML instance
-        // directly, retrying briefly while that loader resolves.
+        // Open and Settings both go through summon so the lazy overlay loader
+        // is created after a shell restart.
         if (action === "open") {
             root.bar.shell.summon("pretty.omagen", "{}");
             return;
@@ -91,9 +88,6 @@ BarWidget {
     }
 
     function quitNow() {
-        root.pendingMethod = "";
-        invokeRetry.stop();
-
         // Close any already-visible surface without creating one.  The
         // backend recovery command is authoritative for demo, pending Apply,
         // theme/background restoration, and durable session cleanup.
@@ -104,31 +98,6 @@ BarWidget {
             return;
         root.quitBusy = true;
         quitProcess.exec([root.backendPath, "session", "recover"]);
-    }
-
-    function callPendingMethod() {
-        if (root.pendingMethod === "" || !root.bar || !root.bar.shell)
-            return;
-
-        let result = typeof root.bar.shell.call === "function"
-            ? root.bar.shell.call("pretty.omagen", root.pendingMethod, "")
-            : "unknown";
-        if (result !== "unknown") {
-            root.pendingMethod = "";
-            return;
-        }
-
-        if (root.pendingAttempts >= 10) {
-            root.pendingMethod = "";
-            return;
-        }
-
-        // Summon once to instantiate the overlay, then retry Settings after
-        // the Loader has had a chance to resolve.
-        if (root.pendingAttempts === 0)
-            root.bar.shell.summon("pretty.omagen", "{}");
-        root.pendingAttempts += 1;
-        invokeRetry.restart();
     }
 
     function activateMenu() {
@@ -149,7 +118,6 @@ BarWidget {
     }
 
     Timer {
-        id: sessionStateProbe
         interval: 1000
         repeat: true
         running: true
@@ -177,7 +145,6 @@ BarWidget {
     }
 
     SequentialAnimation {
-        id: rainbowAnimation
         running: root.sessionActive
         loops: Animation.Infinite
 
@@ -197,13 +164,6 @@ BarWidget {
         font.family: Style.font.family
         font.pixelSize: Style.bar.iconFont
         font.bold: true
-    }
-
-    Timer {
-        id: invokeRetry
-        interval: 40
-        repeat: false
-        onTriggered: root.callPendingMethod()
     }
 
     Process {

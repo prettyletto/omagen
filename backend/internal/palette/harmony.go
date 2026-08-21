@@ -41,5 +41,3 @@ func (h Harmony) Validate() error {
 func (h Harmony) ValidateSupported() error {
 	return h.Validate()
 }
-
-func (h Harmony) Supported() bool { return h.Validate() == nil }

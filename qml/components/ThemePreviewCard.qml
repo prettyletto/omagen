@@ -575,7 +575,6 @@ Item {
                 }
 
                 Rectangle {
-                    id: terminal
                     anchors.top: monitor.bottom
                     anchors.topMargin: root.paneGap
                     anchors.left: monitor.left
@@ -723,7 +722,6 @@ Item {
             }
 
             Rectangle {
-                id: hoverHint
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: 10
@@ -807,7 +805,6 @@ Item {
         }
 
         Rectangle {
-            id: outerFrame
             anchors.fill: parent
             radius: root.cardRadius
             color: "transparent"

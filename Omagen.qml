@@ -357,10 +357,7 @@ Item {
         ) {
             root.sessionBusy = false;
             session.activate(
-                sessionId,
-                originalTheme,
-                backgroundKind,
-                backgroundPath
+                sessionId
             );
             root.shellStyle = root.normalizeShellStyle(backendShellStyle);
             root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
@@ -672,9 +669,6 @@ Item {
         sourceImage: root.sourceImage
         shellStyle: root.shellStyle
         sessionId: session.sessionId
-        originalTheme: session.originalTheme
-        originalBackgroundKind: session.originalBackgroundKind
-        originalBackgroundPath: session.originalBackgroundPath
         generationBusy: root.generationBusy || root.describeBusy
         previewBusy: root.previewBusy
         applyBusy: root.applyBusy

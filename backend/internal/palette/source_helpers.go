@@ -40,52 +40,6 @@ func weightedLightness(colors []imageanalysis.RepresentativeColor) float64 {
 	return total / weight
 }
 
-func chooseSurface(colors []imageanalysis.RepresentativeColor) colorspace.OKLCH {
-	dominant := colors[0].LCH
-	if dominant.C >= surfaceHueThreshold {
-		return dominant
-	}
-	for _, candidate := range colors[1:] {
-		if candidate.LCH.C < chromaticThreshold || candidate.Coverage < 0.10 {
-			continue
-		}
-		return colorspace.OKLCH{L: dominant.L, C: math.Min(candidate.LCH.C*0.20, 0.025), H: candidate.LCH.H}
-	}
-	return colorspace.OKLCH{L: dominant.L, C: 0, H: 0}
-}
-
-func chooseAccent(colors []imageanalysis.RepresentativeColor) colorspace.OKLCH {
-	var best colorspace.OKLCH
-	bestScore := -1.0
-	for _, candidate := range colors {
-		lch := candidate.LCH
-		if lch.C < chromaticThreshold {
-			continue
-		}
-		coverageWeight := 0.30 + math.Sqrt(candidate.Coverage)
-		lightnessDistance := math.Abs(lch.L - 0.62)
-		lightnessFitness := 1.0 - math.Min(1, lightnessDistance/0.62)
-		score := lch.C * coverageWeight * (0.65 + 0.35*lightnessFitness)
-		if score > bestScore {
-			best, bestScore = lch, score
-		}
-	}
-	if bestScore >= 0 {
-		return best
-	}
-	return colorspace.OKLCH{L: 0.62}
-}
-
-func chooseForegroundSource(colors []imageanalysis.RepresentativeColor, mode string) colorspace.OKLCH {
-	best := colors[0].LCH
-	for _, candidate := range colors {
-		if (mode == "dark" && candidate.LCH.L > best.L) || (mode != "dark" && candidate.LCH.L < best.L) {
-			best = candidate.LCH
-		}
-	}
-	return best
-}
-
 func semanticColor(lightness, chroma, hue float64) string {
 	return colorspace.HexFromOKLCH(colorspace.OKLCH{L: clampValue(lightness, 0, 1), C: math.Max(0, chroma), H: hue})
 }

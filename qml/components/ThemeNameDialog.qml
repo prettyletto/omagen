@@ -6,7 +6,6 @@ Item {
     id: root
     property bool opened: false
     property bool busy: false
-    property string suggestedName: ""
     property string errorMessage: ""
     signal cancelled()
     signal confirmed(string name)
@@ -30,7 +29,7 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Util.alpha(Color.background, 0.72); MouseArea { anchors.fill: parent; onClicked: { root.close(); root.cancelled() } } }
     Rectangle {
-        id: dialog; width: 430; height: 230; anchors.centerIn: parent; radius: 14
+        width: 430; height: 230; anchors.centerIn: parent; radius: 14
         color: Color.popups.background; border.width: 1; border.color: Color.popups.border
         Keys.onEscapePressed: { if (!root.busy) { root.close(); root.cancelled() } }
         Column {

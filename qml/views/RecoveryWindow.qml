@@ -39,7 +39,6 @@ PanelWindow {
     MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
 
     Rectangle {
-        id: card
         anchors.centerIn: parent
         width: Math.min(Style.space(560), parent.width - Style.space(48))
         height: Style.space(360)

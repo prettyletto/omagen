@@ -21,9 +21,6 @@ PanelWindow {
     property string sourceImage: ""
     property var shellStyle: ({ surface: "flat", detail: "native" })
     property string sessionId: ""
-    property string originalTheme: ""
-    property string originalBackgroundKind: ""
-    property string originalBackgroundPath: ""
     property string generationId: ""
     property string selectedVariant: "source"
     property string previewVariant: ""
@@ -193,7 +190,6 @@ PanelWindow {
                 }
 
                 GridLayout {
-                    id: previewGrid
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     columns: 3

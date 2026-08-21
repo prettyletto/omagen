@@ -7,9 +7,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"image"
-	"image/color"
-	"image/draw"
 	"log"
 	"net/http"
 	"net/http/httptest"
@@ -22,11 +19,6 @@ import (
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/theme"
-)
-
-const (
-	width  = 640
-	height = 360
 )
 
 type preview struct {
@@ -232,105 +224,4 @@ func generateCorpus(dir string) error {
 		}
 	}
 	return nil
-
-	/*
-		corpus := []struct {
-			name  string
-			paint func(*image.RGBA)
-		}{
-			{"01-monochromatic-dark-blue", solid("#14233d")},
-			{"02-monochromatic-bright-orange", solid("#ff7a28")},
-			{"03-grayscale-dark", solid("#303238")},
-			{"04-grayscale-light", solid("#e7e8eb")},
-			{"05-two-color", split(color.RGBA{22, 37, 69, 255}, color.RGBA{202, 77, 84, 255})},
-			{"06-three-color", thirds()},
-			{"07-tokyo-night-like", tokyoNight()},
-			{"08-highly-colorful", colorful()},
-			{"09-pastel", pastel()},
-			{"10-very-dark-photo", darkPhoto()},
-		}
-		for _, item := range corpus {
-			img := image.NewRGBA(image.Rect(0, 0, width, height))
-			item.paint(img)
-			file, err := os.Create(filepath.Join(dir, item.name+".png"))
-			if err != nil {
-				return err
-			}
-			err = png.Encode(file, img)
-			closeErr := file.Close()
-			if err != nil {
-				return err
-			}
-			if closeErr != nil {
-				return closeErr
-			}
-		}
-		return nil
-	*/
-}
-
-func solid(hex string) func(*image.RGBA) {
-	c := parseHex(hex)
-	return func(img *image.RGBA) { draw.Draw(img, img.Bounds(), &image.Uniform{c}, image.Point{}, draw.Src) }
-}
-func split(a, b color.RGBA) func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		draw.Draw(img, image.Rect(0, 0, width/2, height), &image.Uniform{a}, image.Point{}, draw.Src)
-		draw.Draw(img, image.Rect(width/2, 0, width, height), &image.Uniform{b}, image.Point{}, draw.Src)
-	}
-}
-func thirds() func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		split(color.RGBA{26, 35, 55, 255}, color.RGBA{46, 117, 117, 255})(img)
-		draw.Draw(img, image.Rect(width*2/3, 0, width, height), &image.Uniform{color.RGBA{188, 91, 121, 255}}, image.Point{}, draw.Src)
-	}
-}
-func tokyoNight() func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		draw.Draw(img, img.Bounds(), &image.Uniform{parseHex("#1a1b26")}, image.Point{}, draw.Src)
-		circle(img, 170, 170, 125, parseHex("#7aa2f7"))
-		circle(img, 430, 130, 105, parseHex("#bb9af7"))
-		circle(img, 450, 285, 75, parseHex("#f7768e"))
-	}
-}
-func colorful() func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		draw.Draw(img, img.Bounds(), &image.Uniform{parseHex("#10243b")}, image.Point{}, draw.Src)
-		circle(img, 120, 120, 145, parseHex("#ef476f"))
-		circle(img, 300, 210, 160, parseHex("#06d6a0"))
-		circle(img, 520, 120, 145, parseHex("#ffd166"))
-		circle(img, 520, 320, 120, parseHex("#118ab2"))
-	}
-}
-func pastel() func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		draw.Draw(img, img.Bounds(), &image.Uniform{parseHex("#f5e8dc")}, image.Point{}, draw.Src)
-		circle(img, 120, 180, 150, parseHex("#f6b6c8"))
-		circle(img, 330, 120, 145, parseHex("#b9d9f2"))
-		circle(img, 520, 235, 140, parseHex("#c2e6c2"))
-	}
-}
-func darkPhoto() func(*image.RGBA) {
-	return func(img *image.RGBA) {
-		draw.Draw(img, img.Bounds(), &image.Uniform{parseHex("#090d14")}, image.Point{}, draw.Src)
-		circle(img, 150, 260, 180, parseHex("#152d3d"))
-		circle(img, 420, 100, 120, parseHex("#3d263d"))
-		circle(img, 510, 295, 100, parseHex("#6b3f22"))
-	}
-}
-
-func circle(img *image.RGBA, cx, cy, radius int, c color.RGBA) {
-	for y := cy - radius; y <= cy+radius; y++ {
-		for x := cx - radius; x <= cx+radius; x++ {
-			dx, dy := x-cx, y-cy
-			if dx*dx+dy*dy <= radius*radius && image.Pt(x, y).In(img.Bounds()) {
-				img.SetRGBA(x, y, c)
-			}
-		}
-	}
-}
-func parseHex(value string) color.RGBA {
-	var r, g, b uint8
-	_, _ = fmt.Sscanf(value, "#%02x%02x%02x", &r, &g, &b)
-	return color.RGBA{r, g, b, 255}
 }
