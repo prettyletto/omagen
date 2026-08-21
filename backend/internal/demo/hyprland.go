@@ -39,6 +39,8 @@ type clientInfo struct {
 type rect struct{ X, Y, W, H int }
 type demoRects struct{ Editor, Btop, Shell, Files rect }
 
+const demoGap = 24
+
 func hyprJSON(dst any, args ...string) error {
 	data, err := exec.Command("hyprctl", append([]string{"-j"}, args...)...).Output()
 	if err != nil {
@@ -287,7 +289,8 @@ func layoutForMonitor(m monitorInfo) demoRects {
 	if m.Transform == 1 || m.Transform == 3 || m.Transform == 5 || m.Transform == 7 {
 		w, h = h, w
 	}
-	const outerSide, outerTop, outerBottom, gap = 12, 8, 12, 14
+	const outerSide, outerTop, outerBottom = 12, 8, 12
+	gap := demoGap
 	left := m.Reserved[0]
 	top := m.Reserved[1]
 	right := m.Reserved[2]

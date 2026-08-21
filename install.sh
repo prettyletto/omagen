@@ -6,6 +6,19 @@ SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID"
 MODE="dev"
 
+# Omarchy's shell may be installed in the user's checkout rather than the
+# system path. Prefer a valid existing OMARCHY_PATH, then resolve the paths
+# used by the supported Omarchy layouts before making shell IPC calls.
+# The running Omarchy checkout is the per-user install on this machine. It
+# must win over a stale system-path value inherited from zshrc, otherwise the
+# IPC calls below target the wrong shell instance and report "not running".
+for candidate in "$HOME/.local/share/omarchy" "${OMARCHY_PATH:-}" "/usr/share/omarchy"; do
+    if [[ -n "$candidate" && -f "$candidate/shell/shell.qml" ]]; then
+        export OMARCHY_PATH="$candidate"
+        break
+    fi
+done
+
 usage() {
     cat <<EOF
 Usage: $0 [--dev|--copy]

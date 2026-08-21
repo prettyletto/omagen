@@ -9,16 +9,19 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/contrast"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
+	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type job struct {
-	variant     Variant
-	sourceImage string
-	analysis    *imageanalysis.Analysis
-	settings    settingspkg.Settings
-	panelStyle  string
+	variant      Variant
+	sourceImage  string
+	analysis     *imageanalysis.Analysis
+	settings     settingspkg.Settings
+	shellStyle   session.ShellStyle
+	desktopStyle session.DesktopStyle
+	barStyle     session.BarStyle
 }
 
 func (j job) run(
@@ -165,12 +168,24 @@ func (j job) run(
 			err,
 		)
 	}
-	if j.panelStyle != "" {
-		if err := theme.WriteHyprland(variantDir, generatedPalette, j.panelStyle); err != nil {
-			return fmt.Errorf("write hyprland panel style: %w", err)
+	if j.shellStyle.Valid() && j.barStyle.Valid() {
+		if err := theme.WriteShell(
+			variantDir,
+			generatedPalette,
+			j.shellStyle.Surface,
+			j.shellStyle.Detail,
+			j.barStyle.Surface,
+			j.barStyle.Density,
+			j.barStyle.Attention,
+		); err != nil {
+			return fmt.Errorf("write shell style: %w", err)
 		}
 	}
-
+	if j.desktopStyle.Valid() {
+		if err := theme.WriteHyprland(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth); err != nil {
+			return fmt.Errorf("write hyprland style: %w", err)
+		}
+	}
 	extension, err := j.analysis.Extension()
 	if err != nil {
 		return fmt.Errorf(

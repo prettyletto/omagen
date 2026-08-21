@@ -47,6 +47,8 @@ PanelWindow {
         border.color: Color.popups.border
         z: 1
 
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
+
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent

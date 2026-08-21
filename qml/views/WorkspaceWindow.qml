@@ -19,7 +19,7 @@ PanelWindow {
     property string suggestedThemeName: ""
     property bool workspaceReady: false
     property string sourceImage: ""
-    property string panelStyle: "solid"
+    property var shellStyle: ({ surface: "flat", detail: "native" })
     property string sessionId: ""
     property string originalTheme: ""
     property string originalBackgroundKind: ""
@@ -99,6 +99,8 @@ PanelWindow {
                 GradientStop { position: 1; color: Util.alpha(Color.background, 0.18) }
             }
         }
+
+        MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
 
         PanelKeyCatcher {
             id: keyCatcher
@@ -210,7 +212,6 @@ PanelWindow {
                             label: modelData.label
                             palette: root.palettes[modelData.variant] || null
                             sourceImage: root.sourceImage
-                            panelStyle: root.panelStyle
                             selected: root.selectedVariant === modelData.variant
                             focused: root.cursorIndex === index
                             previewed: root.previewVariant === modelData.variant

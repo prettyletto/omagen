@@ -36,7 +36,9 @@ type resumeResponse struct {
 	SourceImage            string                        `json:"source_image,omitempty"`
 	GenerationID           string                        `json:"generation_id,omitempty"`
 	PreviewVariant         string                        `json:"preview_variant,omitempty"`
-	PanelStyle             session.PanelStyle            `json:"panel_style,omitempty"`
+	ShellStyle             session.ShellStyle            `json:"shell_style,omitempty"`
+	DesktopStyle           session.DesktopStyle          `json:"desktop_style,omitempty"`
+	BarStyle               session.BarStyle              `json:"bar_style,omitempty"`
 	ExtraConfigs           bool                          `json:"extra_configs,omitempty"`
 	OriginalTheme          string                        `json:"original_theme,omitempty"`
 	OriginalBackgroundKind string                        `json:"original_background_kind,omitempty"`
@@ -238,7 +240,7 @@ func runSessionWithDependencies(
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
-		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, PanelStyle: record.PanelStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
 		if record.GenerationID != "" {
 			described, err := generationService.Describe(record.SessionID, record.GenerationID)
 			if err != nil {
@@ -248,8 +250,8 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) > 3 || (len(args) == 2 && !strings.HasPrefix(args[1], "--panel-style=")) || (len(args) == 3 && args[1] != "--panel-style") {
-			return fail(stderr, 2, "usage: omagen session begin [--panel-style <solid|split|cycle|neon>]")
+		if len(args) != 1 && len(args) != 13 {
+			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention>]")
 		}
 		if cleanupService != nil {
 			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
@@ -260,13 +262,24 @@ func runSessionWithDependencies(
 				}
 			}
 		}
-		panelStyle := ""
-		if len(args) == 2 {
-			panelStyle = strings.TrimPrefix(args[1], "--panel-style=")
-		} else if len(args) == 3 {
-			panelStyle = args[2]
+		var shellStyle session.ShellStyle
+		var desktopStyle session.DesktopStyle
+		var barStyle session.BarStyle
+		if len(args) == 13 {
+			if args[1] != "--shell-style" || args[4] != "--desktop-style" || args[9] != "--bar-style" {
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention>]")
+			}
+			shellStyle = session.ShellStyle{Surface: args[2], Detail: args[3]}
+			desktopStyle = session.DesktopStyle{BorderStyle: args[5], Shape: args[6], Spacing: args[7], Depth: args[8]}
+			barStyle = session.BarStyle{Surface: args[10], Density: args[11], Attention: args[12]}
 		}
-		result, err := service.Begin(panelStyle)
+		var result session.BeginResult
+		var err error
+		if len(args) == 1 {
+			result, err = service.Begin()
+		} else {
+			result, err = service.Begin(shellStyle, desktopStyle, barStyle)
+		}
 		if err != nil {
 			return fail(
 				stderr,

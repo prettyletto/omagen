@@ -30,7 +30,9 @@ Item {
     property string pendingApplyName: ""
     property string sourceImage: ""
     property bool extraConfigsEnabled: false
-    property string panelStyle: "solid"
+    property var shellStyle: ({ surface: "flat", detail: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic" })
     property string errorMessage: ""
 
     readonly property string backendPath: decodeURIComponent(
@@ -38,6 +40,23 @@ Item {
             .toString()
             .replace("file://", "")
     )
+
+    function normalizeShellStyle(value) {
+        value = value || ({})
+        var surface = value.surface || "flat"
+        var detail = value.detail || "native"
+        return {
+            surface: surface,
+            detail: detail
+        }
+    }
+    function normalizeDesktopStyle(value) {
+        value = value || ({})
+        var border = value.borderStyle || value.border_style || "solid"
+        if (border === "split") border = "split_top"
+        return { borderStyle: border, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native" }
+    }
+    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic" } }
 
     function open(payload) {
         let action = "open";
@@ -90,7 +109,9 @@ Item {
             return;
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
-        panelStyle = resumableSession.panel_style || "solid";
+        shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
+        desktopStyle = normalizeDesktopStyle(resumableSession.desktop_style);
+        barStyle = normalizeBarStyle(resumableSession.bar_style);
         extraConfigsEnabled = resumableSession.extra_configs === true;
         resumableSession = null;
         route = "workspace";
@@ -189,7 +210,7 @@ Item {
 
         errorMessage = "";
         sessionBusy = true;
-        backend.beginSession(extraConfigsEnabled ? panelStyle : "");
+        backend.beginSession(extraConfigsEnabled ? shellStyle : null, desktopStyle, barStyle);
     }
 
     function continueFromSetup() {
@@ -277,7 +298,9 @@ Item {
         closeAfterCancel = false;
         sourceImage = "";
         extraConfigsEnabled = false;
-        panelStyle = "solid";
+        shellStyle = ({ surface: "flat", detail: "native" });
+        desktopStyle = ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" });
+        barStyle = ({ surface: "native", density: "native", attention: "semantic" });
         errorMessage = "";
         opened = !shouldClose;
         generationBusy = false;
@@ -327,8 +350,10 @@ Item {
             originalTheme,
             backgroundKind,
             backgroundPath,
-            backendPanelStyle,
-            backendExtraConfigs
+            backendShellStyle,
+            backendExtraConfigs,
+            backendDesktopStyle,
+            backendBarStyle
         ) {
             root.sessionBusy = false;
             session.activate(
@@ -337,7 +362,9 @@ Item {
                 backgroundKind,
                 backgroundPath
             );
-            root.panelStyle = backendPanelStyle || "solid";
+            root.shellStyle = root.normalizeShellStyle(backendShellStyle);
+            root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
+            root.barStyle = root.normalizeBarStyle(backendBarStyle);
             root.extraConfigsEnabled = backendExtraConfigs;
             if (root.closeAfterCancel) {
                 root.cancelSession();
@@ -618,8 +645,13 @@ Item {
     Views.PreviewConfigWindow {
         active: root.opened && root.route === "preview-config"
         busy: root.sessionBusy
-        selectedStyle: root.panelStyle
-        onStyleSelected: function(style) { root.panelStyle = style }
+        sourceImage: root.sourceImage
+        shellStyle: root.shellStyle
+        desktopStyle: root.desktopStyle
+        onShellStyleSelected: function(style) { root.shellStyle = style }
+        onDesktopStyleSelected: function(style) { root.desktopStyle = style }
+        barStyle: root.barStyle
+        onBarStyleSelected: function(style) { root.barStyle = style }
         onContinueRequested: root.beginSession()
         onBackRequested: root.route = "setup"
         onHideRequested: root.close()
@@ -639,7 +671,7 @@ Item {
         active: root.opened && root.route === "workspace" && session.active
         cancelBusy: root.cancelBusy
         sourceImage: root.sourceImage
-        panelStyle: root.panelStyle
+        shellStyle: root.shellStyle
         sessionId: session.sessionId
         originalTheme: session.originalTheme
         originalBackgroundKind: session.originalBackgroundKind

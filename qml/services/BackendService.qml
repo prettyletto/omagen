@@ -11,8 +11,10 @@ Item {
         string originalTheme,
         string backgroundKind,
         string backgroundPath,
-        string panelStyle,
-        bool extraConfigs
+        var shellStyle,
+        bool extraConfigs,
+        var desktopStyle,
+        var barStyle
     )
     signal sessionBeginFailed(string message)
     signal sessionCancelled(string sessionId)
@@ -36,10 +38,13 @@ Item {
     signal demoClosed(string sessionId, bool closed)
     signal demoCloseFailed(string message)
 
-    function beginSession(panelStyle) {
+    function beginSession(shellStyle, desktopStyle, barStyle) {
         const args = [root.executable, "session", "begin"];
-        if (panelStyle)
-            args.push("--panel-style", panelStyle);
+        if (shellStyle)
+            args.push("--shell-style", shellStyle.surface, shellStyle.detail,
+                      "--desktop-style", desktopStyle.borderStyle, desktopStyle.shape,
+                      desktopStyle.spacing, desktopStyle.depth,
+                      "--bar-style", barStyle.surface, barStyle.density, barStyle.attention);
         sessionBeginProcess.exec(args);
     }
 
@@ -145,8 +150,10 @@ Item {
                     originalTheme,
                     backgroundKind,
                     backgroundPath,
-                    result.panel_style || "solid",
-                    result.extra_configs === true
+                    result.shell_style || ({ surface: "flat", detail: "native" }),
+                    result.extra_configs === true,
+                    result.desktop_style || ({ border_style: "solid", shape: "native", spacing: "native", depth: "native" }),
+                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic" })
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");

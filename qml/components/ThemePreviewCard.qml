@@ -8,7 +8,12 @@ Item {
     required property string label
     property var palette: null
     property string sourceImage: ""
-    property string panelStyle: "solid"
+    property string borderStyle: "solid"
+    property bool configurationPreview: false
+    property int activeSection: 0
+    property var desktopStyle: ({ borderStyle: root.borderStyle, shape: "native", spacing: "native", depth: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic" })
     property bool selected: false
     property bool focused: false
     property bool hovered: false
@@ -37,6 +42,51 @@ Item {
     // The card and preview use the same rounded silhouette.  Do not rely on
     // `clip` for this: Qt clips children to a rectangle, not to this radius.
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
+    readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
+    readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
+        : root.desktopStyle.shape === "rounded" ? 17
+        : root.desktopStyle.shape === "soft" ? 6 : 10
+    readonly property real windowMargin: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 14
+        : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 5 : 8
+    readonly property real paneGap: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 12
+        : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 5 : 9
+    readonly property real paneInset: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 12
+        : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 7 : 9
+    readonly property real previewBarHeight: root.barStyle.density === "comfortable" ? 34
+        : root.barStyle.density === "compact" ? 22 : 28
+
+    function shellPopupSurface() {
+        var surface = root.shellStyle.surface || "flat"
+        if (surface === "layered") return root.darkBg
+        if (surface === "contrast") return root.lighterBg
+        if (surface === "accent") return root.darkBg
+        return root.bg
+    }
+
+    function shellControlSurface() {
+        var surface = root.shellStyle.surface || "flat"
+        if (surface === "contrast") return root.darkBg
+        if (surface === "accent") return root.selection
+        return root.lighterBg
+    }
+
+    function shellSelectedSurface() {
+        return root.shellStyle.surface === "accent" || root.shellStyle.surface === "contrast"
+            ? root.accent : root.selection
+    }
+
+    function barSurface() {
+        switch (root.barStyle.surface) {
+        case "dark": return root.darkerBg
+        case "light": return root.lighterBg
+        case "accent": return root.accent
+        default: return root.bg
+        }
+    }
+
+    function barForeground() {
+        return root.barStyle.surface === "accent" ? root.bg : root.fg
+    }
 
     Rectangle {
         id: card
@@ -175,24 +225,119 @@ Item {
             }
 
             Rectangle {
+                id: shellBar
+                visible: root.configurationPreview
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.topMargin: root.windowMargin
+                anchors.leftMargin: root.windowMargin
+                anchors.rightMargin: root.windowMargin
+                height: root.previewBarHeight
+                radius: Math.min(root.windowRadius, height / 2)
+                color: root.barSurface()
+                border.width: root.activeSection === 2 ? 2 : 1
+                border.color: root.activeSection === 2 ? root.accent : Util.alpha(root.fg, 0.22)
+
+                Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                Row {
+                    anchors.left: parent.left
+                    anchors.leftMargin: 8
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: root.barStyle.density === "compact" ? 3 : 5
+
+                    Repeater {
+                        model: ["1", "2", "3"]
+                        delegate: Rectangle {
+                            required property string modelData
+                            width: root.barStyle.density === "comfortable" ? 24 : root.barStyle.density === "compact" ? 15 : 19
+                            height: parent.parent.height - (root.barStyle.density === "compact" ? 8 : 10)
+                            radius: Math.min(5, height / 3)
+                            color: modelData === "1" ? Util.alpha(root.accent, 0.28) : "transparent"
+                            border.width: modelData === "1" ? 1 : 0
+                            border.color: root.accent
+                            Text { anchors.centerIn: parent; text: modelData; color: modelData === "1" ? root.barForeground() : root.muted; font.family: Style.font.family; font.pixelSize: 8 }
+                        }
+                    }
+                }
+
+                Row {
+                    anchors.right: parent.right
+                    anchors.rightMargin: 9
+                    anchors.verticalCenter: parent.verticalCenter
+                    spacing: 7
+                    Text { text: "NET"; color: root.barForeground(); opacity: 0.7; font.family: Style.font.family; font.pixelSize: 7; font.bold: true }
+                    Rectangle {
+                        width: 6; height: 6; radius: 3
+                        color: root.barStyle.attention === "accent" ? root.accent : root.red
+                    }
+                    Text { text: "10:42"; color: root.barForeground(); font.family: Style.font.family; font.pixelSize: 8; font.bold: true }
+                }
+            }
+
+            Rectangle {
+                visible: root.configurationPreview && root.desktopStyle.depth === "shadow"
+                anchors.left: mockWindow.left
+                anchors.right: mockWindow.right
+                anchors.top: mockWindow.top
+                anchors.bottom: mockWindow.bottom
+                anchors.leftMargin: 5
+                anchors.rightMargin: -5
+                anchors.topMargin: 7
+                anchors.bottomMargin: -7
+                radius: root.windowRadius + 2
+                color: Util.alpha(root.darkerBg, 0.72)
+            }
+
+            Rectangle {
                 id: mockWindow
-                anchors.fill: parent
-                anchors.margins: 8
-                radius: Math.max(9, root.cardRadius - 11)
+                anchors.top: root.configurationPreview ? shellBar.bottom : parent.top
+                anchors.topMargin: root.windowMargin
+                anchors.left: parent.left
+                anchors.leftMargin: root.windowMargin
+                anchors.right: parent.right
+                anchors.rightMargin: root.windowMargin
+                anchors.bottom: parent.bottom
+                anchors.bottomMargin: root.windowMargin
+                radius: root.windowRadius
                 color: root.bg
-                border.width: 0
+                border.width: root.configurationPreview ? (root.activeSection === 0 ? 3 : 2) : 0
+                border.color: root.activeBorderStyle === "neon" ? root.magenta
+                    : root.activeBorderStyle === "split_bottom" ? root.fg : root.accent
+                opacity: root.configurationPreview && root.activeSection === 1 ? 0.34
+                    : root.configurationPreview && root.activeSection === 2 ? 0.58
+                    : root.configurationPreview && root.desktopStyle.depth === "flat" ? 0.94 : 1
+
+                Behavior on radius { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                Rectangle {
+                    visible: root.configurationPreview && (root.activeBorderStyle === "split_top" || root.activeBorderStyle === "blend" || root.activeBorderStyle === "neon")
+                    anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                    width: 3; radius: parent.radius
+                    color: root.accent
+                }
+                Rectangle {
+                    visible: root.configurationPreview && (root.activeBorderStyle === "split_bottom" || root.activeBorderStyle === "blend" || root.activeBorderStyle === "neon")
+                    anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
+                    width: 3; radius: parent.radius
+                    color: root.activeBorderStyle === "split_bottom" ? root.accent : root.activeBorderStyle === "blend" ? root.blue : root.magenta
+                }
 
                 Rectangle {
                     id: windowBar
+                    visible: !root.configurationPreview
                     anchors.top: parent.top
                     anchors.left: parent.left
                     anchors.right: parent.right
                     height: Math.max(24, 28 * root.uiScale)
                     radius: mockWindow.radius
-                    color: root.panelStyle === "neon" ? root.accent : Util.alpha(root.lighterBg, 0.72)
+                    color: Util.alpha(root.lighterBg, 0.72)
 
                     SequentialAnimation on color {
-                        running: root.panelStyle === "cycle"
+                        running: false
                         loops: Animation.Infinite
                         ColorAnimation { to: root.blue; duration: 900; easing.type: Easing.InOutSine }
                         ColorAnimation { to: root.magenta; duration: 900; easing.type: Easing.InOutSine }
@@ -202,25 +347,25 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
-                        visible: root.panelStyle === "split"
+                        visible: !root.configurationPreview && (root.activeBorderStyle === "split" || root.activeBorderStyle === "split_top" || root.activeBorderStyle === "split_bottom" || root.activeBorderStyle === "blend")
                         gradient: Gradient {
-                            GradientStop { position: 0; color: root.accent }
-                            GradientStop { position: 0.5; color: root.accent }
-                            GradientStop { position: 0.5; color: root.fg }
-                            GradientStop { position: 1; color: root.fg }
+                            GradientStop { position: 0; color: root.activeBorderStyle === "split_bottom" ? root.fg : root.accent }
+                            GradientStop { position: 0.5; color: root.activeBorderStyle === "split_bottom" ? root.fg : root.accent }
+                            GradientStop { position: 0.5; color: root.activeBorderStyle === "blend" ? root.blue : root.activeBorderStyle === "split_bottom" ? root.accent : root.fg }
+                            GradientStop { position: 1; color: root.activeBorderStyle === "blend" ? root.blue : root.activeBorderStyle === "split_bottom" ? root.accent : root.fg }
                         }
                     }
 
                     Rectangle {
                         anchors.fill: parent
                         radius: parent.radius
-                        visible: root.panelStyle === "neon"
+                        visible: !root.configurationPreview && root.activeBorderStyle === "neon"
                         color: "transparent"
                         border.width: 2
                         border.color: Util.alpha(root.accent, neonOpacity)
                         property real neonOpacity: 0.45
                         SequentialAnimation on neonOpacity {
-                            running: root.panelStyle === "neon"
+                            running: false
                             loops: Animation.Infinite
                             NumberAnimation { to: 1; duration: 700; easing.type: Easing.InOutSine }
                             NumberAnimation { to: 0.3; duration: 700; easing.type: Easing.InOutSine }
@@ -276,12 +421,12 @@ Item {
 
                 Rectangle {
                     id: editor
-                    anchors.top: windowBar.bottom
-                    anchors.topMargin: 9
+                    anchors.top: root.configurationPreview ? parent.top : windowBar.bottom
+                    anchors.topMargin: root.paneGap
                     anchors.left: parent.left
-                    anchors.leftMargin: 9
+                    anchors.leftMargin: root.paneInset
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 9
+                    anchors.bottomMargin: root.paneInset
                     width: parent.width * 0.56
                     radius: 7
                     color: Util.alpha(root.darkBg, 0.88)
@@ -320,15 +465,16 @@ Item {
                             }
                         }
                     }
+
                 }
 
                 Rectangle {
                     id: monitor
                     anchors.top: editor.top
                     anchors.left: editor.right
-                    anchors.leftMargin: 9
+                    anchors.leftMargin: root.paneGap
                     anchors.right: parent.right
-                    anchors.rightMargin: 9
+                    anchors.rightMargin: root.paneInset
                     height: (editor.height - 9) * 0.52
                     radius: 7
                     color: Util.alpha(root.darkBg, 0.76)
@@ -372,7 +518,7 @@ Item {
                 Rectangle {
                     id: terminal
                     anchors.top: monitor.bottom
-                    anchors.topMargin: 9
+                    anchors.topMargin: root.paneGap
                     anchors.left: monitor.left
                     anchors.right: monitor.right
                     anchors.bottom: editor.bottom
@@ -393,6 +539,106 @@ Item {
             }
 
             Rectangle {
+                visible: quickShellPanel.visible
+                anchors.fill: quickShellPanel
+                anchors.leftMargin: 7
+                anchors.rightMargin: -7
+                anchors.topMargin: 8
+                anchors.bottomMargin: -8
+                radius: quickShellPanel.radius + 2
+                color: Util.alpha(root.darkerBg, 0.72)
+                z: 3
+            }
+
+            Rectangle {
+                id: quickShellPanel
+                visible: root.configurationPreview && root.activeSection === 1
+                anchors.centerIn: mockWindow
+                width: Math.min(mockWindow.width * 0.68, 390 * root.uiScale)
+                height: Math.min(mockWindow.height * 0.78, 360 * root.uiScale)
+                radius: root.shellStyle.surface === "flat" ? 8 : 14
+                color: root.shellPopupSurface()
+                border.width: root.shellStyle.detail === "framed" ? 2 : 1
+                border.color: root.shellStyle.detail === "focus" || root.shellStyle.surface === "accent"
+                    ? root.accent : Util.alpha(root.fg, 0.34)
+                z: 4
+
+                Behavior on color { ColorAnimation { duration: 160; easing.type: Easing.OutCubic } }
+                Behavior on radius { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
+
+                Rectangle {
+                    visible: root.shellStyle.detail === "edge"
+                    anchors.left: parent.left
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    width: 4
+                    radius: parent.radius
+                    color: root.accent
+                }
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    spacing: 8
+
+                    Item {
+                        width: parent.width
+                        height: 30
+                        Column {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: 1
+                            Text { text: "QUICK SHELL"; color: root.accent; font.family: Style.font.family; font.pixelSize: 8; font.bold: true; font.letterSpacing: 1.2 }
+                            Text { text: "Application launcher"; color: root.fg; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
+                        }
+                        Text { anchors.right: parent.right; anchors.verticalCenter: parent.verticalCenter; text: "ESC"; color: root.muted; font.family: Style.font.family; font.pixelSize: 8; font.bold: true }
+                    }
+
+                    Rectangle {
+                        width: parent.width
+                        height: 34
+                        radius: 7
+                        color: Util.alpha(root.shellControlSurface(), 0.92)
+                        border.width: root.shellStyle.detail === "focus" || root.shellStyle.detail === "framed" ? 1 : 0
+                        border.color: root.shellStyle.detail === "focus" ? root.accent : Util.alpha(root.fg, 0.36)
+                        Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: "⌕  Search applications…"; color: root.darkFg; font.family: Style.font.family; font.pixelSize: 9 }
+                        Text { anchors.right: parent.right; anchors.rightMargin: 9; anchors.verticalCenter: parent.verticalCenter; text: "SUPER"; color: root.accent; font.family: Style.font.family; font.pixelSize: 7; font.bold: true }
+                    }
+
+                    Repeater {
+                        model: [
+                            { icon: "◫", label: "Applications", hint: "42" },
+                            { icon: "◆", label: "Theme studio", hint: "ENTER" },
+                            { icon: "▦", label: "Workspaces", hint: "6" },
+                            { icon: "⏻", label: "Session", hint: "" }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            required property int index
+                            width: parent.width
+                            height: 34
+                            radius: 7
+                            color: index === 1 ? root.shellSelectedSurface() : index % 2 === 0 ? Util.alpha(root.shellControlSurface(), 0.42) : "transparent"
+                            border.width: root.shellStyle.detail === "framed" ? 1 : 0
+                            border.color: Util.alpha(root.fg, 0.3)
+
+                            Rectangle {
+                                visible: index === 1 && root.shellStyle.detail === "edge"
+                                anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                                width: 3; radius: parent.radius; color: root.accent
+                            }
+                            Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.icon; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.accent; font.family: Style.font.family; font.pixelSize: 11; font.bold: true }
+                            Text { anchors.left: parent.left; anchors.leftMargin: 34; anchors.verticalCenter: parent.verticalCenter; text: modelData.label; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.fg; font.family: Style.font.family; font.pixelSize: 9; font.bold: index === 1 }
+                            Text { anchors.right: parent.right; anchors.rightMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: modelData.hint; color: index === 1 && root.shellStyle.surface === "accent" ? root.bg : root.muted; opacity: 0.75; font.family: Style.font.family; font.pixelSize: 7 }
+                        }
+                    }
+
+                    Item { width: parent.width; height: 2 }
+                    Text { width: parent.width; text: "Quickshell surface · not an application window"; horizontalAlignment: Text.AlignHCenter; color: root.muted; font.family: Style.font.family; font.pixelSize: 8 }
+                }
+            }
+
+            Rectangle {
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: 10
@@ -404,6 +650,7 @@ Item {
                 border.width: root.selected ? 0 : 1
                 border.color: Util.alpha(Color.foreground, 0.72)
                 visible: root.selected || root.previewed
+                z: 10
 
                 Text {
                     id: selectedBadge
@@ -428,7 +675,7 @@ Item {
                 color: Util.alpha(Color.background, 0.82)
                 border.width: 1
                 border.color: Util.alpha(Color.accent, 0.72)
-                visible: root.hovered && !root.selected
+                visible: root.hovered && !root.selected && !root.configurationPreview
 
                 Text {
                     anchors.centerIn: parent
@@ -519,7 +766,7 @@ Item {
 
     MouseArea {
         anchors.fill: parent
-        enabled: root.enabled && root.palette !== null
+        enabled: root.enabled && root.palette !== null && !root.configurationPreview
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onEntered: root.hovered = true

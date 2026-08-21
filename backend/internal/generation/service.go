@@ -45,11 +45,15 @@ func (s *Service) Generate(
 			err,
 		)
 	}
-	panelStyle := string(record.PanelStyle)
+	shellStyle := record.ShellStyle
+	desktopStyle := record.DesktopStyle
+	barStyle := record.BarStyle
 	if !record.ExtraConfigs {
-		panelStyle = ""
-	} else if panelStyle == "" {
-		panelStyle = "solid"
+		shellStyle = session.ShellStyle{}
+		desktopStyle = session.DesktopStyle{}
+		barStyle = session.BarStyle{}
+	} else if !shellStyle.Valid() {
+		shellStyle = session.DefaultShellStyle()
 	}
 
 	effectiveSettings, err := s.settings.Load()
@@ -142,7 +146,9 @@ func (s *Service) Generate(
 		cachedSource,
 		analysis,
 		effectiveSettings,
-		panelStyle,
+		shellStyle,
+		desktopStyle,
+		barStyle,
 	); err != nil {
 		return Result{}, err
 	}
@@ -189,12 +195,10 @@ func runJobs(
 	sourceImage string,
 	analysis *imageanalysis.Analysis,
 	effectiveSettings settingspkg.Settings,
-	panelStyles ...string,
+	shellStyle session.ShellStyle,
+	desktopStyle session.DesktopStyle,
+	barStyle session.BarStyle,
 ) error {
-	panelStyle := ""
-	if len(panelStyles) > 0 && panelStyles[0] != "" {
-		panelStyle = panelStyles[0]
-	}
 	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -215,11 +219,13 @@ func runJobs(
 			defer wg.Done()
 
 			err := (job{
-				variant:     variant,
-				sourceImage: sourceImage,
-				analysis:    analysis,
-				settings:    effectiveSettings,
-				panelStyle:  panelStyle,
+				variant:      variant,
+				sourceImage:  sourceImage,
+				analysis:     analysis,
+				settings:     effectiveSettings,
+				shellStyle:   shellStyle,
+				desktopStyle: desktopStyle,
+				barStyle:     barStyle,
 			}).run(
 				ctx,
 				generationRoot,

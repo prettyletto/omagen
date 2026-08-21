@@ -32,6 +32,14 @@ BarWidget {
     // the right-click path because the host intentionally owns left-click
     // routing for reorderable modules.
     function triggerPress(buttonCode) {
+        if (buttonCode === Qt.RightButton) {
+            // ModuleSlot owns bar input in current Quickshell. Handle the
+            // secondary click here so the widget menu remains reachable even
+            // when the slot consumes the event before the child MouseArea.
+            root.menuIndex = 0;
+            root.menuOpen = !root.menuOpen;
+            return;
+        }
         if (buttonCode === Qt.LeftButton)
             invoke("open");
     }
@@ -58,9 +66,13 @@ BarWidget {
             return;
         }
 
-        root.pendingMethod = "openSettings";
-        root.pendingAttempts = 0;
-        root.callPendingMethod();
+        // Passing the action through summon is reliable for a cold plugin:
+        // the overlay loader receives the payload during construction and
+        // opens the settings route directly, without first showing setup.
+        if (action === "settings") {
+            root.bar.shell.summon("pretty.omagen", JSON.stringify({ action: "settings" }));
+            return;
+        }
     }
 
     function quitNow() {

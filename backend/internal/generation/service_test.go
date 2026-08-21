@@ -150,6 +150,52 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	}
 }
 
+func TestGenerateComposesShellAndBarIntoShellTOML(t *testing.T) {
+	store := generationStore(t)
+	if err := store.Save(session.Record{
+		SessionID:          "styled-session",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+		ExtraConfigs:       true,
+		ShellStyle:         session.ShellStyle{Surface: "accent", Detail: "edge"},
+		DesktopStyle:       session.DefaultDesktopStyle(),
+		BarStyle:           session.BarStyle{Surface: "accent", Density: "comfortable", Attention: "accent"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	imagePath := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
+		SessionID:   "styled-session",
+		SourceImage: imagePath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sourceDir := filepath.Join(store.SessionDir("styled-session"), "generations", result.GenerationID, string(Source))
+	data, err := os.ReadFile(filepath.Join(sourceDir, "shell.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"[popups]", "[bar]", "size-horizontal = 30", "size-vertical = 32", "active = "} {
+		if !strings.Contains(text, want) {
+			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Count(text, "[bar]") != 1 {
+		t.Fatalf("expected exactly one bar table:\n%s", text)
+	}
+	if _, err := os.Stat(filepath.Join(sourceDir, "shell.bar.toml")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected shell.bar.toml sidecar: %v", err)
+	}
+}
+
 func testPNG(t *testing.T) []byte {
 	t.Helper()
 
@@ -201,7 +247,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		Format:          "png",
 		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
 		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
-	}, settings.Defaults()); err == nil {
+	}, settings.Defaults(), session.ShellStyle{}, session.DesktopStyle{}, session.BarStyle{}); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
 	if err := (job{
