@@ -38,6 +38,9 @@ section "Go vet"
 section "Backend binary"
 [[ -x "$BIN" ]] || fail "bin/omagen is missing or not executable"
 
+section "Reproducible bundled backend"
+"$ROOT/scripts/verify-bundled-backend.sh"
+
 section "CLI smoke tests"
 "$BIN" --help >/dev/null || fail "omagen --help failed"
 "$BIN" help >/dev/null || fail "omagen help failed"

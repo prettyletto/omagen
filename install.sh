@@ -33,8 +33,7 @@ done
 
 echo "Building Omagen backend..."
 mkdir -p "$SRC_DIR/bin"
-go -C "$SRC_DIR/backend" build -o "$SRC_DIR/bin/omagen" ./cmd/omagen
-chmod +x "$SRC_DIR/bin/omagen"
+"$SRC_DIR/scripts/build-backend.sh" "$SRC_DIR/bin/omagen"
 
 echo "Installing Omagen..."
 mkdir -p "$DEST_DIR"
