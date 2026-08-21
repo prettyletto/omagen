@@ -9,6 +9,7 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
 
 type testApplier struct {
@@ -38,9 +39,7 @@ func (a *testApplier) ApplyTheme(theme, _ string) error {
 
 func setupApplyTest(t *testing.T, applier ThemeApplier) (*Service, *session.Store, string) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)

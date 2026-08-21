@@ -13,6 +13,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
+	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
 
 func TestRunCommandValidation(t *testing.T) {
@@ -123,8 +124,7 @@ func (cliOmarchy) RestoreThemeFast(string, string) error         { return nil }
 func (cliOmarchy) RestoreBackground(session.BackgroundRef) error { return nil }
 
 func TestSessionHandlers(t *testing.T) {
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)

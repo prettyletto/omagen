@@ -7,6 +7,7 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
 
 type previewApplier struct{}
@@ -14,8 +15,7 @@ type previewApplier struct{}
 func (previewApplier) ApplyThemePreview(string, string) (int, bool, error) { return 0, false, nil }
 
 func TestApplyRejectsPendingTransactionBeforePublishingPreview(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)

@@ -8,11 +8,11 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
 
 func TestOpenRejectsPendingApplyBeforeTouchingDemoWorkspace(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)
@@ -41,8 +41,7 @@ func TestOpenRejectsPendingApplyBeforeTouchingDemoWorkspace(t *testing.T) {
 }
 
 func TestDemoStateCommitRejectsCancellationWonRace(t *testing.T) {
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)

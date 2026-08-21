@@ -7,13 +7,12 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
 
 func cleanupFixture(t *testing.T) (*session.Store, string) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
-	t.Setenv("XDG_STATE_HOME", t.TempDir())
-	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	testenv.Isolate(t)
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)
