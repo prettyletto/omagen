@@ -1,0 +1,8 @@
+[book]
+title = "Omagen"
+authors = ["Prettyletto"]
+language = "en"
+src = "."
+
+[build]
+build-dir = "/tmp/omagen-mdbook"

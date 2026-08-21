@@ -44,6 +44,10 @@ PanelWindow {
     signal demoRequested(string variant)
     signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
 
+    function resetApplyDialog() {
+        themeNameDialog.reset()
+    }
+
     visible: active
     color: "transparent"
     WlrLayershell.namespace: "omagen-workspace"
@@ -102,7 +106,7 @@ PanelWindow {
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
-            onCloseRequested: root.hideRequested()
+            onCloseRequested: if (!root.applyBusy) root.hideRequested()
             onMoveRequested: function(dx, dy) { root.moveCursor(dx, dy); }
             onActivateRequested: root.activateCursor()
 
@@ -185,6 +189,7 @@ PanelWindow {
                         fontSize: Style.font.title
                         foreground: Color.foreground
                         tooltipText: "Close overlay"
+                        enabled: !root.applyBusy
                         onClicked: root.hideRequested()
                     }
                 }

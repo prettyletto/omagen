@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
@@ -179,7 +180,7 @@ func TestApplyThemePreviewWaitsForCriticalThemeApply(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	bin := t.TempDir()
 	themeSet := filepath.Join(bin, "omarchy")
-	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then sleep 0.15; printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; fi\n"
+	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then /usr/bin/sleep 0.15; printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; /usr/bin/sleep 0.30; printf done > \"$HOME/theme-set-finished\"; fi\n"
 	if err := os.WriteFile(themeSet, []byte(contents), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -213,6 +214,67 @@ func TestApplyThemePreviewWaitsForCriticalThemeApply(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(previewLogs, terminalReloadPendingFile)); err != nil {
 		t.Fatalf("preview did not persist terminal reload marker: %v", err)
 	}
+	if _, err := os.Stat(filepath.Join(home, "theme-set-finished")); !os.IsNotExist(err) {
+		t.Fatalf("preview waited for full theme-set completion, err=%v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(home, "theme-set-finished")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("preview theme-set process did not finish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestApplyThemeSkipsCacheWarmupsAndCleansShims(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	bin := t.TempDir()
+	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; omarchy-theme-switcher; omarchy-theme-bg-cache; /usr/bin/sleep 0.15; printf done > \"$HOME/theme-set-finished\"; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "omarchy"), []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range cacheWarmupCommands {
+		path := filepath.Join(bin, command)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf ran > \"$HOME/cache-warmup-ran\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", bin)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	if err := NewClient(nil).ApplyTheme("new", filepath.Join(t.TempDir(), "apply.log")); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed < 100*time.Millisecond {
+		t.Fatalf("ApplyTheme returned before theme-set completion: %v", elapsed)
+	}
+	if _, err := os.Stat(filepath.Join(home, "theme-set-finished")); err != nil {
+		t.Fatalf("ApplyTheme returned before theme-set wrote its completion marker: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "cache-warmup-ran")); !os.IsNotExist(err) {
+		t.Fatalf("cache warmup command ran, err=%v", err)
+	}
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("cache warmup shim directory still exists: %v", entries)
+	}
 }
 
 func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
@@ -223,7 +285,7 @@ func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
 	if err := os.WriteFile(realCommand, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, command := range previewCacheCommands {
+	for _, command := range cacheWarmupCommands {
 		path := filepath.Join(bin, command)
 		if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf 'executed' > \"$HOME/preview-cache-command-ran\"\n"), 0o755); err != nil {
 			t.Fatal(err)
@@ -251,7 +313,7 @@ func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
 	if err := sync.persist(); err != nil {
 		t.Fatal(err)
 	}
-	for _, command := range previewCacheCommands {
+	for _, command := range cacheWarmupCommands {
 		cmd := exec.Command("/bin/bash", "-lc", command)
 		cmd.Env = append(os.Environ(), sync.environment()...)
 		if output, err := cmd.CombinedOutput(); err != nil {

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -101,15 +102,47 @@ func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error)
 }
 
 func (c *Client) ApplyTheme(themeName, logPath string) error {
-	_, _, err := c.runThemeSetUntilCritical(themeName, logPath, []string{
+	cacheWarmupSkip, err := newCacheWarmupSkip()
+	if err != nil {
+		return err
+	}
+	environment := []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
-	}, 10*time.Second)
+	}
+	environment = append(environment, cacheWarmupSkip.environment()...)
+	_, _, err = c.runThemeSetToCompletionWithCleanup(themeName, logPath, environment, 30*time.Second, func() {
+		_ = cacheWarmupSkip.close()
+	})
 	return err
 }
 
 func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
+	return c.runThemeSetUntilCriticalWithCleanup(theme, logPath, environment, timeoutDuration, nil)
+}
+
+func (c *Client) runThemeSetUntilCriticalWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false)
+}
+
+func (c *Client) runThemeSetToCompletionWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true)
+}
+
+func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool) (int, bool, error) {
+	var cleanupOnce sync.Once
+	waitTarget := "critical apply"
+	if waitForCompletion {
+		waitTarget = "theme-set completion"
+	}
+	clean := func() {
+		if cleanup != nil {
+			cleanupOnce.Do(cleanup)
+		}
+	}
+
 	current, err := c.CurrentTheme()
 	if err == nil && current == theme {
+		clean()
 		return 0, true, nil
 	}
 
@@ -119,12 +152,14 @@ func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []s
 	}
 	lockFile, err := os.OpenFile(filepath.Join(runtimeDir, "omarchy-theme-set.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
+		clean()
 		return 0, false, fmt.Errorf("open theme-set lock: %w", err)
 	}
 	defer lockFile.Close()
 
 	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
+		clean()
 		return 0, false, fmt.Errorf("open theme-set log: %w", err)
 	}
 
@@ -135,13 +170,18 @@ func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []s
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
 		_ = logFile.Close()
+		clean()
 		return 0, false, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
 	}
 	pid := cmd.Process.Pid
 	_ = logFile.Close()
 
 	waitCh := make(chan error, 1)
-	go func() { waitCh <- cmd.Wait() }()
+	go func() {
+		err := cmd.Wait()
+		clean()
+		waitCh <- err
+	}()
 	ticker := time.NewTicker(25 * time.Millisecond)
 	defer ticker.Stop()
 	timeout := time.NewTimer(timeoutDuration)
@@ -157,6 +197,9 @@ func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []s
 			logData, _ := os.ReadFile(logPath)
 			return pid, false, fmt.Errorf("theme set exited before critical apply completed: %v: %s", err, strings.TrimSpace(string(logData)))
 		case <-ticker.C:
+			if waitForCompletion {
+				continue
+			}
 			currentTheme, err := c.CurrentTheme()
 			if err != nil || currentTheme != theme || !themeSetLockFree(lockFile) {
 				continue
@@ -164,7 +207,13 @@ func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []s
 			return pid, false, nil
 		case <-timeout.C:
 			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
-			return pid, false, fmt.Errorf("timed out waiting for theme %q critical apply", theme)
+			select {
+			case <-waitCh:
+			case <-time.After(2 * time.Second):
+				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+				<-waitCh
+			}
+			return pid, false, fmt.Errorf("timed out waiting for theme %q %s", theme, waitTarget)
 		}
 	}
 }

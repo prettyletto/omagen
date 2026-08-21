@@ -22,6 +22,13 @@ Item {
         opened = true
         Qt.callLater(function() { nameInput.forceActiveFocus(); nameInput.selectAll() })
     }
+    function reset() {
+        opened = false
+        errorMessage = ""
+        nameInput.text = ""
+        generateUnlock = false
+        capturePreview = false
+    }
     function close() { if (!busy) { opened = false; errorMessage = "" } }
     function submit() {
         if (busy) return
@@ -35,6 +42,7 @@ Item {
     Rectangle { anchors.fill: parent; color: Util.alpha(Color.background, 0.72); MouseArea { anchors.fill: parent; onClicked: { root.close(); root.cancelled() } } }
     Rectangle {
         width: 430; height: 390; anchors.centerIn: parent; radius: 14; z: 1
+        visible: !root.busy
         color: Color.popups.background; border.width: 1; border.color: Color.popups.border
         Keys.onEscapePressed: { if (!root.busy) { root.close(); root.cancelled() } }
 
@@ -81,6 +89,59 @@ Item {
                 Rectangle { width: 130; height: 38; radius: 8; color: Color.accent; opacity: root.busy ? .55 : 1
                     Text { anchors.centerIn: parent; text: root.busy ? "Applying…" : "Save & Apply"; color: Color.background; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
                     MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.submit() }
+                }
+            }
+        }
+    }
+
+    // Keep the user oriented while the backend applies the permanent theme.
+    // This replaces the editable form instead of leaving a disabled-looking
+    // Save dialog on screen during the potentially longer Omarchy work.
+    Rectangle {
+        anchors.fill: parent
+        visible: root.busy
+        color: "transparent"
+        z: 2
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.AllButtons
+            onClicked: {}
+        }
+
+        Rectangle {
+            width: 360
+            height: 150
+            anchors.centerIn: parent
+            radius: 14
+            color: Color.popups.background
+            border.width: 1
+            border.color: Color.popups.border
+
+            Column {
+                anchors.centerIn: parent
+                width: parent.width - 48
+                spacing: 8
+
+                Text {
+                    width: parent.width
+                    text: "Applying theme…"
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Color.popups.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.title
+                    font.bold: true
+                }
+
+                Text {
+                    width: parent.width
+                    text: "Saving the theme and updating Omarchy."
+                    horizontalAlignment: Text.AlignHCenter
+                    color: Color.popups.text
+                    opacity: 0.58
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.bodySmall
+                    wrapMode: Text.WordWrap
                 }
             }
         }

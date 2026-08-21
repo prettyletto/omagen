@@ -14,7 +14,7 @@ const terminalReloadWatchdog = 5 * time.Second
 const terminalReloadPendingFile = "terminal-reload.pending"
 const terminalReloadDirectoryPrefix = ".terminal-reload-"
 
-var previewCacheCommands = []string{
+var cacheWarmupCommands = []string{
 	"omarchy-theme-switcher",
 	"omarchy-theme-bg-cache",
 }
@@ -58,14 +58,48 @@ exit "$status"
 		_ = os.RemoveAll(directory)
 		return nil, fmt.Errorf("write terminal reload marker shim: %w", err)
 	}
-	const skip = "#!/bin/sh\nexit 0\n"
-	for _, command := range previewCacheCommands {
-		if err := os.WriteFile(filepath.Join(directory, command), []byte(skip), 0755); err != nil {
-			_ = os.RemoveAll(directory)
-			return nil, fmt.Errorf("write preview cache shim %s: %w", command, err)
-		}
+	if err := writeCacheWarmupShims(directory); err != nil {
+		_ = os.RemoveAll(directory)
+		return nil, err
 	}
 	return sync, nil
+}
+
+type cacheWarmupSkip struct {
+	directory string
+}
+
+func newCacheWarmupSkip() (*cacheWarmupSkip, error) {
+	directory, err := os.MkdirTemp("", ".omagen-cache-warmup-")
+	if err != nil {
+		return nil, fmt.Errorf("create cache warmup shim directory: %w", err)
+	}
+	if err := writeCacheWarmupShims(directory); err != nil {
+		_ = os.RemoveAll(directory)
+		return nil, err
+	}
+	return &cacheWarmupSkip{directory: directory}, nil
+}
+
+func writeCacheWarmupShims(directory string) error {
+	const skip = "#!/bin/sh\nexit 0\n"
+	for _, command := range cacheWarmupCommands {
+		if err := os.WriteFile(filepath.Join(directory, command), []byte(skip), 0755); err != nil {
+			return fmt.Errorf("write cache warmup shim %s: %w", command, err)
+		}
+	}
+	return nil
+}
+
+func (s *cacheWarmupSkip) environment() []string {
+	return []string{"PATH=" + s.directory + string(os.PathListSeparator) + os.Getenv("PATH")}
+}
+
+func (s *cacheWarmupSkip) close() error {
+	if s == nil || strings.TrimSpace(s.directory) == "" {
+		return nil
+	}
+	return os.RemoveAll(s.directory)
 }
 
 func (s *terminalReloadSync) environment() []string {

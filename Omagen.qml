@@ -340,8 +340,9 @@ Item {
         backend.cancelSession(session.sessionId);
     }
 
-    function clearSession() {
-        const shouldClose = closeAfterCancel;
+    function clearSession(closeWhenDone) {
+        const shouldClose = closeWhenDone === true || closeAfterCancel;
+        workspaceWindow.resetApplyDialog();
         session.clear();
         sessionBusy = false;
         cancelBusy = false;
@@ -642,6 +643,10 @@ Item {
                 const generateUnlock = root.pendingApplyUnlock;
                 const capturePreview = root.pendingApplyCapture;
                 root.resetPendingApply();
+                // Demo capture must hide Omagen while the screenshot is taken,
+                // but the permanent Go/theme-set phase belongs behind the
+                // applying modal until the backend process fully completes.
+                root.opened = true;
                 backend.applyTheme(
                     session.sessionId,
                     session.generationId,
@@ -662,6 +667,7 @@ Item {
                 // waiting forever for a demoClosed signal that will not come.
                 root.resetPendingApply();
                 root.applyBusy = false;
+                root.opened = true;
             }
         }
         onThemeApplied: function(sessionId, generationId, variant, themeName) {
@@ -669,13 +675,14 @@ Item {
                 return;
             applyBusy = false
             if (sessionId !== session.sessionId || generationId !== session.generationId) { errorMessage = "Backend applied a different generation"; return }
-            root.clearSession()
+            root.clearSession(true)
         }
         onThemeApplyFailed: function(message) {
             if (root.closeAfterCancel)
                 return;
             applyBusy = false;
             errorMessage = message;
+            root.opened = true;
         }
     }
 
@@ -763,6 +770,7 @@ Item {
     }
 
     Views.WorkspaceWindow {
+        id: workspaceWindow
         active: root.opened && root.route === "workspace" && session.active
         cancelBusy: root.cancelBusy
         sourceImage: root.sourceImage
