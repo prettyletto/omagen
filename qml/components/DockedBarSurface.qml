@@ -18,13 +18,17 @@ PanelWindow {
         var value = Color.shellValues["bar.form"]
         return String(value || "continuous").toLowerCase() === "docked"
     }
+    // Transparency is still owned by Quattro's native bar gesture/config.
+    // Docked only mirrors that state so double-clicking the bar hides the
+    // section surfaces exactly as it hides the continuous native surface.
+    readonly property bool transparent: root.bar && root.bar.transparent === true
     readonly property color surface: {
         var raw = Color.shellValues["bar.background"]
         return raw !== undefined && String(raw).length > 0
             ? Color.flatColor(String(raw), Color.background)
             : Color.background
     }
-    readonly property color text: Color.bar.text
+    readonly property color text: root.bar ? root.bar.barForeground : Color.bar.text
     readonly property real islandRadius: Math.max(Style.space(8), Style.cornerRadius)
     readonly property int islandPadding: Math.max(Style.space(5), 5)
 
@@ -34,6 +38,7 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "pretty-omagen-docked-bar"
     WlrLayershell.layer: WlrLayer.Bottom
+    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     mask: Region {}
 
     anchors {
@@ -108,8 +113,8 @@ PanelWindow {
             width: bounds.width
             height: bounds.height
             radius: root.islandRadius
-            color: root.surface
-            border.width: 1
+            color: root.transparent ? "transparent" : root.surface
+            border.width: root.transparent ? 0 : 1
             border.color: Util.alpha(root.text, 0.28)
         }
     }
