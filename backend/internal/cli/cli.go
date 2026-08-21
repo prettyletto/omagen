@@ -35,6 +35,7 @@ type resumeResponse struct {
 	SessionID              string                        `json:"session_id,omitempty"`
 	SourceImage            string                        `json:"source_image,omitempty"`
 	GenerationID           string                        `json:"generation_id,omitempty"`
+	WorkspaceResumable     bool                          `json:"workspace_resumable"`
 	PreviewVariant         string                        `json:"preview_variant,omitempty"`
 	ShellStyle             session.ShellStyle            `json:"shell_style,omitempty"`
 	DesktopStyle           session.DesktopStyle          `json:"desktop_style,omitempty"`
@@ -256,12 +257,12 @@ func runSessionWithDependencies(
 			return fail(stderr, 1, "%v", err)
 		}
 		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
-		if record.GenerationID != "" {
+		if record.GenerationID != "" && generationService != nil {
 			described, err := generationService.Describe(record.SessionID, record.GenerationID)
-			if err != nil {
-				return fail(stderr, 1, "describe resumable generation: %v", err)
+			if err == nil {
+				result.WorkspaceResumable = true
+				result.Variants = described.Variants
 			}
-			result.Variants = described.Variants
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":

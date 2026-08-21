@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
+	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/settings"
 )
 
 func TestRunCommandValidation(t *testing.T) {
@@ -185,5 +187,46 @@ func TestSessionResumeRecoversPendingApplyBeforeInspectingWorkspace(t *testing.T
 	}
 	if _, err := os.Stat(store.SessionDir(record.SessionID)); !os.IsNotExist(err) {
 		t.Fatalf("pending apply session still exists, err=%v", err)
+	}
+}
+
+func TestSessionResumeRemainsRecoverableWhenGenerationArtifactsAreMissing(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := session.Record{
+		SessionID:          "broken-generation",
+		OriginalTheme:      "original",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/background"},
+		GenerationID:       "missing-generation",
+	}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveActive(session.ActiveRecord{SessionID: record.SessionID, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	settingsStore, err := settings.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	generationService := generation.NewService(store, settingsStore)
+	service := session.NewService(store, cliOmarchy{})
+	var out, stderr bytes.Buffer
+	if code := runSessionWithDependencies([]string{"resume"}, service, nil, nil, nil, nil, generationService, &out, &stderr); code != 0 {
+		t.Fatalf("resume code=%d stderr=%q", code, stderr.String())
+	}
+	var result resumeResponse
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.Active || result.WorkspaceResumable {
+		t.Fatalf("resume=%#v, want active but not workspace resumable", result)
 	}
 }
