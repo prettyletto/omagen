@@ -6,6 +6,9 @@ Omagen is designed as a short loop:
 image → palette directions → live preview or Demo → permanent theme
 ~~~
 
+For a visual tour of the complete workflow, watch the [Omagen video
+walkthrough on YouTube](https://youtu.be/Af06-XsdBHA).
+
 ## Open Omagen
 
 Click the Omagen widget in the Quattro bar to open the theme studio. The

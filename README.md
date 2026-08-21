@@ -11,6 +11,12 @@ on your desktop, and apply the one that feels right.
 
 ![Omagen demo](assets/omagen-demo.gif)
 
+## Video walkthrough
+
+[![Watch the Omagen walkthrough](https://img.youtube.com/vi/Af06-XsdBHA/maxresdefault.jpg)](https://youtu.be/Af06-XsdBHA)
+
+Watch the full walkthrough on [YouTube](https://youtu.be/Af06-XsdBHA).
+
 ## Install
 
 Install and enable Omagen through Omarchy:
