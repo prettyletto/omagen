@@ -11,6 +11,7 @@ Item {
     property bool sessionBusy: false
     property bool cancelBusy: false
     property bool closeAfterCancel: false
+    property bool returnToConfigurationAfterCancel: false
     property bool settingsOpen: false
     property string settingsReturnRoute: "setup"
     property bool settingsBusy: false
@@ -340,6 +341,46 @@ Item {
         backend.cancelSession(session.sessionId);
     }
 
+    // A generated workspace is bound to a durable backend session.  Returning
+    // to the configuration must close that temporary session first so its
+    // preview is restored, but it intentionally keeps the selected image and
+    // the configuration choices for the next generation.
+    function returnToConfiguration() {
+        if (!session.active || session.sessionId === "" || cancelBusy || previewBusy || applyBusy)
+            return;
+
+        errorMessage = "";
+        returnToConfigurationAfterCancel = true;
+        cancelSession();
+    }
+
+    function clearWorkspaceForConfiguration() {
+        workspaceWindow.resetApplyDialog();
+        session.clear();
+        sessionBusy = false;
+        cancelBusy = false;
+        closeAfterCancel = false;
+        errorMessage = "";
+        generationBusy = false;
+        describeBusy = false;
+        previewBusy = false;
+        demoBusy = false;
+        demoActive = false;
+        pendingDemo = false;
+        pendingApplyAfterDemo = false;
+        pendingApplyCapture = false;
+        pendingApplyAbortAfterDemo = false;
+        pendingApplyUnlock = false;
+        pendingApplyVariant = "";
+        pendingApplyName = "";
+        applyBusy = false;
+        resumableSession = null;
+        recoveryBusy = false;
+        returnToConfigurationAfterCancel = false;
+        opened = true;
+        route = "preview-config";
+    }
+
     function clearSession(closeWhenDone) {
         const shouldClose = closeWhenDone === true || closeAfterCancel;
         workspaceWindow.resetApplyDialog();
@@ -347,6 +388,7 @@ Item {
         sessionBusy = false;
         cancelBusy = false;
         closeAfterCancel = false;
+        returnToConfigurationAfterCancel = false;
         sourceImage = "";
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native" });
@@ -503,12 +545,17 @@ Item {
                 root.errorMessage = "Backend cancelled a different session";
                 return;
             }
+            if (root.returnToConfigurationAfterCancel) {
+                root.clearWorkspaceForConfiguration();
+                return;
+            }
             root.clearSession();
         }
 
         onSessionCancelFailed: function(message) {
             root.cancelBusy = false;
             root.closeAfterCancel = false;
+            root.returnToConfigurationAfterCancel = false;
             root.errorMessage = message;
             root.opened = true;
             root.route = "workspace";
@@ -798,7 +845,7 @@ Item {
                 root.demoVariant(variant);
         }
         onHideRequested: root.close()
-        onCancelRequested: root.cancelSession()
+        onBackToConfigurationRequested: root.returnToConfiguration()
         onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
             root.applyTheme(variant, name, generateUnlock, capturePreview)
         }

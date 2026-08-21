@@ -38,7 +38,7 @@ PanelWindow {
     ]
 
     signal hideRequested()
-    signal cancelRequested()
+    signal backToConfigurationRequested()
     signal variantSelected(string variant)
     signal testLiveRequested(string variant)
     signal demoRequested(string variant)
@@ -258,11 +258,11 @@ PanelWindow {
                         spacing: Style.space(8)
 
                         Button {
-                            text: root.cancelBusy ? "Restoring…" : "Cancel"
+                            text: root.cancelBusy ? "Returning…" : "Back to configuration"
                             foreground: Color.foreground
                             bordered: true
                             enabled: !root.cancelBusy && !root.previewBusy && !root.applyBusy
-                            onClicked: root.cancelRequested()
+                            onClicked: root.backToConfigurationRequested()
                         }
                         Button {
                             text: root.previewBusy ? "Applying…" : "Test live"
