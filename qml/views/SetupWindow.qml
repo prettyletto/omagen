@@ -124,7 +124,7 @@ PanelWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Create a theme from an image"
+                    text: "Create a theme from a PNG or JPEG image"
                     color: Color.popups.text
                     opacity: 0.7
                     font.family: Style.font.family

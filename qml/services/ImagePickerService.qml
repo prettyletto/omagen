@@ -14,9 +14,9 @@ Item {
             "file",
             "select",
             "--title",
-            "Choose an image for Omagen",
+            "Choose a PNG or JPEG image for Omagen",
             "--extensions",
-            "png jpg jpeg webp"
+            "png jpg jpeg"
         ]);
     }
 
