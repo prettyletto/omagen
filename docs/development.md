@@ -38,7 +38,7 @@ backend sources with the canonical builder:
 ~~~
 
 The builder pins the source-to-binary settings that affect reproducibility:
-the Go version declared by <code>backend/go.mod</code>, the Linux
+the exact Go toolchain declared by <code>backend/go.mod</code>, the Linux
 <code>amd64</code>/<code>GOAMD64=v1</code> target, <code>CGO_ENABLED=0</code>,
 the Go <code>nodwarf5</code> experiment used by that pinned toolchain,
 <code>-trimpath</code>, disabled VCS stamping, a cleared Go build ID, and
