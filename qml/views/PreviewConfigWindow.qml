@@ -63,7 +63,7 @@ PanelWindow {
         { key: "semantic", title: "Semantic (default)" }, { key: "accent", title: "Accent" }
     ]
     readonly property var barFormOptions: [
-        { key: "continuous", title: "Continuous (default)" }, { key: "docked", title: "Docked" }
+        { key: "continuous", title: "Continuous (default)" }, { key: "docked", title: "Docked (native)" }
     ]
 
     // Generation begins after this screen, so the actual Source palette is

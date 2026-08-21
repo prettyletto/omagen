@@ -112,9 +112,9 @@ monitors, and file managers and provides fallbacks when a preferred
 application is not installed.
 
 Omagen preserves Quattro's native left, center, and right widget layout. Its
-optional Docked bar form is an additive surface beneath the native widgets and
-falls back to the normal continuous bar when the active shell does not expose
-the geometry hooks required for the three section surfaces.
+optional Docked bar form is rendered by newer Omarchy bars behind their native
+widgets. Older Omarchy versions safely retain the normal continuous bar,
+preserving Quattro's controls, plugin order, and layout.
 
 ## Documentation
 

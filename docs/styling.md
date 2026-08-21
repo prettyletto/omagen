@@ -96,9 +96,9 @@ Bar controls are:
 
 Omagen preserves Quattro's native left, center, and right widget arrangement.
 It does not take ownership of widget placement, ordering, transparency, or
-bar input. Docked is an additive Omagen-owned surface beneath the native
-widgets. If the active shell does not expose the geometry hooks required for
-the three section surfaces, Omagen falls back to the normal continuous form.
+bar input. Docked is a native Omarchy surface behind the real modules when
+supported; older shells keep their normal continuous form without moving or
+hiding widgets.
 
 ## Generated assets
 

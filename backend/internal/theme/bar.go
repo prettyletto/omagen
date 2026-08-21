@@ -18,9 +18,10 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 	}
 
 	if form == "docked" {
-		// The native bar keeps its widgets and input surface; Omagen's additive
-		// section-surface renderer sits underneath those widgets.
-		b.WriteString("background-alpha = 0.0\n")
+		// Newer Omarchy bars render Docked within their native surface. Older
+		// bars ignore this key and stay continuous, so a generated theme can
+		// never make its real modules disappear or reorder.
+		b.WriteString("form = \"docked\"\n")
 	}
 	switch surface {
 	case "dark":
