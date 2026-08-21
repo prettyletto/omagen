@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
@@ -20,12 +21,8 @@ type Service struct{ sessions *session.Store }
 func NewService(sessions *session.Store) *Service { return &Service{sessions: sessions} }
 
 func (s *Service) Open(sessionID string) (OpenResult, error) {
-	record, err := s.sessions.Load(sessionID)
-	if err != nil {
-		return OpenResult{}, fmt.Errorf("load session: %w", err)
-	}
-	if record.ApplyPhase != session.ApplyPhaseNone {
-		return OpenResult{}, fmt.Errorf("%w: cannot open Demo while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	if _, err := s.requireActiveIdle(sessionID); err != nil {
+		return OpenResult{}, fmt.Errorf("inspect session: %w", err)
 	}
 	state, stateErr := s.loadState(sessionID)
 	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
@@ -35,6 +32,52 @@ func (s *Service) Open(sessionID string) (OpenResult, error) {
 		return s.reopenDemo(state)
 	}
 	return s.createDemo(sessionID)
+}
+
+func (s *Service) requireActiveIdle(sessionID string) (session.Record, error) {
+	lock, err := fsutil.AcquireFileLock(s.sessions.MutationLockPath())
+	if err != nil {
+		return session.Record{}, fmt.Errorf("acquire session mutation lock: %w", err)
+	}
+	defer lock.Close()
+	active, exists, err := s.sessions.LoadActive()
+	if err != nil {
+		return session.Record{}, fmt.Errorf("load active session: %w", err)
+	}
+	if !exists || active.SessionID != sessionID {
+		return session.Record{}, session.ErrSessionNotActive
+	}
+	record, err := s.sessions.Load(sessionID)
+	if err != nil {
+		return session.Record{}, fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return session.Record{}, fmt.Errorf("%w: cannot open Demo while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
+	return record, nil
+}
+
+func (s *Service) saveStateIfActive(state State) error {
+	lock, err := fsutil.AcquireFileLock(s.sessions.MutationLockPath())
+	if err != nil {
+		return fmt.Errorf("acquire session mutation lock: %w", err)
+	}
+	defer lock.Close()
+	active, exists, err := s.sessions.LoadActive()
+	if err != nil {
+		return fmt.Errorf("load active session: %w", err)
+	}
+	if !exists || active.SessionID != state.SessionID {
+		return session.ErrSessionNotActive
+	}
+	record, err := s.sessions.Load(state.SessionID)
+	if err != nil {
+		return fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return fmt.Errorf("%w: cannot persist Demo while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
+	return s.saveState(state)
 }
 
 func (s *Service) reopenDemo(state State) (OpenResult, error) {
@@ -73,7 +116,7 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 	if err = placeDemoWindows(state, monitor); err != nil {
 		return OpenResult{}, err
 	}
-	if err = s.saveState(state); err != nil {
+	if err = s.saveStateIfActive(state); err != nil {
 		return OpenResult{}, fmt.Errorf("persist demo state: %w", err)
 	}
 	return s.openResult(state, len(missing) == 0), nil
@@ -102,10 +145,14 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 	if err = focusMonitor(demoMonitor); err != nil {
 		return OpenResult{}, err
 	}
+	if _, err = s.requireActiveIdle(sessionID); err != nil {
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("recheck session before opening Demo: %w", err)
+	}
 	workspace := workspacePrefix + shortID(sessionID)
 	state := State{SessionID: sessionID, Workspace: workspace, DemoMonitor: demoMonitor, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, OwnerToken: makeOwnerToken(sessionID), Windows: map[Slot]string{}, CreatedAt: time.Now().UTC()}
-	if err = s.saveState(state); err != nil {
-		return OpenResult{}, err
+	if err = s.saveStateIfActive(state); err != nil {
+		return OpenResult{}, fmt.Errorf("persist initial demo state: %w", err)
 	}
 	if err = switchWorkspace(workspace); err != nil {
 		return OpenResult{}, err
@@ -132,7 +179,7 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 	if err != nil {
 		logger.line("launch failed error=%v; cleaning up classified windows", err)
 		state.Windows = cloneWindows(windows)
-		_ = s.saveState(state)
+		_ = s.saveStateIfActive(state)
 		closeErr := closeDemoWindows(windows, 3*time.Second, logger)
 		restoreErr := restoreWorkspace(origin)
 		if closeErr == nil && restoreErr == nil {
@@ -158,7 +205,7 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 	if err = placeDemoWindows(state, m); err != nil {
 		return OpenResult{}, errors.Join(err, cleanup())
 	}
-	if err = s.saveState(state); err != nil {
+	if err = s.saveStateIfActive(state); err != nil {
 		return OpenResult{}, errors.Join(err, cleanup())
 	}
 	return s.openResult(state, false), nil
