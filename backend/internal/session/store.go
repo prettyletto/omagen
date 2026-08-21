@@ -108,7 +108,49 @@ func validateRecord(record Record, expectedID string) error {
 	if record.OriginalBackground.Path == "" {
 		return fmt.Errorf("session has no original background path")
 	}
+	switch record.ApplyPhase {
+	case ApplyPhaseNone:
+		if record.AppliedTheme != "" || record.AppliedGeneration != "" || record.AppliedVariant != "" || record.AppliedDisplayName != "" {
+			return fmt.Errorf("session has apply metadata without a transaction phase")
+		}
+	case ApplyPhasePrepared, ApplyPhaseCommitted:
+		if !validSessionComponent(record.AppliedTheme) {
+			return fmt.Errorf("session has invalid applied theme")
+		}
+		if !validSessionComponent(record.AppliedGeneration) {
+			return fmt.Errorf("session has invalid applied generation")
+		}
+		if !validApplyVariant(record.AppliedVariant) {
+			return fmt.Errorf("session has invalid applied variant")
+		}
+		if record.AppliedDisplayName == "" {
+			return fmt.Errorf("session has no applied display name")
+		}
+	default:
+		return fmt.Errorf("session has unknown apply phase %q", record.ApplyPhase)
+	}
 	return nil
+}
+
+func validSessionComponent(value string) bool {
+	if value == "." || value == ".." || !validSessionID(value) {
+		return false
+	}
+	for _, r := range value {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_' || r == '.') {
+			return false
+		}
+	}
+	return true
+}
+
+func validApplyVariant(value string) bool {
+	switch value {
+	case "source", "calm", "mute", "deep", "vibrant", "balanced":
+		return true
+	default:
+		return false
+	}
 }
 
 func validSessionID(sessionID string) bool {

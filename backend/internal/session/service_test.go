@@ -63,6 +63,9 @@ func TestCancelCommittedApplyOnlyFinishesCleanup(t *testing.T) {
 	record := testRecord("committed")
 	record.ApplyPhase = ApplyPhaseCommitted
 	record.AppliedTheme = "permanent"
+	record.AppliedGeneration = "generation-1"
+	record.AppliedVariant = "source"
+	record.AppliedDisplayName = "Permanent"
 	if err := s.Save(record); err != nil {
 		t.Fatal(err)
 	}

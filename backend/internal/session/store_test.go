@@ -73,6 +73,42 @@ func TestStoreRejectsInvalidAndMalformedRecords(t *testing.T) {
 	}
 }
 
+func TestStoreRejectsUnknownAndIncompleteApplyTransactions(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mutate func(*Record)
+	}{
+		{name: "unknown phase", mutate: func(record *Record) { record.ApplyPhase = ApplyPhase("rollback") }},
+		{name: "prepared without metadata", mutate: func(record *Record) { record.ApplyPhase = ApplyPhasePrepared }},
+		{name: "committed with bad variant", mutate: func(record *Record) {
+			record.ApplyPhase = ApplyPhaseCommitted
+			record.AppliedTheme = "theme"
+			record.AppliedGeneration = "generation-1"
+			record.AppliedVariant = "unknown"
+			record.AppliedDisplayName = "Theme"
+		}},
+		{name: "metadata without phase", mutate: func(record *Record) { record.AppliedTheme = "theme" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			record := testRecord("transaction")
+			tc.mutate(&record)
+			if err := testStore(t).Save(record); err == nil {
+				t.Fatal("accepted invalid apply transaction")
+			}
+		})
+	}
+
+	record := testRecord("prepared")
+	record.ApplyPhase = ApplyPhasePrepared
+	record.AppliedTheme = "theme"
+	record.AppliedGeneration = "generation-1"
+	record.AppliedVariant = "source"
+	record.AppliedDisplayName = "Theme"
+	if err := testStore(t).Save(record); err != nil {
+		t.Fatalf("rejected complete prepared transaction: %v", err)
+	}
+}
+
 func writeTestFile(path, contents string) error {
 	return os.WriteFile(path, []byte(contents), 0o644)
 }
