@@ -274,7 +274,7 @@ PanelWindow {
                             onClicked: root.testLiveRequested(root.selectedVariant)
                         }
                         Button {
-                            text: root.demoBusy ? (root.demoActive ? "Dispatching…" : "Opening…") : (root.demoActive ? "Dispatch" : "Demo")
+                            text: root.demoBusy ? (root.demoActive ? "Stopping demo…" : "Starting demo…") : (root.demoActive ? "Stop demo" : "Start demo")
                             foreground: Color.foreground
                             accent: Color.accent
                             background: Util.alpha(Color.accent, 0.08)
