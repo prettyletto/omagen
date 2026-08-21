@@ -150,7 +150,7 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	}
 }
 
-func TestGenerateComposesShellAndBarIntoShellTOML(t *testing.T) {
+func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 	store := generationStore(t)
 	if err := store.Save(session.Record{
 		SessionID:          "styled-session",
@@ -178,21 +178,32 @@ func TestGenerateComposesShellAndBarIntoShellTOML(t *testing.T) {
 	}
 
 	sourceDir := filepath.Join(store.SessionDir("styled-session"), "generations", result.GenerationID, string(Source))
-	data, err := os.ReadFile(filepath.Join(sourceDir, "shell.toml"))
-	if err != nil {
-		t.Fatal(err)
+	if _, err := os.Stat(filepath.Join(sourceDir, "shell.toml")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected generated root shell.toml: %v", err)
 	}
-	text := string(data)
-	for _, want := range []string{"[popups]", "[bar]", `form = "docked"`, "size-horizontal = 30", "size-vertical = 32", "active = "} {
-		if !strings.Contains(text, want) {
-			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
+	for section, wants := range map[string][]string{
+		"bar":      {`form = "docked"`, "size-horizontal = 30", "size-vertical = 32", "active = "},
+		"popups":   {"background = "},
+		"menu":     {"selected-background = ", "selected-background-alpha = 0.18"},
+		"launcher": {"selected-background = ", "selected-background-alpha = 0.18"},
+		"controls": {"selected-border = ", "selected-fill-alpha = 0.18"},
+	} {
+		data, err := os.ReadFile(filepath.Join(sourceDir, "shell."+section+".toml"))
+		if err != nil {
+			t.Fatalf("read shell.%s.toml: %v", section, err)
+		}
+		text := string(data)
+		if strings.Contains(text, "["+section+"]") {
+			t.Fatalf("shell.%s.toml should be headerless:\n%s", section, text)
+		}
+		for _, want := range wants {
+			if !strings.Contains(text, want) {
+				t.Errorf("shell.%s.toml missing %q:\n%s", section, want, text)
+			}
 		}
 	}
-	if strings.Count(text, "[bar]") != 1 {
-		t.Fatalf("expected exactly one bar table:\n%s", text)
-	}
-	if _, err := os.Stat(filepath.Join(sourceDir, "shell.bar.toml")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected shell.bar.toml sidecar: %v", err)
+	if _, err := os.Stat(filepath.Join(sourceDir, "shell.notifications.toml")); !os.IsNotExist(err) {
+		t.Fatalf("unexpected notifications sidecar for accent edge style: %v", err)
 	}
 }
 

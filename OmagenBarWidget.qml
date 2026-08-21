@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
@@ -17,6 +18,19 @@ BarWidget {
     property string pendingMethod: ""
     property int pendingAttempts: 0
     property bool quitBusy: false
+    property bool sessionActive: false
+    property color animatedIconColor: normalIconColor
+
+    readonly property color normalIconColor: root.bar ? root.bar.foreground : Color.foreground
+    readonly property string stateHome: {
+        const configured = Quickshell.env("XDG_STATE_HOME")
+        const home = Quickshell.env("HOME")
+        return configured && configured.length > 0 ? configured : home + "/.local/state"
+    }
+    readonly property string activeSessionPath: root.stateHome + "/omagen/active-session.json"
+    readonly property var rainbowColors: [
+        "#ff6b6b", "#ffd166", "#7bd88f", "#5ed0e6", "#7aa7ff", "#c58cff", "#ff7ac8"
+    ]
 
     readonly property string backendPath: decodeURIComponent(
         Qt.resolvedUrl("bin/omagen")
@@ -134,10 +148,52 @@ BarWidget {
         bar: root.bar
     }
 
+    Timer {
+        id: sessionStateProbe
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: if (!activeSessionProbe.running) activeSessionProbe.running = true
+    }
+
+    // The marker is written atomically by the backend, so a non-empty file is
+    // the authoritative, race-free signal that an Omagen session is active.
+    // Checking the path directly also avoids FileView retaining stale JSON
+    // after the marker is removed during recovery or normal completion.
+    Process {
+        id: activeSessionProbe
+        command: ["/usr/bin/test", "-s", root.activeSessionPath]
+        running: true
+        onExited: function(exitCode) { root.setSessionActive(exitCode === 0) }
+    }
+
+    function setSessionActive(next) {
+        next = next === true
+        if (sessionActive === next)
+            return
+        sessionActive = next
+        if (!next)
+            animatedIconColor = normalIconColor
+    }
+
+    SequentialAnimation {
+        id: rainbowAnimation
+        running: root.sessionActive
+        loops: Animation.Infinite
+
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[0]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[1]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[2]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[3]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[4]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[5]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[6]; duration: 280; easing.type: Easing.InOutSine }
+    }
+
     Text {
         anchors.centerIn: parent
         text: "O"
-        color: root.bar ? root.bar.foreground : Color.foreground
+        color: root.sessionActive ? root.animatedIconColor : root.normalIconColor
         font.family: Style.font.family
         font.pixelSize: Style.bar.iconFont
         font.bold: true

@@ -5,8 +5,7 @@ import (
 	"strings"
 )
 
-// appendBarOverrides composes bar choices into the theme's single shell.toml.
-// Quattro does not load sidecar files such as shell.bar.toml.
+// appendBarOverrides appends bar choices to a shell.bar.toml sidecar.
 func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attention, form string) error {
 	if !validChoice(surface, "native", "dark", "light", "accent") || !validChoice(density, "native", "compact", "comfortable") || !validChoice(attention, "semantic", "accent") {
 		return fmt.Errorf("invalid bar style")
@@ -18,7 +17,6 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 		return nil
 	}
 
-	b.WriteString("\n[bar]\n")
 	if form == "docked" {
 		// The native bar keeps its widgets and input surface; Docked only makes
 		// its outer background transparent so the additive section-surface
