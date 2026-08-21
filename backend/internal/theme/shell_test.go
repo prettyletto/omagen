@@ -123,13 +123,13 @@ func TestWriteShellEmitsDockedBarFormWithoutChangingOtherBarOptions(t *testing.T
 		t.Fatal(err)
 	}
 	text := readShellSection(t, dir, "bar")
-	for _, want := range []string{`form = "docked"`, `background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
+	for _, want := range []string{"background-alpha = 0.0", `background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("shell.bar.toml missing %q:\n%s", want, text)
 		}
 	}
-	if strings.Contains(text, "background-alpha = 0.0") {
-		t.Fatalf("shell.bar.toml must not make an unsupported bar transparent:\n%s", text)
+	if strings.Contains(text, "form =") {
+		t.Fatalf("shell.bar.toml should not contain Omagen-owned form metadata:\n%s", text)
 	}
 	metadata, err := os.ReadFile(filepath.Join(dir, "omagen.bar.toml"))
 	if err != nil {

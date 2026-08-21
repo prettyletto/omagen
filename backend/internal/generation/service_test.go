@@ -228,7 +228,7 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 		t.Fatalf("unexpected generated root shell.toml: %v", err)
 	}
 	for section, wants := range map[string][]string{
-		"bar":      {`form = "docked"`, "size-horizontal = 30", "size-vertical = 32", "active = "},
+		"bar":      {"background-alpha = 0.0", "size-horizontal = 30", "size-vertical = 32", "active = "},
 		"popups":   {"background = "},
 		"menu":     {"selected-background = ", "selected-background-alpha = 0.18"},
 		"launcher": {"selected-background = ", "selected-background-alpha = 0.18"},

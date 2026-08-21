@@ -4,9 +4,9 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 
-// Compatibility decoration for themes generated before Docked became a
-// native Omarchy bar form. New themes never activate this separate layer:
-// unsupported shells stay continuous and retain every real module.
+// Additive decoration for the native Omarchy bar.  It owns no widgets and has
+// an empty input region: the native bar remains responsible for all layout,
+// drag/reorder behavior, click handling, and popouts.
 PanelWindow {
     id: root
 
@@ -26,14 +26,6 @@ PanelWindow {
     readonly property bool requestedDocked: root.metadataResolved
         ? root.omagenBarForm === "docked"
         : root.legacyDocked
-    readonly property bool nativeDockedSupported: root.bar && root.bar.supportsDockedSurface === true
-    // Older generated themes made the native bar transparent and therefore
-    // still need this renderer. New themes only write `form = "docked"`;
-    // old shells ignore that key and safely retain their continuous bar.
-    readonly property bool legacyTransparentTheme: Number(Color.shellValues["bar.background-alpha"]) === 0
-    readonly property bool legacyDecorationActive: root.requestedDocked
-        && root.legacyTransparentTheme
-        && !root.nativeDockedSupported
     readonly property bool geometrySupported: {
         return root.bar !== null
             && root.bar.moduleSlots !== undefined
@@ -41,8 +33,8 @@ PanelWindow {
             && root.bar.barSize !== undefined
             && root.bar.vertical !== undefined
     }
-    readonly property bool docked: root.legacyDecorationActive && root.geometrySupported
-    readonly property bool fallbackContinuous: root.legacyDecorationActive && !root.geometrySupported
+    readonly property bool docked: root.requestedDocked && root.geometrySupported
+    readonly property bool fallbackContinuous: root.requestedDocked && !root.geometrySupported
     // Transparency is still owned by Quattro's native bar gesture/config.
     // Docked only mirrors that state so double-clicking the bar hides the
     // section surfaces exactly as it hides the continuous native surface.

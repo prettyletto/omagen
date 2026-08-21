@@ -237,16 +237,31 @@ Item {
                 anchors.rightMargin: root.windowMargin
                 height: root.previewBarHeight
                 radius: Math.min(root.windowRadius, height / 2)
-                // The real bar owns Docked geometry and plugin placement. A
-                // miniature cannot know a user's modules, so it deliberately
-                // previews the truthful continuous fallback rather than fake
-                // islands that can disagree with the running desktop.
-                color: root.barSurface()
-                border.width: root.activeSection === 2 ? 2 : 1
+                color: root.barStyle.form === "docked" ? "transparent" : root.barSurface()
+                border.width: root.barStyle.form === "docked" ? 0 : root.activeSection === 2 ? 2 : 1
                 border.color: root.activeSection === 2 ? root.accent : Util.alpha(root.fg, 0.22)
 
                 Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                Repeater {
+                    model: root.barStyle.form === "docked" ? [
+                        { x: 0.00, width: 0.30 },
+                        { x: 0.36, width: 0.28 },
+                        { x: 0.70, width: 0.30 }
+                    ] : []
+                    delegate: Rectangle {
+                        required property var modelData
+                        x: parent.width * modelData.x
+                        width: parent.width * modelData.width
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        radius: Math.min(root.windowRadius, height / 2)
+                        color: root.barSurface()
+                        border.width: 1
+                        border.color: root.activeSection === 2 ? Util.alpha(root.accent, 0.78) : Util.alpha(root.barForeground(), 0.24)
+                    }
+                }
 
                 Row {
                     anchors.left: parent.left

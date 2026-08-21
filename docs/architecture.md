@@ -143,9 +143,7 @@ Omagen integrates with Omarchy without replacing the native shell systems:
 - Theme changes go through Omarchy's theme commands.
 - Quattro remains responsible for native bar layout, widget ordering,
   transparency, and input.
-- Omagen records Docked as a native bar form. A supporting Omarchy bar renders
-  its surfaces behind the real widgets; older bars ignore the form and retain
-  their continuous layout.
+- Omagen's Docked form is an additive surface beneath those native widgets.
 - Demo uses temporary Hyprland workspace/window state and restores the user's
   original workspace.
 - Cleanup removes only resources that Omagen can prove belong to an inactive
