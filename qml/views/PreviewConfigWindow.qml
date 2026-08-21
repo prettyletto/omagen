@@ -30,40 +30,40 @@ PanelWindow {
         { title: "Bar", eyebrow: "STATUS BAR" }
     ]
     readonly property var borderOptions: [
-        { key: "solid", title: "Solid" }, { key: "split_top", title: "Split Top" },
+        { key: "solid", title: "Solid (default)" }, { key: "split_top", title: "Split Top" },
         { key: "split_bottom", title: "Split Bottom" }, { key: "blend", title: "Accent Blend" },
         { key: "neon", title: "Neon Blend" }
     ]
     readonly property var shapeOptions: [
-        { key: "native", title: "Native" }, { key: "soft", title: "Soft" }, { key: "rounded", title: "Rounded" }
+        { key: "native", title: "Default" }, { key: "soft", title: "Soft" }, { key: "rounded", title: "Rounded" }
     ]
     readonly property var spacingOptions: [
-        { key: "native", title: "Native" }, { key: "compact", title: "Compact" }, { key: "airy", title: "Airy" }
+        { key: "native", title: "Default" }, { key: "compact", title: "Compact" }, { key: "airy", title: "Airy" }
     ]
     readonly property var depthOptions: [
-        { key: "native", title: "Native" }, { key: "flat", title: "Flat" }, { key: "shadow", title: "Shadow" }
+        { key: "native", title: "Default" }, { key: "flat", title: "Flat" }, { key: "shadow", title: "Shadow" }
     ]
     readonly property var surfaceOptions: [
-        { key: "flat", title: "Flat" }, { key: "layered", title: "Layered" },
+        { key: "flat", title: "Flat (default)" }, { key: "layered", title: "Layered" },
         { key: "contrast", title: "Contrast" }, { key: "accent", title: "Accent" }
     ]
     readonly property var detailOptions: [
-        { key: "native", title: "Native" }, { key: "framed", title: "Framed" },
+        { key: "native", title: "Default" }, { key: "framed", title: "Framed" },
         { key: "edge", title: "Edge" }, { key: "focus", title: "Focus" }
     ]
     readonly property var barSurfaceOptions: [
-        { key: "native", title: "Native" }, { key: "dark", title: "Dark" },
+        { key: "native", title: "Default" }, { key: "dark", title: "Dark" },
         { key: "light", title: "Light" }, { key: "accent", title: "Accent" }
     ]
     readonly property var barDensityOptions: [
-        { key: "native", title: "Native" }, { key: "compact", title: "Compact" },
+        { key: "native", title: "Default" }, { key: "compact", title: "Compact" },
         { key: "comfortable", title: "Comfortable" }
     ]
     readonly property var attentionOptions: [
-        { key: "semantic", title: "Semantic" }, { key: "accent", title: "Accent" }
+        { key: "semantic", title: "Semantic (default)" }, { key: "accent", title: "Accent" }
     ]
     readonly property var barFormOptions: [
-        { key: "continuous", title: "Continuous" }, { key: "docked", title: "Docked" }
+        { key: "continuous", title: "Continuous (default)" }, { key: "docked", title: "Docked" }
     ]
 
     // Generation begins after this screen, so the actual Source palette is
