@@ -57,6 +57,46 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 }
 
+func TestCancelAfterRegenerationRestoresInitialBaseline(t *testing.T) {
+	s := testStore(t)
+	record := testRecord("regenerated")
+	if err := s.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveActive(ActiveRecord{SessionID: record.SessionID, CreatedAt: record.CreatedAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	updated := record
+	updated.SourceImage = "/tmp/reconfigured.png"
+	updated.GenerationID = "generation-2"
+	updated.PreviewVariant = "vibrant"
+	updated.ExtraConfigs = true
+	updated.ShellStyle = ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"}
+	updated.DesktopStyle = DesktopStyle{BorderStyle: "spin", BorderSize: 4, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"}
+	updated.BarStyle = BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"}
+	if err := s.Save(updated); err != nil {
+		t.Fatal(err)
+	}
+
+	fake := &fakeOmarchy{
+		theme:      "omagen-preview-regenerated-vibrant",
+		background: BackgroundRef{Kind: "external", Path: "/tmp/reconfigured.png"},
+	}
+	if err := NewService(s, fake).Cancel(record.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if fake.restoredTheme != record.OriginalTheme || fake.restoredBackground != record.OriginalBackground {
+		t.Fatalf("cancel restored the latest preview instead of the initial baseline: %#v", fake)
+	}
+	if _, exists, err := s.LoadActive(); err != nil || exists {
+		t.Fatalf("cancel did not return to state zero: exists=%t err=%v", exists, err)
+	}
+	if _, err := s.Load(record.SessionID); err == nil {
+		t.Fatal("cancel left the durable session behind")
+	}
+}
+
 func TestCancelCommittedApplyOnlyFinishesCleanup(t *testing.T) {
 	s := testStore(t)
 	fake := &fakeOmarchy{theme: "permanent", background: BackgroundRef{Kind: "external", Path: "/tmp/permanent.png"}}

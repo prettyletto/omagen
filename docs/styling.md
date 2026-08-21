@@ -66,11 +66,20 @@ composition can be judged alongside the extracted palette.
 
 Window controls are:
 
-- **Active border:** Solid, Split Top, Split Bottom, Accent Blend, Neon
-  Blend.
+- **Active border:** Solid, Split Top, Split Bottom, Accent Blend, Neon Blend,
+  or Spinning Accent. Neon Blend adds a soft compositor glow/halo and a
+  continuously moving gradient around the focused window. Spinning Accent
+  keeps the gradient moving without the neon halo.
+- **Border thickness:** Native, 1 px, 2 px, 4 px.
 - **Corner shape:** Native, Soft, Rounded.
 - **Pane spacing:** Native, Compact, Airy.
 - **Depth:** Native, Flat, Shadow.
+- **Inactive windows:** Native, Shadowed, Blurred.
+
+Shadowed dims unfocused windows and gives them a stronger receding shadow.
+Blurred dims and lowers inactive opacity while enabling Hyprland's background
+blur treatment; opaque applications may only show the dimming because native
+Hyprland blur affects translucent surfaces.
 
 These choices describe the generated theme's window presentation. They do not
 change Hyprland's layout while you are making the selection.
@@ -81,9 +90,13 @@ Shell controls are:
 
 - **Surface composition:** Flat, Layered, Contrast, Accent.
 - **Detail language:** Native, Framed, Edge, Focus.
+- **Tooltip surface:** Native or Accent.
+- **Notification surface:** Native or Accent.
 
 Shell surface choices affect Quickshell popups, menus, and interactive
 controls. Detail choices affect how focus and selection edges are expressed.
+Native tooltip and notification surfaces preserve Omarchy's semantic treatment;
+Accent uses the generated accent for their borders and notification countdowns.
 
 ### Bar
 
@@ -93,12 +106,17 @@ Bar controls are:
 - **Density:** Native, Compact, Comfortable.
 - **Attention color:** Semantic, Accent.
 - **Bar form:** Continuous, Docked.
+- **Docked visibility:** Native transparency, Show islands.
 
 Omagen preserves Quattro's native left, center, and right widget arrangement.
 It does not take ownership of widget placement, ordering, transparency, or
 bar input. Docked is an additive Omagen-owned surface beneath the native
-widgets. If the active shell does not expose the geometry hooks required for
-the three section surfaces, Omagen falls back to the normal continuous form.
+widgets when the native bar is opaque. Native transparency keeps that additive
+decoration transparent, preserving the existing behavior. Show islands is an
+explicit opt-in that keeps the three Docked surfaces visible over a transparent
+native bar; native widgets, layout, and input remain Omarchy-owned. If the active
+shell does not expose the geometry hooks required for the three section
+surfaces, Omagen falls back to the normal continuous form.
 
 ## Generated assets
 
@@ -111,4 +129,6 @@ An applied theme can contain these generated assets:
   is selected.
 - <code>preview-unlock.png</code> — the unlock artwork preview used by the
   Plymouth switcher.
-- Bar configuration sidecar data when non-native Bar choices are selected.
+- `shell.*.toml` section overrides for non-native Shell choices, including
+  tooltip and notification feedback surfaces.
+- `omagen.bar.toml` sidecar metadata when Docked Bar choices are selected.

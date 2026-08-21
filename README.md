@@ -43,11 +43,44 @@ The preview uses the same production palette and semantic-contrast pipeline as
 the applied theme, so the gallery represents the colors that will actually be
 written to the theme.
 
+## Examples
+
+### Kanaawesome — Kanagawa Waves
+
+An image-derived Omagen theme generated from a Kanagawa-style wave wallpaper:
+
+<p align="center">
+  <img src="assets/examples/midnight-waves-wallpaper.webp" alt="Kanaawesome source wallpaper" width="480">
+  <img src="assets/examples/midnight-waves-theme.webp" alt="Kanaawesome generated Omagen theme" width="480">
+</p>
+
+### NieR:Automata — 2B Sunset
+
+An image-derived Omagen theme generated from a NieR:Automata-inspired wallpaper:
+
+<p align="center">
+  <img src="assets/examples/2b-sunset-wallpaper.webp" alt="NieR:Automata source wallpaper" width="480">
+  <img src="assets/examples/2b-sunset-theme.webp" alt="NieR:Automata generated Omagen theme" width="480">
+</p>
+
+### Ushinawareta — 失われた
+
+An image-derived Omagen theme generated from a neon anime wallpaper:
+
+<p align="center">
+  <img src="assets/examples/ushinawareta-wallpaper.webp" alt="Ushinawareta source wallpaper" width="480">
+  <img src="assets/examples/ushinawareta-theme.webp" alt="Ushinawareta generated Omagen theme" width="480">
+</p>
+
+See the [Examples gallery](docs/examples.md) for the complete set of generated themes.
+
 ## Features
 
 - Image-derived Omarchy palettes with six visual directions.
 - Live previews inside a recoverable Omagen session.
-- Optional Window, Shell, and Bar composition previews.
+- Optional Window, Shell, and Bar composition previews, including animated
+  borders, border thickness, inactive-window treatment, shell feedback
+  surfaces, and Docked-bar visibility.
 - Temporary Demo workspace with editor, terminal, system-monitor, and
   file-manager views.
 - Capability detection and useful fallbacks when preferred Demo applications
@@ -57,6 +90,11 @@ written to the theme.
 - Keyboard and mouse navigation, including arrows and `h/j/k/l`.
 - Crash-safe Apply, Cancel, Quit, and recovery flows.
 
+The optional composition controls shape generated theme files without taking
+ownership of Quattro's native widget layout, ordering, transparency, or input.
+See [Styling and palette settings](docs/styling.md) for the complete option
+matrix.
+
 ## Screenshots
 
 ### Using Omagen
@@ -65,12 +103,12 @@ Start with an image, review the generated directions, and tune the palette
 defaults from Settings:
 
 <p align="center">
-  <img src="assets/screenshots/setup.png" alt="Omagen setup" width="320">
-  <img src="assets/screenshots/settings.png" alt="Omagen settings" width="320">
+  <img src="assets/screenshots/setup.webp" alt="Omagen setup" width="320">
+  <img src="assets/screenshots/settings.webp" alt="Omagen settings" width="320">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/palette-gallery.png" alt="Omagen palette gallery" width="960">
+  <img src="assets/screenshots/palette-gallery.webp" alt="Omagen palette gallery" width="960">
 </p>
 
 ### Extra desktop composition
@@ -78,11 +116,11 @@ defaults from Settings:
 Enable the optional composition step to preview how the generated palette can
 shape Window, Shell, and Bar surfaces while keeping Quattro's native layout:
 
-![Omagen Window styling](assets/screenshots/extras-window.png)
+![Omagen Window styling](assets/screenshots/extras-window.webp)
 
-![Omagen Shell styling](assets/screenshots/extras-shell.png)
+![Omagen Shell styling](assets/screenshots/extras-shell.webp)
 
-![Omagen Bar styling](assets/screenshots/extras-bar.png)
+![Omagen Bar styling](assets/screenshots/extras-bar.webp)
 
 ## First run
 
@@ -112,9 +150,12 @@ monitors, and file managers and provides fallbacks when a preferred
 application is not installed.
 
 Omagen preserves Quattro's native left, center, and right widget layout. Its
-optional Docked bar form is an additive surface beneath the native widgets and
-falls back to the normal continuous bar when the active shell does not expose
-the geometry hooks required for the three section surfaces.
+optional Docked bar form is an additive surface beneath the native widgets when
+the native bar is opaque. Native transparency intentionally keeps this
+decoration transparent, while the explicit Show islands policy can keep it
+visible over a transparent native bar. Native widgets, layout, and input remain
+Omarchy-owned. It falls back to the normal continuous bar when the active shell
+does not expose the geometry hooks required for the three section surfaces.
 
 ## Documentation
 

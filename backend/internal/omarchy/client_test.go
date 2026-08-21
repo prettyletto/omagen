@@ -169,7 +169,7 @@ func TestRestoreCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(refreshLog); got != "-q background setInstant "+background+"\n" {
+	if got := string(refreshLog); got != "-q background refresh \n" {
 		t.Fatalf("refresh command = %q", got)
 	}
 }

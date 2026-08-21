@@ -76,6 +76,7 @@ QML owns:
 
 - Overlay routing and visible state.
 - Image selection and settings controls.
+- Window, Shell, and Bar composition choices and their visual previews.
 - Palette-card selection and keyboard navigation.
 - Demo, preview, Apply, Cancel, and recovery requests.
 - User-facing busy and error states.
@@ -84,6 +85,7 @@ The Go backend owns:
 
 - Image analysis and palette generation.
 - Contrast enforcement and theme-file writing.
+- Hyprland window overrides and Quattro shell section overrides.
 - Durable session records and mutation locking.
 - Temporary preview theme aliases.
 - Demo capability resolution, window ownership, placement, and cleanup.
@@ -143,7 +145,9 @@ Omagen integrates with Omarchy without replacing the native shell systems:
 - Theme changes go through Omarchy's theme commands.
 - Quattro remains responsible for native bar layout, widget ordering,
   transparency, and input.
-- Omagen's Docked form is an additive surface beneath those native widgets.
+- Omagen's Docked form is an additive surface beneath those native widgets;
+  native transparency hides that decoration unless the user selects Show
+  islands.
 - Demo uses temporary Hyprland workspace/window state and restores the user's
   original workspace.
 - Cleanup removes only resources that Omagen can prove belong to an inactive

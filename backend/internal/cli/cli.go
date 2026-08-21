@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
@@ -201,6 +202,15 @@ func runGeneration(args []string, service *generation.Service, stdout, stderr io
 		return fail(stderr, 2, "missing generation subcommand")
 	}
 	switch args[0] {
+	case "discard":
+		if len(args) != 3 {
+			return fail(stderr, 2, "usage: omagen generation discard <session_id> <generation_id>")
+		}
+		result, err := service.Discard(args[1], args[2])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
 	case "describe":
 		if len(args) != 3 {
 			return fail(stderr, 2, "usage: omagen generation describe <session_id> <generation_id>")
@@ -279,8 +289,8 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) != 1 && len(args) != 13 && len(args) != 14 {
-			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention> [<form>]]")
+		if len(args) != 1 && len(args) != 13 && len(args) != 14 && len(args) != 15 && len(args) != 16 && len(args) != 17 && len(args) != 18 && len(args) != 19 {
+			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 		}
 		if cleanupService != nil {
 			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
@@ -294,15 +304,48 @@ func runSessionWithDependencies(
 		var shellStyle session.ShellStyle
 		var desktopStyle session.DesktopStyle
 		var barStyle session.BarStyle
-		if len(args) == 13 || len(args) == 14 {
-			if args[1] != "--shell-style" || args[4] != "--desktop-style" || args[9] != "--bar-style" {
-				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention> [<form>]]")
+		if len(args) >= 13 {
+			shellStyleEnd := 4
+			newShellStyle := len(args) >= 17
+			extendedDesktopStyle := len(args) >= 15
+			if newShellStyle {
+				shellStyleEnd = 6
 			}
-			shellStyle = session.ShellStyle{Surface: args[2], Detail: args[3]}
-			desktopStyle = session.DesktopStyle{BorderStyle: args[5], Shape: args[6], Spacing: args[7], Depth: args[8]}
-			barStyle = session.BarStyle{Surface: args[10], Density: args[11], Attention: args[12], Form: "continuous"}
-			if len(args) == 14 {
-				barStyle.Form = args[13]
+			barStyleStart := 9
+			if extendedDesktopStyle {
+				barStyleStart = 11
+			}
+			if newShellStyle {
+				barStyleStart = 13
+			}
+			if args[1] != "--shell-style" || args[shellStyleEnd] != "--desktop-style" || args[barStyleStart] != "--bar-style" {
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
+			}
+			shellStyle = session.ShellStyle{Surface: args[2], Detail: args[3], Tooltip: "native", Notifications: "native"}
+			desktopStart := shellStyleEnd + 1
+			if newShellStyle {
+				shellStyle.Tooltip = args[4]
+				shellStyle.Notifications = args[5]
+			}
+			desktopStyle = session.DesktopStyle{BorderStyle: args[desktopStart], BorderSize: 0, Shape: args[desktopStart+1], Spacing: args[desktopStart+2], Depth: args[desktopStart+3], Inactive: "native"}
+			if extendedDesktopStyle {
+				borderSize, parseErr := strconv.Atoi(args[desktopStart+1])
+				if parseErr != nil {
+					return fail(stderr, 2, "invalid border size")
+				}
+				desktopStyle.BorderSize = borderSize
+				desktopStyle.Shape = args[desktopStart+2]
+				desktopStyle.Spacing = args[desktopStart+3]
+				desktopStyle.Depth = args[desktopStart+4]
+				desktopStyle.Inactive = args[desktopStart+5]
+			}
+			barStyle = session.BarStyle{Surface: args[barStyleStart+1], Density: args[barStyleStart+2], Attention: args[barStyleStart+3], Form: "continuous", Visibility: "native"}
+			barArgCount := len(args) - (barStyleStart + 1)
+			if barArgCount >= 4 {
+				barStyle.Form = args[barStyleStart+4]
+			}
+			if barArgCount >= 5 {
+				barStyle.Visibility = args[barStyleStart+5]
 			}
 		}
 		var result session.BeginResult
@@ -553,7 +596,7 @@ func runGenerate(
 func parseGenerateArgs(args []string) (generation.Request, error) {
 	if len(args) < 2 {
 		return generation.Request{}, fmt.Errorf(
-			"usage: omagen generate <session_id> <image> [--harmony <mode>]",
+			"usage: omagen generate <session_id> <image> [--harmony <mode>] [--shell-style <surface> <detail> <tooltip> <notifications> --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> <form> <visibility>]",
 		)
 	}
 
@@ -562,6 +605,12 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 		SourceImage: args[1],
 	}
 	harmonySeen := false
+	shellStyleSeen := false
+	desktopStyleSeen := false
+	barStyleSeen := false
+	var shellStyle session.ShellStyle
+	var desktopStyle session.DesktopStyle
+	var barStyle session.BarStyle
 
 	for i := 2; i < len(args); i++ {
 		arg := args[i]
@@ -590,9 +639,49 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			}
 			request.Overrides.ColorTheory.Harmony = &harmony
 			harmonySeen = true
+		case arg == "--shell-style":
+			if shellStyleSeen {
+				return generation.Request{}, fmt.Errorf("--shell-style specified more than once")
+			}
+			if i+4 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--shell-style requires surface, detail, tooltip, and notifications")
+			}
+			shellStyle = session.ShellStyle{Surface: args[i+1], Detail: args[i+2], Tooltip: args[i+3], Notifications: args[i+4]}
+			shellStyleSeen = true
+			i += 4
+		case arg == "--desktop-style":
+			if desktopStyleSeen {
+				return generation.Request{}, fmt.Errorf("--desktop-style specified more than once")
+			}
+			if i+6 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--desktop-style requires border, border size, shape, spacing, depth, and inactive style")
+			}
+			borderSize, parseErr := strconv.Atoi(args[i+2])
+			if parseErr != nil {
+				return generation.Request{}, fmt.Errorf("invalid border size")
+			}
+			desktopStyle = session.DesktopStyle{BorderStyle: args[i+1], BorderSize: borderSize, Shape: args[i+3], Spacing: args[i+4], Depth: args[i+5], Inactive: args[i+6]}
+			desktopStyleSeen = true
+			i += 6
+		case arg == "--bar-style":
+			if barStyleSeen {
+				return generation.Request{}, fmt.Errorf("--bar-style specified more than once")
+			}
+			if i+5 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--bar-style requires surface, density, attention, form, and visibility")
+			}
+			barStyle = session.BarStyle{Surface: args[i+1], Density: args[i+2], Attention: args[i+3], Form: args[i+4], Visibility: args[i+5]}
+			barStyleSeen = true
+			i += 5
 		default:
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
 		}
+	}
+	if shellStyleSeen || desktopStyleSeen || barStyleSeen {
+		if !shellStyleSeen || !desktopStyleSeen || !barStyleSeen {
+			return generation.Request{}, fmt.Errorf("generation configuration requires --shell-style, --desktop-style, and --bar-style together")
+		}
+		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle}
 	}
 
 	return request, nil

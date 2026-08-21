@@ -172,16 +172,19 @@ func (j job) run(
 			generatedPalette,
 			j.shellStyle.Surface,
 			j.shellStyle.Detail,
+			j.shellStyle.Tooltip,
+			j.shellStyle.Notifications,
 			j.barStyle.Surface,
 			j.barStyle.Density,
 			j.barStyle.Attention,
 			j.barStyle.Form,
+			j.barStyle.Visibility,
 		); err != nil {
 			return fmt.Errorf("write shell style: %w", err)
 		}
 	}
 	if j.desktopStyle.Valid() {
-		if err := theme.WriteHyprland(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth); err != nil {
+		if err := theme.WriteHyprland(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Inactive); err != nil {
 			return fmt.Errorf("write hyprland style: %w", err)
 		}
 	}

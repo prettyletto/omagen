@@ -13,13 +13,16 @@ PanelWindow {
     property bool generationBusy: false
     property bool previewBusy: false
     property bool cancelBusy: false
+    property bool backBusy: false
     property bool demoBusy: false
     property bool demoActive: false
     property bool applyBusy: false
+    property bool extraConfigsEnabled: false
     property string suggestedThemeName: ""
     property bool workspaceReady: false
     property string sourceImage: ""
-    property var shellStyle: ({ surface: "flat", detail: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
     property string sessionId: ""
     property string generationId: ""
     property string selectedVariant: "source"
@@ -38,6 +41,7 @@ PanelWindow {
     ]
 
     signal hideRequested()
+    signal cancelRequested()
     signal backToConfigurationRequested()
     signal variantSelected(string variant)
     signal testLiveRequested(string variant)
@@ -213,6 +217,9 @@ PanelWindow {
                             label: modelData.label
                             palette: root.palettes[modelData.variant] || null
                             sourceImage: root.sourceImage
+                            configurationPreview: root.extraConfigsEnabled
+                            shellStyle: root.shellStyle
+                            barStyle: root.barStyle
                             selected: root.selectedVariant === modelData.variant
                             focused: root.cursorIndex === index
                             previewed: root.previewVariant === modelData.variant
@@ -258,11 +265,11 @@ PanelWindow {
                         spacing: Style.space(8)
 
                         Button {
-                            text: root.cancelBusy ? "Returning…" : "Back to configuration"
+                            text: root.backBusy ? "Returning…" : (root.cancelBusy ? "Restoring…" : (root.extraConfigsEnabled ? "Back to configuration" : "Cancel"))
                             foreground: Color.foreground
                             bordered: true
-                            enabled: !root.cancelBusy && !root.previewBusy && !root.applyBusy
-                            onClicked: root.backToConfigurationRequested()
+                            enabled: !root.backBusy && !root.cancelBusy && !root.previewBusy && !root.applyBusy
+                            onClicked: root.extraConfigsEnabled ? root.backToConfigurationRequested() : root.cancelRequested()
                         }
                         Button {
                             text: root.previewBusy ? "Applying…" : "Test live"

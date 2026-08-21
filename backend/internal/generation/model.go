@@ -3,6 +3,7 @@ package generation
 import (
 	"fmt"
 
+	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
 )
 
@@ -37,9 +38,20 @@ func ParseVariant(value string) (Variant, error) {
 }
 
 type Request struct {
-	SessionID   string
-	SourceImage string
-	Overrides   settings.Overrides
+	SessionID     string
+	SourceImage   string
+	Overrides     settings.Overrides
+	Configuration *Configuration
+}
+
+// Configuration is supplied only when an existing active session is being
+// regenerated from the configuration screen. It is committed atomically with
+// the replacement generation, so a failed generation leaves the previous
+// workspace and durable configuration recoverable.
+type Configuration struct {
+	ShellStyle   session.ShellStyle
+	DesktopStyle session.DesktopStyle
+	BarStyle     session.BarStyle
 }
 
 type VariantResult struct {

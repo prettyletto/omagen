@@ -45,6 +45,8 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			return BeginResult{}, fmt.Errorf("invalid style configuration")
 		}
 	}
+	shellStyle = NormalizeShellStyle(shellStyle)
+	barStyle = NormalizeBarStyle(barStyle)
 	if extraConfigs {
 		if !shellStyle.Valid() {
 			return BeginResult{}, fmt.Errorf("invalid shell style")

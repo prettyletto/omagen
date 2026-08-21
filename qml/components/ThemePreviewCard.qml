@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import qs.Commons
 
 Item {
@@ -11,9 +12,9 @@ Item {
     property string borderStyle: "solid"
     property bool configurationPreview: false
     property int activeSection: 0
-    property var desktopStyle: ({ borderStyle: root.borderStyle, shape: "native", spacing: "native", depth: "native" })
-    property var shellStyle: ({ surface: "flat", detail: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
+    property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
     property bool selected: false
     property bool focused: false
     property bool hovered: false
@@ -43,6 +44,9 @@ Item {
     // `clip` for this: Qt clips children to a rectangle, not to this radius.
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
     readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
+    readonly property string inactiveWindowStyle: root.configurationPreview ? (root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native") : "native"
+    readonly property real previewBorderWidth: root.configurationPreview && Number(root.desktopStyle.borderSize) > 0
+        ? Number(root.desktopStyle.borderSize) : 2
     readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
         // Match the Hyprland output: Native inherits Omarchy's square
         // baseline, Soft writes rounding=3, Rounded writes rounding=8.
@@ -332,6 +336,37 @@ Item {
                 color: Util.alpha(root.darkerBg, 0.72)
             }
 
+            Item {
+                id: neonGlowPreview
+                visible: root.configurationPreview && root.activeBorderStyle === "neon"
+                anchors.fill: mockWindow
+                anchors.margins: -10
+                z: 1
+
+                Rectangle {
+                    id: neonGlowSource
+                    anchors.fill: parent
+                    radius: root.windowRadius + 10
+                    color: "transparent"
+                    border.width: root.previewBorderWidth + 2
+                    border.color: Util.alpha(root.magenta, 0.9)
+                }
+
+                MultiEffect {
+                    anchors.fill: neonGlowSource
+                    source: neonGlowSource
+                    blurEnabled: true
+                    blur: 1.0
+                    blurMax: 32
+                    blurMultiplier: 1.35
+                    opacity: neonGlowPreview.glowOpacity
+                }
+
+                // Hyprland's compositor glow is static; the animated part of
+                // Neon Blend is the borderangle gradient below.
+                property real glowOpacity: 0.68
+            }
+
             Rectangle {
                 id: mockWindow
                 anchors.top: root.configurationPreview ? shellBar.bottom : parent.top
@@ -344,7 +379,7 @@ Item {
                 anchors.bottomMargin: root.windowMargin
                 radius: root.windowRadius
                 color: root.bg
-                border.width: root.configurationPreview && (root.activeBorderStyle === "solid" || root.activeBorderStyle === "neon") ? 2 : 0
+                border.width: root.configurationPreview && (root.activeBorderStyle === "solid" || root.activeBorderStyle === "neon") ? root.previewBorderWidth : 0
                 border.color: root.activeBorderStyle === "neon" ? root.magenta
                     : root.accent
                 opacity: root.configurationPreview && root.activeSection === 1 ? 0.34
@@ -354,31 +389,103 @@ Item {
                 Behavior on radius { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
 
+                Item {
+                    id: inactivePanePreview
+                    visible: root.configurationPreview && root.inactiveWindowStyle !== "native"
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.rightMargin: 12
+                    anchors.bottomMargin: 14
+                    width: Math.max(86, parent.width * 0.28)
+                    height: Math.max(58, parent.height * 0.24)
+                    z: 3
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: root.inactiveWindowStyle === "shadow" ? -6 : -2
+                        radius: root.windowRadius + 2
+                        color: root.inactiveWindowStyle === "shadow" ? Util.alpha(root.darkerBg, 0.62) : "transparent"
+                        border.width: root.inactiveWindowStyle === "shadow" ? 2 : 1
+                        border.color: Util.alpha(root.darkFg, root.inactiveWindowStyle === "shadow" ? 0.34 : 0.18)
+                    }
+
+                    Item {
+                        id: inactivePaneSource
+                        anchors.fill: parent
+                        opacity: root.inactiveWindowStyle === "shadow" ? 0.52
+                            : root.inactiveWindowStyle === "blur" ? 0.42 : 0.68
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: root.windowRadius
+                            color: root.lighterBg
+                            border.width: 1
+                            border.color: Util.alpha(root.darkFg, 0.48)
+                        }
+                        Text {
+                            anchors.centerIn: parent
+                            text: root.inactiveWindowStyle === "blur" ? "inactive · softened" : "inactive · shadowed"
+                            color: root.darkFg
+                            font.family: Style.font.family
+                            font.pixelSize: Math.max(7, 8 * root.uiScale)
+                            font.bold: true
+                        }
+                    }
+
+                    MultiEffect {
+                        visible: root.inactiveWindowStyle === "blur"
+                        anchors.fill: inactivePaneSource
+                        source: inactivePaneSource
+                        blurEnabled: true
+                        blur: 1.0
+                        blurMax: 40
+                        blurMultiplier: 2.0
+                        opacity: 0.88
+                    }
+                }
+
                 Rectangle {
                     visible: root.configurationPreview && root.activeBorderStyle === "split_top"
                     anchors.left: parent.left; anchors.top: parent.top; anchors.right: parent.right
-                    height: 3; radius: parent.radius
+                    height: root.previewBorderWidth; radius: parent.radius
                     color: root.accent
                 }
                 Rectangle {
                     visible: root.configurationPreview && root.activeBorderStyle === "split_bottom"
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                    height: 3; radius: parent.radius
+                    height: root.previewBorderWidth; radius: parent.radius
                     color: root.accent
                 }
                 Rectangle {
                     visible: root.configurationPreview && root.activeBorderStyle === "blend"
                     anchors.left: parent.left; anchors.top: parent.top; anchors.right: parent.right
-                    height: 3; radius: parent.radius
+                    height: root.previewBorderWidth; radius: parent.radius
                     gradient: Gradient {
                         GradientStop { position: 0; color: root.accent }
                         GradientStop { position: 1; color: root.blue }
                     }
                 }
                 Rectangle {
+                    id: spinningBorderPreview
+                    visible: root.configurationPreview && root.activeBorderStyle === "spin"
+                    anchors.fill: parent
+                    radius: parent.radius
+                    color: "transparent"
+                    border.width: root.previewBorderWidth
+                    border.color: spinningBorderPreview.spinBorderColor
+                    property color spinBorderColor: root.accent
+                    SequentialAnimation on spinBorderColor {
+                        running: spinningBorderPreview.visible
+                        loops: Animation.Infinite
+                        ColorAnimation { to: root.blue; duration: 1200; easing.type: Easing.Linear }
+                        ColorAnimation { to: root.magenta; duration: 1200; easing.type: Easing.Linear }
+                        ColorAnimation { to: root.accent; duration: 1200; easing.type: Easing.Linear }
+                    }
+                }
+                Rectangle {
                     visible: root.configurationPreview && root.activeBorderStyle === "blend"
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
-                    height: 3; radius: parent.radius
+                    height: root.previewBorderWidth; radius: parent.radius
                     gradient: Gradient {
                         GradientStop { position: 0; color: root.blue }
                         GradientStop { position: 1; color: root.accent }
@@ -657,10 +764,21 @@ Item {
                         height: 34
                         radius: 7
                         color: Util.alpha(root.shellControlSurface(), 0.92)
-                        border.width: root.shellStyle.detail === "focus" || root.shellStyle.detail === "framed" ? 1 : 0
-                        border.color: root.shellStyle.detail === "focus" ? root.accent : Util.alpha(root.fg, 0.36)
+                        border.width: root.shellStyle.tooltip === "accent" || root.shellStyle.detail === "focus" || root.shellStyle.detail === "framed" ? 1 : 0
+                        border.color: root.shellStyle.tooltip === "accent" ? root.accent : root.shellStyle.detail === "focus" ? root.accent : Util.alpha(root.fg, 0.36)
                         Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: "⌕  Search applications…"; color: root.darkFg; font.family: Style.font.family; font.pixelSize: 9 }
                         Text { anchors.right: parent.right; anchors.rightMargin: 9; anchors.verticalCenter: parent.verticalCenter; text: "SUPER"; color: root.accent; font.family: Style.font.family; font.pixelSize: 7; font.bold: true }
+                    }
+
+                    Rectangle {
+                        visible: root.shellStyle.notifications === "accent"
+                        width: parent.width
+                        height: 24
+                        radius: 7
+                        color: Util.alpha(root.accent, 0.13)
+                        border.width: 1
+                        border.color: Util.alpha(root.accent, 0.8)
+                        Text { anchors.left: parent.left; anchors.leftMargin: 10; anchors.verticalCenter: parent.verticalCenter; text: "●  NOTIFICATION  ready"; color: root.accent; font.family: Style.font.family; font.pixelSize: 8; font.bold: true }
                     }
 
                     Repeater {
@@ -822,7 +940,7 @@ Item {
 
     MouseArea {
         anchors.fill: parent
-        enabled: root.enabled && root.palette !== null && !root.configurationPreview
+        enabled: root.enabled && root.palette !== null
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onEntered: root.hovered = true

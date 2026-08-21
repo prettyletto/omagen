@@ -9,6 +9,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -75,6 +76,143 @@ func TestGenerate(t *testing.T) {
 		if content, err := os.ReadFile(background); err != nil || !bytes.Equal(content, imageData) {
 			t.Fatalf("variant %s has bad background: %v", variant.Variant, err)
 		}
+	}
+}
+
+func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "reconfigure",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+		ExtraConfigs:       true,
+		ShellStyle:         session.DefaultShellStyle(),
+		DesktopStyle:       session.DefaultDesktopStyle(),
+		BarStyle:           session.DefaultBarStyle(),
+	}
+	saveGenerationRecord(t, store, record)
+	imagePath := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	configuration := &Configuration{
+		ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+		DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+		BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+	}
+
+	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
+		SessionID:     record.SessionID,
+		SourceImage:   imagePath,
+		Configuration: configuration,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := store.Load(record.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.GenerationID != result.GenerationID || updated.SourceImage != imagePath {
+		t.Fatalf("generation progress not updated: %#v", updated)
+	}
+	if updated.OriginalTheme != record.OriginalTheme || updated.OriginalBackground != record.OriginalBackground || !updated.CreatedAt.Equal(record.CreatedAt) {
+		t.Fatalf("regeneration replaced the session baseline: %#v", updated)
+	}
+	if !updated.ExtraConfigs || !reflect.DeepEqual(updated.ShellStyle, configuration.ShellStyle) ||
+		!reflect.DeepEqual(updated.DesktopStyle, configuration.DesktopStyle) ||
+		!reflect.DeepEqual(updated.BarStyle, configuration.BarStyle) {
+		t.Fatalf("configuration not committed: %#v", updated)
+	}
+	sourceDir := filepath.Join(store.SessionDir(record.SessionID), "generations", result.GenerationID, string(Source))
+	metadata, err := os.ReadFile(filepath.Join(sourceDir, "omagen.bar.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(metadata), `form = "docked"`) || !strings.Contains(string(metadata), `visibility = "islands"`) {
+		t.Fatalf("replacement generation did not use updated bar configuration:\n%s", metadata)
+	}
+	if _, err := os.Stat(filepath.Join(sourceDir, "shell.notifications.toml")); err != nil {
+		t.Fatalf("replacement generation did not use updated notification configuration: %v", err)
+	}
+	active, exists, err := store.LoadActive()
+	if err != nil || !exists || active.SessionID != record.SessionID {
+		t.Fatalf("active session changed: active=%#v exists=%t err=%v", active, exists, err)
+	}
+}
+
+func TestFailedRegenerationPreservesPreviousConfiguration(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "failed-reconfigure",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+		ExtraConfigs:       true,
+		ShellStyle:         session.DefaultShellStyle(),
+		DesktopStyle:       session.DefaultDesktopStyle(),
+		BarStyle:           session.DefaultBarStyle(),
+		GenerationID:       "generation-old",
+	}
+	saveGenerationRecord(t, store, record)
+	_, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
+		SessionID:   record.SessionID,
+		SourceImage: filepath.Join(t.TempDir(), "missing.png"),
+		Configuration: &Configuration{
+			ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+			DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+			BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected regeneration to fail")
+	}
+	updated, loadErr := store.Load(record.SessionID)
+	if loadErr != nil {
+		t.Fatal(loadErr)
+	}
+	if !reflect.DeepEqual(updated, record) {
+		t.Fatalf("failed regeneration changed durable record:\n got %#v\nwant %#v", updated, record)
+	}
+}
+
+func TestDiscardClearsWorkspaceButPreservesActiveSessionAndBaseline(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "discard-generation",
+		OriginalTheme:      "original-theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/original.png"},
+		SourceImage:        "/tmp/source.png",
+		ExtraConfigs:       true,
+		ShellStyle:         session.DefaultShellStyle(),
+		DesktopStyle:       session.DefaultDesktopStyle(),
+		BarStyle:           session.DefaultBarStyle(),
+		GenerationID:       "generation-old",
+		PreviewVariant:     "vibrant",
+	}
+	saveGenerationRecord(t, store, record)
+
+	result, err := NewService(store, generationSettingsStore(t)).Discard(record.SessionID, record.GenerationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.SessionID != record.SessionID || result.GenerationID != record.GenerationID {
+		t.Fatalf("unexpected discard result: %#v", result)
+	}
+	updated, err := store.Load(record.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.GenerationID != "" || updated.PreviewVariant != "" {
+		t.Fatalf("discard left generated workspace current: %#v", updated)
+	}
+	if updated.OriginalTheme != record.OriginalTheme || updated.OriginalBackground != record.OriginalBackground ||
+		updated.SourceImage != record.SourceImage || !reflect.DeepEqual(updated.ShellStyle, record.ShellStyle) ||
+		!reflect.DeepEqual(updated.DesktopStyle, record.DesktopStyle) || !reflect.DeepEqual(updated.BarStyle, record.BarStyle) {
+		t.Fatalf("discard changed session baseline or configuration: %#v", updated)
+	}
+	active, exists, err := store.LoadActive()
+	if err != nil || !exists || active.SessionID != record.SessionID {
+		t.Fatalf("discard ended active session: active=%#v exists=%t err=%v", active, exists, err)
 	}
 }
 

@@ -12,9 +12,9 @@ PanelWindow {
     property bool active: false
     property bool busy: false
     property string sourceImage: ""
-    property var shellStyle: ({ surface: "flat", detail: "native" })
-    property var desktopStyle: ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
     property int activeTab: 0
 
     signal shellStyleSelected(var style)
@@ -32,7 +32,11 @@ PanelWindow {
     readonly property var borderOptions: [
         { key: "solid", title: "Solid (default)" }, { key: "split_top", title: "Split Top" },
         { key: "split_bottom", title: "Split Bottom" }, { key: "blend", title: "Accent Blend" },
-        { key: "neon", title: "Neon Blend" }
+        { key: "neon", title: "Neon Blend" }, { key: "spin", title: "Spinning Accent" }
+    ]
+    readonly property var borderSizeOptions: [
+        { key: 0, title: "Default" }, { key: 1, title: "1 px" },
+        { key: 2, title: "2 px" }, { key: 4, title: "4 px" }
     ]
     readonly property var shapeOptions: [
         { key: "native", title: "Default" }, { key: "soft", title: "Soft" }, { key: "rounded", title: "Rounded" }
@@ -43,6 +47,9 @@ PanelWindow {
     readonly property var depthOptions: [
         { key: "native", title: "Default" }, { key: "flat", title: "Flat" }, { key: "shadow", title: "Shadow" }
     ]
+    readonly property var inactiveOptions: [
+        { key: "native", title: "Native" }, { key: "shadow", title: "Shadowed" }, { key: "blur", title: "Blurred" }
+    ]
     readonly property var surfaceOptions: [
         { key: "flat", title: "Flat (default)" }, { key: "layered", title: "Layered" },
         { key: "contrast", title: "Contrast" }, { key: "accent", title: "Accent" }
@@ -50,6 +57,9 @@ PanelWindow {
     readonly property var detailOptions: [
         { key: "native", title: "Default" }, { key: "framed", title: "Framed" },
         { key: "edge", title: "Edge" }, { key: "focus", title: "Focus" }
+    ]
+    readonly property var feedbackOptions: [
+        { key: "native", title: "Native" }, { key: "accent", title: "Accent" }
     ]
     readonly property var barSurfaceOptions: [
         { key: "native", title: "Default" }, { key: "dark", title: "Dark" },
@@ -63,7 +73,10 @@ PanelWindow {
         { key: "semantic", title: "Semantic (default)" }, { key: "accent", title: "Accent" }
     ]
     readonly property var barFormOptions: [
-        { key: "continuous", title: "Continuous (default)" }, { key: "docked", title: "Docked" }
+        { key: "continuous", title: "Continuous (default)" }, { key: "docked", title: "Docked (opaque bar)" }
+    ]
+    readonly property var barVisibilityOptions: [
+        { key: "native", title: "Native transparency" }, { key: "islands", title: "Show islands" }
     ]
 
     // Generation begins after this screen, so the actual Source palette is
@@ -98,9 +111,11 @@ PanelWindow {
     function chooseDesktop(group, key) {
         var next = {
             borderStyle: desktopStyle.borderStyle,
+            borderSize: desktopStyle.borderSize || 0,
             shape: desktopStyle.shape,
             spacing: desktopStyle.spacing,
-            depth: desktopStyle.depth
+            depth: desktopStyle.depth,
+            inactiveStyle: desktopStyle.inactiveStyle || "native"
         }
         next[group === "border" ? "borderStyle" : group] = key
         desktopStyle = next
@@ -108,14 +123,14 @@ PanelWindow {
     }
 
     function chooseShell(group, key) {
-        var next = { surface: shellStyle.surface, detail: shellStyle.detail }
+        var next = { surface: shellStyle.surface, detail: shellStyle.detail, tooltip: shellStyle.tooltip, notifications: shellStyle.notifications }
         next[group] = key
         shellStyle = next
         shellStyleSelected(next)
     }
 
     function chooseBar(group, key) {
-        var next = { surface: barStyle.surface, density: barStyle.density, attention: barStyle.attention, form: barStyle.form }
+        var next = { surface: barStyle.surface, density: barStyle.density, attention: barStyle.attention, form: barStyle.form, visibility: barStyle.visibility }
         next[group] = key
         barStyle = next
         barStyleSelected(next)
@@ -346,6 +361,11 @@ PanelWindow {
                                                 }
                                             }
                                         }
+                                        Text { text: "BORDER THICKNESS"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(7)
+                                            Repeater { model: root.borderSizeOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: Number(root.desktopStyle.borderSize || 0) === modelData.key; onClicked: root.chooseDesktop("borderSize", modelData.key) } }
+                                        }
                                         Text { text: "CORNER SHAPE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: Style.space(7)
@@ -360,6 +380,12 @@ PanelWindow {
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: Style.space(7)
                                             Repeater { model: root.depthOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.desktopStyle.depth === modelData.key; onClicked: root.chooseDesktop("depth", modelData.key) } }
+                                        }
+                                        Text { text: "INACTIVE WINDOWS"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        Text { Layout.fillWidth: true; text: "Control how unfocused panes recede while the active pane stays clear. Blurred uses opacity, dimming, and compositor background blur; opaque app content remains sharp."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(7)
+                                            Repeater { model: root.inactiveOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.desktopStyle.inactiveStyle === modelData.key; onClicked: root.chooseDesktop("inactiveStyle", modelData.key) } }
                                         }
                                     }
                                 }
@@ -380,6 +406,18 @@ PanelWindow {
                                             Layout.fillWidth: true; columns: 2; rowSpacing: Style.space(8); columnSpacing: Style.space(8)
                                             Repeater { model: root.detailOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.shellStyle.detail === modelData.key; onClicked: root.chooseShell("detail", modelData.key) } }
                                         }
+                                        Text { text: "TOOLTIP SURFACE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        Text { Layout.fillWidth: true; text: "Native keeps Quattro's semantic tooltip treatment. Accent gives tooltip borders the generated accent color."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(8)
+                                            Repeater { model: root.feedbackOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.shellStyle.tooltip === modelData.key; onClicked: root.chooseShell("tooltip", modelData.key) } }
+                                        }
+                                        Text { text: "NOTIFICATION SURFACE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        Text { Layout.fillWidth: true; text: "Native preserves Omarchy's notification semantics. Accent uses the generated accent for notification borders and countdowns."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(8)
+                                            Repeater { model: root.feedbackOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.shellStyle.notifications === modelData.key; onClicked: root.chooseShell("notifications", modelData.key) } }
+                                        }
                                         Item { Layout.fillHeight: true }
                                     }
                                 }
@@ -389,10 +427,16 @@ PanelWindow {
                                         anchors.fill: parent
                                         spacing: Style.space(12)
                                         Text { text: "BAR FORM"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
-                                        Text { Layout.fillWidth: true; text: "Keep Quattro's left, center, and right widgets in place; choose one continuous surface or three floating section surfaces."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        Text { Layout.fillWidth: true; text: "Keep Quattro's left, center, and right widgets in place. Docked adds three section surfaces beneath them when the native bar is opaque; a transparent native bar intentionally keeps the decoration transparent."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: Style.space(8)
                                             Repeater { model: root.barFormOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.barStyle.form === modelData.key; onClicked: root.chooseBar("form", modelData.key) } }
+                                        }
+                                        Text { text: "DOCKED VISIBILITY"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        Text { Layout.fillWidth: true; text: "Native follows Quattro's transparency toggle. Show islands keeps the additive Docked decoration visible over a transparent native bar; native widgets and input remain unchanged."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(8)
+                                            Repeater { model: root.barVisibilityOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.barStyle.visibility === modelData.key; onClicked: root.chooseBar("visibility", modelData.key) } }
                                         }
                                         Text { text: "BAR SURFACE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
                                         GridLayout {

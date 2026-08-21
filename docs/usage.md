@@ -27,7 +27,7 @@ navigation, and <code>h/j/k/l</code> navigation. Use <code>Enter</code> or <code
 activate the focused action and <code>Escape</code> to close the current surface.
 
 <p align="center">
-  <img src="../assets/screenshots/settings.png" alt="Omagen settings" width="420">
+  <img src="../assets/screenshots/settings.webp" alt="Omagen settings" width="420">
 </p>
 
 Settings persist the harmony and contrast preferences used by later palette
@@ -46,7 +46,7 @@ preview**. Extra configs open a styling step before palette generation; see
 [Styling and palette settings](styling.md).
 
 <p align="center">
-  <img src="../assets/screenshots/setup.png" alt="Omagen setup" width="420">
+  <img src="../assets/screenshots/setup.webp" alt="Omagen setup" width="420">
 </p>
 
 ## Configure extra desktop previews
@@ -55,20 +55,23 @@ When **extra configs on preview** is enabled, Omagen opens a composition step
 before generating the six palette directions. Move between the three sections
 with the section tabs or <code>h/j/k/l</code> navigation:
 
-- **Window** controls the active border, corner shape, pane spacing, and depth.
-- **Shell** controls surface composition and focus/detail language.
-- **Bar** controls the form, surface, density, attention color, and native
-  Quattro layout behavior.
+- **Window** controls the active border, border thickness, corner shape, pane
+  spacing, depth, and how inactive windows recede (native, shadowed, or
+  blurred).
+- **Shell** controls surface composition, focus/detail language, and tooltip or
+  notification feedback surfaces.
+- **Bar** controls the form, surface, density, attention color, and Docked
+  visibility policy while preserving native Quattro layout behavior.
 
 Every choice updates the source card immediately. Choose **Continue to
 preview** when the composition looks right; these settings become part of the
 generated preview and applied theme.
 
-![Window styling extras](../assets/screenshots/extras-window.png)
+![Window styling extras](../assets/screenshots/extras-window.webp)
 
-![Shell styling extras](../assets/screenshots/extras-shell.png)
+![Shell styling extras](../assets/screenshots/extras-shell.webp)
 
-![Bar styling extras](../assets/screenshots/extras-bar.png)
+![Bar styling extras](../assets/screenshots/extras-bar.webp)
 
 ## Explore palette directions
 
@@ -90,7 +93,7 @@ it reaches the gallery, so the preview represents the palette that will be
 used by the generated theme rather than an earlier intermediate result.
 
 <p align="center">
-  <img src="../assets/screenshots/palette-gallery.png" alt="Omagen palette gallery" width="960">
+  <img src="../assets/screenshots/palette-gallery.webp" alt="Omagen palette gallery" width="960">
 </p>
 
 ## Test a direction live

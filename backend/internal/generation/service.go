@@ -46,10 +46,28 @@ func (s *Service) Generate(
 	if record.ApplyPhase != session.ApplyPhaseNone {
 		return Result{}, fmt.Errorf("%w: cannot generate while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
 	}
-	shellStyle := record.ShellStyle
-	desktopStyle := record.DesktopStyle
+	shellStyle := session.NormalizeShellStyle(record.ShellStyle)
+	desktopStyle := session.NormalizeDesktopStyle(record.DesktopStyle)
 	barStyle := session.NormalizeBarStyle(record.BarStyle)
-	if !record.ExtraConfigs {
+	if request.Configuration != nil {
+		configuration := *request.Configuration
+		configuration.ShellStyle = session.NormalizeShellStyle(configuration.ShellStyle)
+		configuration.DesktopStyle = session.NormalizeDesktopStyle(configuration.DesktopStyle)
+		configuration.BarStyle = session.NormalizeBarStyle(configuration.BarStyle)
+		if !configuration.ShellStyle.Valid() {
+			return Result{}, fmt.Errorf("invalid shell style configuration")
+		}
+		if !configuration.DesktopStyle.Valid() {
+			return Result{}, fmt.Errorf("invalid desktop style configuration")
+		}
+		if !configuration.BarStyle.Valid() {
+			return Result{}, fmt.Errorf("invalid bar style configuration")
+		}
+		request.Configuration = &configuration
+		shellStyle = configuration.ShellStyle
+		desktopStyle = configuration.DesktopStyle
+		barStyle = configuration.BarStyle
+	} else if !record.ExtraConfigs {
 		shellStyle = session.ShellStyle{}
 		desktopStyle = session.DesktopStyle{}
 		barStyle = session.BarStyle{}
@@ -226,6 +244,12 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 	record.SourceImage = request.SourceImage
 	record.GenerationID = generationID
 	record.PreviewVariant = ""
+	if request.Configuration != nil {
+		record.ExtraConfigs = true
+		record.ShellStyle = request.Configuration.ShellStyle
+		record.DesktopStyle = request.Configuration.DesktopStyle
+		record.BarStyle = request.Configuration.BarStyle
+	}
 	if err := s.sessions.Save(record); err != nil {
 		_ = fsutil.RemoveAllAndSync(finalRoot)
 		return false, fmt.Errorf("persist generation progress: %w", err)

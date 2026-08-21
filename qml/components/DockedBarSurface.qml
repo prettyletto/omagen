@@ -14,6 +14,7 @@ PanelWindow {
     required property Item anchorItem
     property int geometryTick: 0
     property string omagenBarForm: "continuous"
+    property string omagenBarVisibility: "native"
     property bool metadataResolved: false
 
     readonly property var anchorWindow: anchorItem ? anchorItem.QsWindow.window : null
@@ -35,10 +36,18 @@ PanelWindow {
     }
     readonly property bool docked: root.requestedDocked && root.geometrySupported
     readonly property bool fallbackContinuous: root.requestedDocked && !root.geometrySupported
+    // Quattro keeps its PanelWindow alive and slides it off-screen when the
+    // top-bar toggle is off. Mirror that public state so this separate
+    // decoration window does not remain behind as orphaned islands.
+    readonly property bool nativeBarVisible: root.bar && root.bar.barHidden !== true
     // Transparency is still owned by Quattro's native bar gesture/config.
     // Docked only mirrors that state so double-clicking the bar hides the
     // section surfaces exactly as it hides the continuous native surface.
     readonly property bool transparent: root.bar && root.bar.transparent === true
+    // Native is the backwards-compatible policy: a transparent Quattro bar
+    // also hides this decoration. Islands is an explicit additive opt-in and
+    // never changes the native bar's widgets, layout, or input ownership.
+    readonly property bool showSurface: !root.transparent || root.omagenBarVisibility === "islands"
     readonly property color surface: {
         var raw = Color.shellValues["bar.background"]
         return raw !== undefined && String(raw).length > 0
@@ -60,6 +69,7 @@ PanelWindow {
         // were generated before Omagen moved form metadata to its own file.
         onLoadFailed: {
             root.omagenBarForm = "continuous"
+            root.omagenBarVisibility = "native"
             root.metadataResolved = false
         }
         onFileChanged: reload()
@@ -74,13 +84,19 @@ PanelWindow {
     }
 
     function applyMetadata(raw) {
-        var match = String(raw || "").match(/^\s*form\s*=\s*["']([^"']+)["']\s*$/m)
-        omagenBarForm = match && String(match[1]).toLowerCase() === "docked" ? "docked" : "continuous"
+        var text = String(raw || "")
+        var formMatch = text.match(/^\s*form\s*=\s*["']([^"']+)["']\s*$/m)
+        var visibilityMatch = text.match(/^\s*visibility\s*=\s*["']([^"']+)["']\s*$/m)
+        omagenBarForm = formMatch && String(formMatch[1]).toLowerCase() === "docked" ? "docked" : "continuous"
+        omagenBarVisibility = visibilityMatch && String(visibilityMatch[1]).toLowerCase() === "islands" ? "islands" : "native"
         metadataResolved = true
     }
 
     screen: anchorWindow ? anchorWindow.screen : null
-    visible: (docked || fallbackContinuous) && anchorWindow !== null && bar !== null
+    visible: (docked || fallbackContinuous)
+        && nativeBarVisible
+        && anchorWindow !== null
+        && bar !== null
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "pretty-omagen-docked-bar"
@@ -172,8 +188,8 @@ PanelWindow {
             width: bounds.width
             height: bounds.height
             radius: wholeBar ? 0 : root.islandRadius
-            color: root.transparent ? "transparent" : root.surface
-            border.width: wholeBar || root.transparent ? 0 : 1
+            color: root.showSurface ? root.surface : "transparent"
+            border.width: wholeBar || !root.showSurface ? 0 : 1
             border.color: Util.alpha(root.text, 0.28)
         }
     }

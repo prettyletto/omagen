@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
 import qs.Commons
@@ -17,18 +18,35 @@ BarWidget {
     property int menuIndex: 0
     property bool quitBusy: false
     property bool sessionActive: false
-    property color animatedIconColor: normalIconColor
+    property color animatedDiamondColor: idleDiamondColor
+    property real diamondGlowOpacity: 0.28
 
     readonly property color normalIconColor: root.bar ? root.bar.foreground : Color.foreground
+    readonly property color accentAnchor: Color.accent
+    readonly property color idleDiamondColor: Color.accent
+    readonly property var accentRainbow: root.buildAccentRainbow(root.accentAnchor)
     readonly property string stateHome: {
         const configured = Quickshell.env("XDG_STATE_HOME")
         const home = Quickshell.env("HOME")
         return configured && configured.length > 0 ? configured : home + "/.local/state"
     }
     readonly property string activeSessionPath: root.stateHome + "/omagen/active-session.json"
-    readonly property var rainbowColors: [
-        "#ff6b6b", "#ffd166", "#7bd88f", "#5ed0e6", "#7aa7ff", "#c58cff", "#ff7ac8"
-    ]
+    function buildAccentRainbow(baseColor) {
+        var base = Qt.color(baseColor)
+        var hue = base.hsvHue
+        // A neutral accent has no hue. Start it at a cool blue and keep the
+        // generated active-state colors vivid enough to survive a bar surface.
+        if (hue < 0)
+            hue = 0.58
+
+        var saturation = Math.max(0.68, base.hsvSaturation)
+        var value = Math.max(0.84, base.hsvValue)
+        var offsets = [0.00, 0.14, 0.28, 0.42, 0.56, 0.70, 0.84]
+        var colors = []
+        for (var i = 0; i < offsets.length; i++)
+            colors.push(Qt.hsva((hue + offsets[i]) % 1.0, saturation, Math.min(0.98, value), 1.0))
+        return colors
+    }
 
     readonly property string backendPath: decodeURIComponent(
         Qt.resolvedUrl("bin/omagen")
@@ -60,9 +78,8 @@ BarWidget {
     function invoke(action) {
         menuOpen = false;
 
-        // Quit is deliberately independent from the overlay loader.  Calling
-        // shell.summon here makes a cold/lazy plugin appear before the quit
-        // method can be delivered, which leaves the user with an open overlay.
+        // Quit is deliberately independent from the overlay loader. Calling
+        // shell.summon here would make a cold plugin appear before aborting.
         if (action === "quit") {
             quitNow();
             return;
@@ -88,12 +105,16 @@ BarWidget {
     }
 
     function quitNow() {
-        // Close any already-visible surface without creating one.  The
-        // backend recovery command is authoritative for demo, pending Apply,
-        // theme/background restoration, and durable session cleanup.
-        if (root.bar && root.bar.shell && typeof root.bar.shell.hide === "function")
-            root.bar.shell.hide("pretty.omagen");
+        // Route through the plugin lifecycle when the shell is available so
+        // both durable backend state and the already-loaded QML state reach
+        // zero. open({action: "quit"}) aborts before showing any surface.
+        if (root.bar && root.bar.shell && typeof root.bar.shell.summon === "function") {
+            root.bar.shell.summon("pretty.omagen", JSON.stringify({ action: "quit" }));
+            return;
+        }
 
+        // Defensive fallback for an unavailable shell host. Backend recovery
+        // is idempotent and restores the same pre-session baseline.
         if (root.quitBusy)
             return;
         root.quitBusy = true;
@@ -140,30 +161,89 @@ BarWidget {
         if (sessionActive === next)
             return
         sessionActive = next
-        if (!next)
-            animatedIconColor = normalIconColor
+        if (!next) {
+            animatedDiamondColor = idleDiamondColor
+            diamondGlowOpacity = 0.28
+        }
     }
 
     SequentialAnimation {
         running: root.sessionActive
         loops: Animation.Infinite
 
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[0]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[1]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[2]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[3]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[4]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[5]; duration: 280; easing.type: Easing.InOutSine }
-        ColorAnimation { target: root; property: "animatedIconColor"; to: root.rainbowColors[6]; duration: 280; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[0]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[1]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[2]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[3]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[4]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[5]; duration: 420; easing.type: Easing.InOutSine }
+        ColorAnimation { target: root; property: "animatedDiamondColor"; to: root.accentRainbow[6]; duration: 420; easing.type: Easing.InOutSine }
     }
 
-    Text {
+    SequentialAnimation {
+        running: root.sessionActive
+        loops: Animation.Infinite
+
+        NumberAnimation { target: root; property: "diamondGlowOpacity"; to: 0.56; duration: 620; easing.type: Easing.InOutSine }
+        NumberAnimation { target: root; property: "diamondGlowOpacity"; to: 0.28; duration: 620; easing.type: Easing.InOutSine }
+    }
+
+    Row {
+        id: iconRow
         anchors.centerIn: parent
-        text: "O"
-        color: root.sessionActive ? root.animatedIconColor : root.normalIconColor
-        font.family: Style.font.family
-        font.pixelSize: Style.bar.iconFont
-        font.bold: true
+        spacing: Style.space(1)
+
+        Text {
+            text: "O"
+            color: root.normalIconColor
+            font.family: Style.font.family
+            font.pixelSize: Style.bar.iconFont
+            font.bold: true
+        }
+
+        Item {
+            width: diamondGlow.implicitWidth
+            height: diamondGlow.implicitHeight
+            anchors.verticalCenter: parent.verticalCenter
+
+            Text {
+                id: diamondGlow
+                anchors.centerIn: parent
+                text: "◈"
+                color: root.animatedDiamondColor
+                opacity: root.sessionActive ? 0.9 : 0
+                font.family: Style.font.family
+                font.pixelSize: Style.bar.iconFont
+                font.bold: true
+            }
+
+            MultiEffect {
+                anchors.fill: diamondGlow
+                anchors.margins: -Style.space(5)
+                source: diamondGlow
+                visible: root.sessionActive
+                blurEnabled: true
+                blur: 1.0
+                blurMax: 32
+                blurMultiplier: 1.8
+                opacity: root.diamondGlowOpacity
+            }
+
+            Text {
+                anchors.centerIn: parent
+                text: "◈"
+                color: root.sessionActive ? root.animatedDiamondColor : root.idleDiamondColor
+                scale: root.sessionActive ? 1.08 : 1.0
+                // Keep the active accent readable when a rainbow step lands
+                // near the current bar surface. Quattro's semantic bar
+                // foreground is the contrast-safe outline for both themes.
+                style: Text.Outline
+                styleColor: root.normalIconColor
+                font.family: Style.font.family
+                font.pixelSize: Style.bar.iconFont
+                font.bold: true
+            }
+        }
     }
 
     Process {

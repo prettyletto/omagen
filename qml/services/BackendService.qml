@@ -25,10 +25,12 @@ Item {
     signal backendUnavailable(string message)
     signal sessionRecovered()
     signal sessionRecoverFailed(string message)
-    signal generationCompleted(string generationId)
-    signal generationFailed(string message)
-    signal generationDescribed(string generationId, var variants)
-    signal generationDescribeFailed(string message)
+    signal generationCompleted(string sessionId, string generationId)
+    signal generationFailed(string sessionId, string message)
+    signal generationDescribed(string sessionId, string generationId, var variants)
+    signal generationDescribeFailed(string sessionId, string message)
+    signal generationDiscarded(string sessionId, string generationId)
+    signal generationDiscardFailed(string sessionId, string message)
     signal previewApplied(string sessionId, string generationId, string variant, string themeName)
     signal previewApplyFailed(string message)
     signal themeApplied(string sessionId, string generationId, string variant, string themeName)
@@ -40,13 +42,18 @@ Item {
     signal demoCaptured(string sessionId, string previewPath)
     signal demoCaptureFailed(string message)
 
+    function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle) {
+        if (!shellStyle)
+            return;
+        args.push("--shell-style", shellStyle.surface, shellStyle.detail, shellStyle.tooltip, shellStyle.notifications,
+                  "--desktop-style", desktopStyle.borderStyle, desktopStyle.borderSize,
+                  desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
+                  "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility);
+    }
+
     function beginSession(shellStyle, desktopStyle, barStyle) {
         const args = [root.executable, "session", "begin"];
-        if (shellStyle)
-            args.push("--shell-style", shellStyle.surface, shellStyle.detail,
-                      "--desktop-style", desktopStyle.borderStyle, desktopStyle.shape,
-                      desktopStyle.spacing, desktopStyle.depth,
-                      "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form);
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle);
         sessionBeginProcess.exec(args);
     }
 
@@ -62,8 +69,20 @@ Item {
     function checkBackend() { pingProcess.exec([root.executable, "ping"]); }
     function recoverSession() { recoverProcess.exec([root.executable, "session", "recover"]); }
 
-    function generateTheme(sessionId, imagePath) { generationProcess.exec([root.executable, "generate", sessionId, imagePath]); }
-    function describeGeneration(sessionId, generationId) { generationDescribeProcess.exec([root.executable, "generation", "describe", sessionId, generationId]); }
+    function generateTheme(sessionId, imagePath, shellStyle, desktopStyle, barStyle) {
+        generationProcess.sessionId = sessionId;
+        const args = [root.executable, "generate", sessionId, imagePath];
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle);
+        generationProcess.exec(args);
+    }
+    function describeGeneration(sessionId, generationId) {
+        generationDescribeProcess.sessionId = sessionId;
+        generationDescribeProcess.exec([root.executable, "generation", "describe", sessionId, generationId]);
+    }
+    function discardGeneration(sessionId, generationId) {
+        generationDiscardProcess.sessionId = sessionId;
+        generationDiscardProcess.exec([root.executable, "generation", "discard", sessionId, generationId]);
+    }
     function applyPreview(sessionId, generationId, variant) { previewProcess.exec([root.executable, "preview", "apply", sessionId, generationId, variant]); }
     function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview) {
         const args = [root.executable, "apply", sessionId, generationId, variant, name];
@@ -158,10 +177,10 @@ Item {
                     originalTheme,
                     backgroundKind,
                     backgroundPath,
-                    result.shell_style || ({ surface: "flat", detail: "native" }),
+                    result.shell_style || ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" }),
                     result.extra_configs === true,
-                    result.desktop_style || ({ border_style: "solid", shape: "native", spacing: "native", depth: "native" }),
-                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
+                    result.desktop_style || ({ border_style: "solid", border_size: 0, shape: "native", spacing: "native", depth: "native", inactive_style: "native" }),
+                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");
@@ -210,21 +229,49 @@ Item {
 
     Process {
         id: generationProcess
+        property string sessionId: ""
         stdout: StdioCollector { id: generationStdout; waitForEnd: true }
         stderr: StdioCollector { id: generationStderr; waitForEnd: true }
         onExited: function(exitCode, exitStatus) {
-            if (exitCode !== 0) { root.generationFailed(generationStderr.text.trim() || "Theme generation failed"); return }
-            try { const result=JSON.parse(generationStdout.text); if (!result.generation_id) { root.generationFailed("Backend returned no generation id"); return } root.generationCompleted(result.generation_id) } catch (error) { root.generationFailed("Backend returned invalid generation JSON") }
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) { root.generationFailed(requestSessionId, generationStderr.text.trim() || "Theme generation failed"); return }
+            try { const result=JSON.parse(generationStdout.text); if (!result.generation_id) { root.generationFailed(requestSessionId, "Backend returned no generation id"); return } root.generationCompleted(requestSessionId, result.generation_id) } catch (error) { root.generationFailed(requestSessionId, "Backend returned invalid generation JSON") }
         }
     }
 
     Process {
         id: generationDescribeProcess
+        property string sessionId: ""
         stdout: StdioCollector { id: generationDescribeStdout; waitForEnd: true }
         stderr: StdioCollector { id: generationDescribeStderr; waitForEnd: true }
         onExited: function(exitCode, exitStatus) {
-            if (exitCode !== 0) { root.generationDescribeFailed(generationDescribeStderr.text.trim() || "Failed to load generated palettes"); return }
-            try { const result=JSON.parse(generationDescribeStdout.text); if (!result.generation_id || (result.variants||[]).length !== 6) { root.generationDescribeFailed("Backend returned incomplete generation data"); return } root.generationDescribed(result.generation_id, result.variants) } catch (error) { root.generationDescribeFailed("Backend returned invalid generation description") }
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) { root.generationDescribeFailed(requestSessionId, generationDescribeStderr.text.trim() || "Failed to load generated palettes"); return }
+            try { const result=JSON.parse(generationDescribeStdout.text); if (!result.generation_id || (result.variants||[]).length !== 6) { root.generationDescribeFailed(requestSessionId, "Backend returned incomplete generation data"); return } root.generationDescribed(requestSessionId, result.generation_id, result.variants) } catch (error) { root.generationDescribeFailed(requestSessionId, "Backend returned invalid generation description") }
+        }
+    }
+
+    Process {
+        id: generationDiscardProcess
+        property string sessionId: ""
+        stdout: StdioCollector { id: generationDiscardStdout; waitForEnd: true }
+        stderr: StdioCollector { id: generationDiscardStderr; waitForEnd: true }
+        onExited: function(exitCode, exitStatus) {
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) {
+                root.generationDiscardFailed(requestSessionId, generationDiscardStderr.text.trim() || "Failed to discard generated workspace");
+                return;
+            }
+            try {
+                const result = JSON.parse(generationDiscardStdout.text);
+                if (result.ok !== true || !result.session_id || !result.generation_id) {
+                    root.generationDiscardFailed(requestSessionId, "Backend returned incomplete generation discard data");
+                    return;
+                }
+                root.generationDiscarded(result.session_id, result.generation_id);
+            } catch (error) {
+                root.generationDiscardFailed(requestSessionId, "Backend returned invalid generation discard JSON");
+            }
         }
     }
 

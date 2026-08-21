@@ -10,15 +10,20 @@ PanelWindow {
 
     property bool active: false
     property bool busy: false
+    property bool sessionActive: false
+    property bool cancelBusy: false
     property string sourceImage: ""
     property bool extraConfigsEnabled: false
     property string errorMessage: ""
     property int cursorIndex: 0
-    readonly property int actionCount: sourceImage === "" ? 1 : 3
+    readonly property int actionCount: sourceImage === ""
+        ? (sessionActive ? 2 : 1)
+        : (sessionActive ? 4 : 3)
 
     signal chooseImageRequested()
     signal extraConfigsToggled(bool enabled)
     signal continueRequested()
+    signal cancelRequested()
     signal hideRequested()
 
     visible: active
@@ -42,6 +47,8 @@ PanelWindow {
             extraConfigsToggled(!extraConfigsEnabled);
         else if (sourceImage !== "" && cursorIndex === 2)
             continueRequested();
+        else if (sessionActive && cursorIndex === actionCount - 1)
+            cancelRequested();
     }
 
     onActiveChanged: if (active) {
@@ -199,6 +206,17 @@ PanelWindow {
                         hasCursor: root.sourceImage !== "" && root.cursorIndex === 2
                         enabled: !root.busy
                         onClicked: root.continueRequested()
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        visible: root.sessionActive
+                        text: root.cancelBusy ? "Restoring original desktop…" : "Cancel session"
+                        leftAlign: true
+                        foreground: Color.popups.text
+                        bordered: true
+                        hasCursor: root.sessionActive && root.cursorIndex === root.actionCount - 1
+                        enabled: !root.busy && !root.cancelBusy
+                        onClicked: root.cancelRequested()
                     }
                 }
 

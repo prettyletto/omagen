@@ -2,6 +2,7 @@
 
 - [Omagen](README.md)
 - [Documentation index](docs/README.md)
+  - [Examples](docs/examples.md)
   - [Usage](docs/usage.md)
   - [Styling and palette settings](docs/styling.md)
   - [Demo workspace](docs/demo.md)

@@ -3,6 +3,7 @@
 Omagen is an Omarchy Quattro plugin. Start with the user workflow, then use
 the focused guides for styling, Demo, recovery, or development.
 
+- [Examples](examples.md) — wallpaper and generated-theme pairs.
 - [Usage](usage.md) — choose an image, generate palettes, preview, Demo, and
   apply a theme.
 - [Styling and palette settings](styling.md) — harmony, contrast, Window,

@@ -50,12 +50,32 @@ func TestParseGenerateArgs(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgsWithConfiguration(t *testing.T) {
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "accent", "edge", "accent", "native",
+		"--desktop-style", "split_top", "2", "rounded", "airy", "shadow", "blur",
+		"--bar-style", "accent", "compact", "accent", "docked", "islands",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil {
+		t.Fatal("configuration was not parsed")
+	}
+	if request.Configuration.ShellStyle.Surface != "accent" || request.Configuration.DesktopStyle.BorderSize != 2 || request.Configuration.BarStyle.Visibility != "islands" {
+		t.Fatalf("unexpected configuration: %#v", request.Configuration)
+	}
+}
+
 func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 	for _, args := range [][]string{
 		{"session", "image", "--harmony"},
 		{"session", "image", "--harmony", "random"},
 		{"session", "image", "--harmony=triadic", "--harmony", "auto"},
 		{"session", "image", "--unknown"},
+		{"session", "image", "--shell-style", "flat", "native", "native", "native"},
+		{"session", "image", "--desktop-style", "solid", "not-a-number", "native", "native", "native", "native"},
 	} {
 		if _, err := parseGenerateArgs(args); err == nil {
 			t.Fatalf("expected args %v to fail", args)
@@ -139,6 +159,24 @@ func TestSessionHandlers(t *testing.T) {
 	}
 	if code := runGenerate([]string{"too-few"}, nil, &out, &stderr); code != 2 {
 		t.Fatalf("generate code=%d", code)
+	}
+}
+
+func TestSessionBeginAcceptsInactiveStyleArgumentShape(t *testing.T) {
+	testenv.Isolate(t)
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := session.NewService(store, cliOmarchy{})
+	var out, stderr bytes.Buffer
+	args := []string{
+		"begin", "--shell-style", "flat", "native",
+		"--desktop-style", "invalid", "2", "native", "native", "native", "blur",
+		"--bar-style", "native", "native", "semantic", "continuous",
+	}
+	if code := runSession(args, service, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
+		t.Fatalf("inactive-style argument shape was rejected before validation: code=%d stderr=%q", code, stderr.String())
 	}
 }
 

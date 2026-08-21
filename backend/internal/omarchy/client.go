@@ -256,18 +256,18 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 		return fmt.Errorf("omarchy theme bg set %q: %w", path, err)
 	}
 	// Theme restoration can put the current/background symlink back at the
-	// same path that the preview used. The shell's normal background IPC
-	// deliberately ignores an unchanged path, even when the symlink now
-	// points at a different inode. Force a fresh image load so Cancel cannot
-	// leave the preview bitmap cached on screen.
+	// same path that the preview used. Quattro's set/setInstant IPC compares
+	// the path string before loading, so it can ignore a changed symlink that
+	// points at a different image. Refresh makes the shell reread and resolve
+	// the symlink before updating the live wallpaper.
 	if _, err := exec.LookPath("omarchy-shell"); err != nil {
 		return nil
 	}
-	refresh := exec.Command("omarchy-shell", "-q", "background", "setInstant", path)
+	refresh := exec.Command("omarchy-shell", "-q", "background", "refresh")
 	refresh.Stdout = c.stderr
 	refresh.Stderr = c.stderr
 	if err := refresh.Run(); err != nil {
-		return fmt.Errorf("refresh restored background %q: %w", path, err)
+		return fmt.Errorf("refresh restored background: %w", err)
 	}
 	return nil
 }

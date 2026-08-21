@@ -8,12 +8,15 @@ script at runtime.
 
 ~~~text
 manifest.json             Omarchy plugin contract
+preview.png               Optional marketplace listing preview
 Omagen.qml                Overlay entry point
 OmagenBarWidget.qml       Bar-widget entry point
 qml/                      QML views, components, services, and state
 backend/                  Go backend and internal services
 bin/omagen                Bundled runtime backend binary
 demo/                     Deterministic Demo workspace assets
+assets/                   README and documentation media
+docs/                     User and contributor guides
 scripts/v1-check.sh       Full validation gate
 dev-install.sh            Local development installer
 ~~~
@@ -22,6 +25,10 @@ The plugin manifest declares the ID <code>pretty.omagen</code>, the
 <code>overlay</code> and <code>bar-widget</code> kinds, the two QML entry points,
 and the default right-side bar section. See the root
 [manifest.json](../manifest.json).
+
+The root <code>preview.png</code> is a marketplace showcase image. It is not a
+runtime entry point and is not required by the Omarchy shell loader; the
+community marketplace can resize and optimize it for plugin listings.
 
 ## Local development installation
 
