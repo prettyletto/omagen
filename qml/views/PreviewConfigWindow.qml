@@ -389,7 +389,7 @@ PanelWindow {
                                         anchors.fill: parent
                                         spacing: Style.space(12)
                                         Text { text: "BAR FORM"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
-                                        Text { Layout.fillWidth: true; text: "Keep Quattro's left, center, and right widgets in place; choose one continuous surface or three floating section surfaces."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        Text { Layout.fillWidth: true; text: "Keep Quattro's left, center, and right widgets in place. Docked is rendered by supporting Omarchy bars; older versions stay continuous."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                                         RowLayout {
                                             Layout.fillWidth: true; spacing: Style.space(8)
                                             Repeater { model: root.barFormOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.barStyle.form === modelData.key; onClicked: root.chooseBar("form", modelData.key) } }
