@@ -100,6 +100,7 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 		return OpenResult{}, err
 	}
 	missing := missingSlots(surviving)
+	createdDuringReopen := map[Slot]string{}
 	if len(missing) > 0 {
 		before, err := windowAddresses()
 		if err != nil {
@@ -110,14 +111,21 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 		if err != nil {
 			return OpenResult{}, fmt.Errorf("recreate demo slots: %w", err)
 		}
+		createdDuringReopen = cloneWindows(created)
 		surviving = mergeWindows(surviving, created)
+	}
+	cleanupCreated := func() error {
+		if len(createdDuringReopen) == 0 {
+			return nil
+		}
+		return closeDemoWindows(createdDuringReopen, 3*time.Second, appendLaunchLogger(s.launchLogPath(state.SessionID)))
 	}
 	state.Windows = surviving
 	if err = placeDemoWindows(state, monitor); err != nil {
-		return OpenResult{}, err
+		return OpenResult{}, errors.Join(err, cleanupCreated())
 	}
 	if err = s.saveStateIfActive(state); err != nil {
-		return OpenResult{}, fmt.Errorf("persist demo state: %w", err)
+		return OpenResult{}, errors.Join(fmt.Errorf("persist demo state: %w", err), cleanupCreated())
 	}
 	return s.openResult(state, len(missing) == 0), nil
 }

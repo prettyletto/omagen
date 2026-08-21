@@ -69,7 +69,7 @@ func launchDemoSlots(demoDir, ownerToken string, slots []Slot, capabilities Capa
 			}
 		}(launch.Slot, launch.Cmd, &stdout, &stderr)
 	}
-	return waitForDemoWindows(before, hints, 10*time.Second, logger)
+	return waitForDemoWindows(before, hints, slots, 10*time.Second, logger)
 }
 
 func buildDemoLaunches(demoDir string, capabilities Capabilities) ([]slotLaunch, launchHints, error) {
@@ -210,7 +210,7 @@ func systemInfoScript() string {
 func fileListingScript() string {
 	return "cd \"$OMAGEN_DEMO_DIR\" || exit 1; if command -v tree >/dev/null 2>&1; then tree -a -L 2; elif command -v find >/dev/null 2>&1; then find . -maxdepth 2 -print; else ls -la; fi; printf '\\n'; exec \"${SHELL:-/bin/bash}\" -l"
 }
-func waitForDemoWindows(before map[string]clientInfo, hints launchHints, timeout time.Duration, logger *launchLogger) (map[Slot]string, error) {
+func waitForDemoWindows(before map[string]clientInfo, hints launchHints, expectedSlots []Slot, timeout time.Duration, logger *launchLogger) (map[Slot]string, error) {
 	deadline := time.Now().Add(timeout)
 	var last []clientInfo
 	lastCount := -1
@@ -243,7 +243,7 @@ func waitForDemoWindows(before map[string]clientInfo, hints launchHints, timeout
 			lastCount = len(fresh)
 			lastClassification = classification
 		}
-		if len(windows) == 4 {
+		if len(windows) == len(expectedSlots) {
 			logger.line("all demo windows classified: %s", classification)
 			return windows, nil
 		}
