@@ -44,7 +44,7 @@ func TestStoreSaveLoadDelete(t *testing.T) {
 
 func TestStoreRejectsInvalidAndMalformedRecords(t *testing.T) {
 	s := testStore(t)
-	for _, id := range []string{"", "../escape", "a/b"} {
+	for _, id := range []string{"", ".", "..", "../escape", "a/b"} {
 		if _, err := s.Load(id); err == nil {
 			t.Errorf("Load(%q) accepted invalid id", id)
 		}

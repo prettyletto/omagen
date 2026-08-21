@@ -154,5 +154,5 @@ func validApplyVariant(value string) bool {
 }
 
 func validSessionID(sessionID string) bool {
-	return sessionID != "" && filepath.Base(sessionID) == sessionID
+	return sessionID != "" && sessionID != "." && sessionID != ".." && filepath.Base(sessionID) == sessionID
 }
