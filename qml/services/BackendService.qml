@@ -44,7 +44,7 @@ Item {
             args.push("--shell-style", shellStyle.surface, shellStyle.detail,
                       "--desktop-style", desktopStyle.borderStyle, desktopStyle.shape,
                       desktopStyle.spacing, desktopStyle.depth,
-                      "--bar-style", barStyle.surface, barStyle.density, barStyle.attention);
+                      "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form);
         sessionBeginProcess.exec(args);
     }
 
@@ -153,7 +153,7 @@ Item {
                     result.shell_style || ({ surface: "flat", detail: "native" }),
                     result.extra_configs === true,
                     result.desktop_style || ({ border_style: "solid", shape: "native", spacing: "native", depth: "native" }),
-                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic" })
+                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");

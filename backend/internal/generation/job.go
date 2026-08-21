@@ -177,6 +177,7 @@ func (j job) run(
 			j.barStyle.Surface,
 			j.barStyle.Density,
 			j.barStyle.Attention,
+			j.barStyle.Form,
 		); err != nil {
 			return fmt.Errorf("write shell style: %w", err)
 		}

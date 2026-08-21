@@ -14,7 +14,7 @@ PanelWindow {
     property string sourceImage: ""
     property var shellStyle: ({ surface: "flat", detail: "native" })
     property var desktopStyle: ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
     property int activeTab: 0
 
     signal shellStyleSelected(var style)
@@ -61,6 +61,9 @@ PanelWindow {
     ]
     readonly property var attentionOptions: [
         { key: "semantic", title: "Semantic" }, { key: "accent", title: "Accent" }
+    ]
+    readonly property var barFormOptions: [
+        { key: "continuous", title: "Continuous" }, { key: "docked", title: "Docked" }
     ]
 
     // Generation begins after this screen, so the actual Source palette is
@@ -112,7 +115,7 @@ PanelWindow {
     }
 
     function chooseBar(group, key) {
-        var next = { surface: barStyle.surface, density: barStyle.density, attention: barStyle.attention }
+        var next = { surface: barStyle.surface, density: barStyle.density, attention: barStyle.attention, form: barStyle.form }
         next[group] = key
         barStyle = next
         barStyleSelected(next)
@@ -385,6 +388,12 @@ PanelWindow {
                                     ColumnLayout {
                                         anchors.fill: parent
                                         spacing: Style.space(12)
+                                        Text { text: "BAR FORM"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
+                                        Text { Layout.fillWidth: true; text: "Keep Quattro's left, center, and right widgets in place; choose one continuous surface or three floating section surfaces."; wrapMode: Text.WordWrap; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                                        RowLayout {
+                                            Layout.fillWidth: true; spacing: Style.space(8)
+                                            Repeater { model: root.barFormOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; title: modelData.title; selected: root.barStyle.form === modelData.key; onClicked: root.chooseBar("form", modelData.key) } }
+                                        }
                                         Text { text: "BAR SURFACE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 1 }
                                         GridLayout {
                                             Layout.fillWidth: true; columns: 2; rowSpacing: Style.space(8); columnSpacing: Style.space(8)

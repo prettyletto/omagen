@@ -250,8 +250,8 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) != 1 && len(args) != 13 {
-			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention>]")
+		if len(args) != 1 && len(args) != 13 && len(args) != 14 {
+			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention> [<form>]]")
 		}
 		if cleanupService != nil {
 			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
@@ -265,13 +265,16 @@ func runSessionWithDependencies(
 		var shellStyle session.ShellStyle
 		var desktopStyle session.DesktopStyle
 		var barStyle session.BarStyle
-		if len(args) == 13 {
+		if len(args) == 13 || len(args) == 14 {
 			if args[1] != "--shell-style" || args[4] != "--desktop-style" || args[9] != "--bar-style" {
-				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention>]")
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> --desktop-style <border> <shape> <spacing> <depth> --bar-style <surface> <density> <attention> [<form>]]")
 			}
 			shellStyle = session.ShellStyle{Surface: args[2], Detail: args[3]}
 			desktopStyle = session.DesktopStyle{BorderStyle: args[5], Shape: args[6], Spacing: args[7], Depth: args[8]}
-			barStyle = session.BarStyle{Surface: args[10], Density: args[11], Attention: args[12]}
+			barStyle = session.BarStyle{Surface: args[10], Density: args[11], Attention: args[12], Form: "continuous"}
+			if len(args) == 14 {
+				barStyle.Form = args[13]
+			}
 		}
 		var result session.BeginResult
 		var err error

@@ -13,7 +13,7 @@ Item {
     property int activeSection: 0
     property var desktopStyle: ({ borderStyle: root.borderStyle, shape: "native", spacing: "native", depth: "native" })
     property var shellStyle: ({ surface: "flat", detail: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
     property bool selected: false
     property bool focused: false
     property bool hovered: false
@@ -237,12 +237,31 @@ Item {
                 anchors.rightMargin: root.windowMargin
                 height: root.previewBarHeight
                 radius: Math.min(root.windowRadius, height / 2)
-                color: root.barSurface()
-                border.width: root.activeSection === 2 ? 2 : 1
+                color: root.barStyle.form === "docked" ? "transparent" : root.barSurface()
+                border.width: root.barStyle.form === "docked" ? 0 : root.activeSection === 2 ? 2 : 1
                 border.color: root.activeSection === 2 ? root.accent : Util.alpha(root.fg, 0.22)
 
                 Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+
+                Repeater {
+                    model: root.barStyle.form === "docked" ? [
+                        { x: 0.00, width: 0.30 },
+                        { x: 0.36, width: 0.28 },
+                        { x: 0.70, width: 0.30 }
+                    ] : []
+                    delegate: Rectangle {
+                        required property var modelData
+                        x: parent.width * modelData.x
+                        width: parent.width * modelData.width
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        radius: Math.min(root.windowRadius, height / 2)
+                        color: root.barSurface()
+                        border.width: 1
+                        border.color: root.activeSection === 2 ? Util.alpha(root.accent, 0.78) : Util.alpha(root.barForeground(), 0.24)
+                    }
+                }
 
                 Row {
                     anchors.left: parent.left

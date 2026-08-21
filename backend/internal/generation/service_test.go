@@ -159,7 +159,7 @@ func TestGenerateComposesShellAndBarIntoShellTOML(t *testing.T) {
 		ExtraConfigs:       true,
 		ShellStyle:         session.ShellStyle{Surface: "accent", Detail: "edge"},
 		DesktopStyle:       session.DefaultDesktopStyle(),
-		BarStyle:           session.BarStyle{Surface: "accent", Density: "comfortable", Attention: "accent"},
+		BarStyle:           session.BarStyle{Surface: "accent", Density: "comfortable", Attention: "accent", Form: "docked"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestGenerateComposesShellAndBarIntoShellTOML(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := string(data)
-	for _, want := range []string{"[popups]", "[bar]", "size-horizontal = 30", "size-vertical = 32", "active = "} {
+	for _, want := range []string{"[popups]", "[bar]", `form = "docked"`, "size-horizontal = 30", "size-vertical = 32", "active = "} {
 		if !strings.Contains(text, want) {
 			t.Errorf("generated shell.toml missing %q:\n%s", want, text)
 		}

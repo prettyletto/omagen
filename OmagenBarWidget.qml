@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "qml/components" as Components
 
 // The bar keeps the familiar left-click summon, while right-click exposes
 // the small lifecycle menu used by Omagen.  KeyboardPanel gives this menu
@@ -127,6 +128,11 @@ BarWidget {
 
     implicitWidth: Style.bar.statusSlot
     implicitHeight: barSize
+
+    Components.DockedBarSurface {
+        anchorItem: root
+        bar: root.bar
+    }
 
     Text {
         anchors.centerIn: parent

@@ -19,13 +19,36 @@ type BarStyle struct {
 	Surface   string `json:"surface"`
 	Density   string `json:"density"`
 	Attention string `json:"attention"`
+	Form      string `json:"form"`
 }
 
 func DefaultBarStyle() BarStyle {
-	return BarStyle{Surface: "native", Density: "native", Attention: "semantic"}
+	return BarStyle{Surface: "native", Density: "native", Attention: "semantic", Form: "continuous"}
 }
+
+// NormalizeBarStyle keeps sessions written before Bar Form was introduced
+// valid. Missing form values are the backwards-compatible Continuous mode.
+func NormalizeBarStyle(s BarStyle) BarStyle {
+	if s.Surface == "" {
+		s.Surface = "native"
+	}
+	if s.Density == "" {
+		s.Density = "native"
+	}
+	if s.Attention == "" {
+		s.Attention = "semantic"
+	}
+	if s.Form == "" {
+		s.Form = "continuous"
+	}
+	return s
+}
+
 func (s BarStyle) Valid() bool {
-	return validChoice(s.Surface, "native", "dark", "light", "accent") && validChoice(s.Density, "native", "compact", "comfortable") && validChoice(s.Attention, "semantic", "accent")
+	return validChoice(s.Surface, "native", "dark", "light", "accent") &&
+		validChoice(s.Density, "native", "compact", "comfortable") &&
+		validChoice(s.Attention, "semantic", "accent") &&
+		validChoice(s.Form, "continuous", "docked")
 }
 
 func DefaultDesktopStyle() DesktopStyle {

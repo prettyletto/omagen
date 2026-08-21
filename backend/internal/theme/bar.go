@@ -7,15 +7,24 @@ import (
 
 // appendBarOverrides composes bar choices into the theme's single shell.toml.
 // Quattro does not load sidecar files such as shell.bar.toml.
-func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attention string) error {
+func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attention, form string) error {
 	if !validChoice(surface, "native", "dark", "light", "accent") || !validChoice(density, "native", "compact", "comfortable") || !validChoice(attention, "semantic", "accent") {
 		return fmt.Errorf("invalid bar style")
 	}
-	if surface == "native" && density == "native" && attention == "semantic" {
+	if !validChoice(form, "continuous", "docked") {
+		return fmt.Errorf("invalid bar form %q", form)
+	}
+	if surface == "native" && density == "native" && attention == "semantic" && form == "continuous" {
 		return nil
 	}
 
 	b.WriteString("\n[bar]\n")
+	if form == "docked" {
+		// The native bar keeps its widgets and input surface; Docked only makes
+		// its outer background transparent so the additive section-surface
+		// renderer can sit underneath those widgets.
+		b.WriteString("form = \"docked\"\nbackground-alpha = 0.0\n")
+	}
 	switch surface {
 	case "dark":
 		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.DarkBackground, p.Foreground)

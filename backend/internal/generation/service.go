@@ -47,7 +47,7 @@ func (s *Service) Generate(
 	}
 	shellStyle := record.ShellStyle
 	desktopStyle := record.DesktopStyle
-	barStyle := record.BarStyle
+	barStyle := session.NormalizeBarStyle(record.BarStyle)
 	if !record.ExtraConfigs {
 		shellStyle = session.ShellStyle{}
 		desktopStyle = session.DesktopStyle{}

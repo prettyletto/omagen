@@ -32,7 +32,7 @@ Item {
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ surface: "flat", detail: "native" })
     property var desktopStyle: ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous" })
     property string errorMessage: ""
 
     readonly property string backendPath: decodeURIComponent(
@@ -56,7 +56,7 @@ Item {
         if (border === "split") border = "split_top"
         return { borderStyle: border, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native" }
     }
-    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic" } }
+    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous" } }
 
     function open(payload) {
         let action = "open";
@@ -300,7 +300,7 @@ Item {
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native" });
         desktopStyle = ({ borderStyle: "solid", shape: "native", spacing: "native", depth: "native" });
-        barStyle = ({ surface: "native", density: "native", attention: "semantic" });
+        barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous" });
         errorMessage = "";
         opened = !shouldClose;
         generationBusy = false;
