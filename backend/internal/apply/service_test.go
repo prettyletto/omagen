@@ -146,6 +146,36 @@ func TestApplyErrorAfterThemeSwitchIsRecoveredAsCommitted(t *testing.T) {
 	}
 }
 
+func TestRecoverCommittedApplyRemovesStaleOwnerMarker(t *testing.T) {
+	service, store, sessionID := setupApplyTest(t, &testApplier{})
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.ApplyPhase = session.ApplyPhaseCommitted
+	record.AppliedTheme = "test-theme"
+	record.AppliedGeneration = "generation-1"
+	record.AppliedVariant = "source"
+	record.AppliedDisplayName = "Test Theme"
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(service.themesRoot, record.AppliedTheme)
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeOwnerMarker(destination, sessionID); err != nil {
+		t.Fatal(err)
+	}
+	handled, err := service.RecoverPending(sessionID)
+	if err != nil || !handled {
+		t.Fatalf("handled=%t err=%v", handled, err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, ".omagen-owner")); !os.IsNotExist(err) {
+		t.Fatalf("stale owner marker remains, err=%v", err)
+	}
+}
+
 func TestPreparedApplyActiveThemeWithoutOwnershipDoesNotCommit(t *testing.T) {
 	service, store, sessionID := setupApplyTest(t, &inspectingApplier{theme: "test-theme"})
 	record, err := store.Load(sessionID)

@@ -21,7 +21,6 @@ Item {
     property bool demoBusy: false
     property bool demoActive: false
     property bool pendingDemo: false
-    property bool pendingCancelAfterDemo: false
     property bool pendingApplyAfterDemo: false
     property bool recoveryBusy: false
     property string route: "unknown"
@@ -283,7 +282,6 @@ Item {
         errorMessage = "";
         cancelBusy = true;
         demoBusy = false;
-        pendingCancelAfterDemo = false;
         pendingDemo = false;
         pendingApplyAfterDemo = false;
         // The backend cancel command closes any demo, recovers an interrupted
@@ -312,7 +310,6 @@ Item {
         demoBusy = false;
         demoActive = false;
         pendingDemo = false;
-        pendingCancelAfterDemo = false;
         pendingApplyAfterDemo = false;
         pendingApplyVariant = "";
         pendingApplyName = "";
@@ -542,11 +539,6 @@ Item {
                 return;
             }
             root.demoActive = false;
-            if (root.pendingCancelAfterDemo) {
-                root.pendingCancelAfterDemo = false;
-                backend.cancelSession(session.sessionId);
-                return;
-            }
             if (root.pendingApplyAfterDemo) {
                 root.pendingApplyAfterDemo = false;
                 const variant = root.pendingApplyVariant;
@@ -565,9 +557,6 @@ Item {
         onDemoCloseFailed: function(message) {
             root.demoBusy = false;
             root.errorMessage = message;
-            if (root.pendingCancelAfterDemo) {
-                root.pendingCancelAfterDemo = false;
-            }
             if (root.pendingApplyAfterDemo) {
                 // A failed Demo close must abort this Apply attempt. Keeping
                 // applyBusy/pendingApplyAfterDemo set would leave the UI

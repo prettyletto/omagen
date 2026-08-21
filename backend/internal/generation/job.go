@@ -143,20 +143,18 @@ func (j job) run(
 		return fmt.Errorf("unsupported generation variant %q", j.variant)
 	}
 
-	if j.variant == Source || j.variant == Calm || j.variant == Mute || j.variant == Deep || j.variant == Vibrant || j.variant == Balanced {
-		var err error
-		generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
-		if err != nil {
-			return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
-		}
-		generatedPalette, err = semanticpalette.EnsureANSIDistinctAfterContrast(
-			generatedPalette,
-			j.settings.Contrast.ANSI,
-			j.settings.Contrast.BrightANSI,
-		)
-		if err != nil {
-			return fmt.Errorf("finalize ANSI palette for %s: %w", j.variant, err)
-		}
+	var err error
+	generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
+	if err != nil {
+		return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
+	}
+	generatedPalette, err = semanticpalette.EnsureANSIDistinctAfterContrast(
+		generatedPalette,
+		j.settings.Contrast.ANSI,
+		j.settings.Contrast.BrightANSI,
+	)
+	if err != nil {
+		return fmt.Errorf("finalize ANSI palette for %s: %w", j.variant, err)
 	}
 
 	if err := theme.WriteColors(

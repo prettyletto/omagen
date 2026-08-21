@@ -360,20 +360,7 @@ func beforeClients(clients map[string]clientInfo) []clientInfo {
 }
 func (s *Service) saveState(state State) error {
 	path := s.statePath(state.SessionID)
-	data, err := json.MarshalIndent(state, "", "  ")
-	if err != nil {
-		return err
-	}
-	data = append(data, '\n')
-	tmp := path + ".tmp"
-	if err = os.WriteFile(tmp, data, 0600); err != nil {
-		return err
-	}
-	if err = os.Rename(tmp, path); err != nil {
-		_ = os.Remove(tmp)
-		return err
-	}
-	return nil
+	return fsutil.AtomicWriteJSON(path, state, 0600)
 }
 func (s *Service) loadState(id string) (State, error) {
 	data, err := os.ReadFile(s.statePath(id))

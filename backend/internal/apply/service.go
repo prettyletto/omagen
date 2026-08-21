@@ -234,6 +234,10 @@ func (s *Service) finishCommitted(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("load committed session: %w", err)
 	}
+	// A crash can leave the ownership marker behind after the committed
+	// transaction was persisted. It is only a recovery hint, so cleanup is
+	// deliberately best-effort and must not block session finalization.
+	_ = fsutil.RemoveFileAndSync(filepath.Join(s.themesRoot, record.AppliedTheme, ".omagen-owner"))
 	if err := s.sessions.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)
 	}

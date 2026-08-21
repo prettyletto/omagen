@@ -68,7 +68,7 @@ func TestRunPing(t *testing.T) {
 	if code := Run([]string{"ping"}, &out, &err); code != 0 {
 		t.Fatalf("code=%d err=%q", code, err.String())
 	}
-	if !strings.Contains(out.String(), `"ok":true`) || !strings.Contains(out.String(), `"version":"dev"`) {
+	if !strings.Contains(out.String(), `"ok":true`) || !strings.Contains(out.String(), `"version":"1.0.0"`) {
 		t.Fatalf("output=%q", out.String())
 	}
 }

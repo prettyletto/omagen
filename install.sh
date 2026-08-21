@@ -4,7 +4,6 @@ set -Eeuo pipefail
 PLUGIN_ID="pretty.omagen"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID"
-MODE="dev"
 
 # Omarchy's shell may be installed in the user's checkout rather than the
 # system path. Prefer a valid existing OMARCHY_PATH, then resolve the paths
@@ -21,17 +20,12 @@ done
 
 usage() {
     cat <<EOF
-Usage: $0 [--dev|--copy]
-
-  --dev   Build and fast-sync the checkout into the Omarchy plugin directory (default).
-  --copy  Build and copy a self-contained plugin installation.
+Usage: $0
 EOF
 }
 
 for arg in "$@"; do
     case "$arg" in
-        --dev) MODE="dev" ;;
-        --copy) MODE="copy" ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; exit 2 ;;
     esac
@@ -42,7 +36,7 @@ mkdir -p "$SRC_DIR/bin"
 go -C "$SRC_DIR/backend" build -o "$SRC_DIR/bin/omagen" ./cmd/omagen
 chmod +x "$SRC_DIR/bin/omagen"
 
-echo "Installing Omagen ($MODE mode)..."
+echo "Installing Omagen..."
 mkdir -p "$DEST_DIR"
 
 if [[ -L "$DEST_DIR" ]]; then

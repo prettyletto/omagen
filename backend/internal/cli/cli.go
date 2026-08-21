@@ -25,6 +25,8 @@ type pingResponse struct {
 	Version string `json:"version"`
 }
 
+const BackendVersion = "1.0.0"
+
 type cancelResponse struct {
 	OK        bool   `json:"ok"`
 	SessionID string `json:"session_id"`
@@ -107,7 +109,7 @@ func Run(
 			stderr,
 			pingResponse{
 				OK:      true,
-				Version: "dev",
+				Version: BackendVersion,
 			},
 		)
 

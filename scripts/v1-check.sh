@@ -58,8 +58,9 @@ PY
 
 section "Manifest"
 [[ -f "$MANIFEST" ]] || fail "manifest.json missing"
-python3 - "$MANIFEST" <<'PY'
+python3 - "$MANIFEST" "$BIN" <<'PY'
 import json
+import subprocess
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as stream:
@@ -69,6 +70,10 @@ if manifest.get("id") != "pretty.omagen":
     raise SystemExit(f"unexpected plugin id: {manifest.get('id')!r}")
 if manifest.get("keepLoaded") is not True:
     raise SystemExit("manifest keepLoaded must be true")
+
+binary = json.loads(subprocess.check_output([sys.argv[2], "ping"], text=True))
+if manifest.get("version") != binary.get("version"):
+    raise SystemExit(f"manifest version {manifest.get('version')!r} does not match binary version {binary.get('version')!r}")
 PY
 
 section "Omarchy plugin validator"
@@ -104,9 +109,9 @@ for relative in "${demo_files[@]}"; do
     [[ -e "$ROOT/$relative" ]] || fail "missing demo asset: $relative"
 done
 
-section "No broken plugin symlinks"
+section "No plugin symlinks"
 while IFS= read -r -d '' link; do
-    [[ -e "$link" ]] || fail "broken symlink: ${link#$ROOT/}"
+    fail "symlink is not allowed in V1 package: ${link#$ROOT/}"
 done < <(find "$ROOT" -type l -print0)
 
 section "QML syntax"
