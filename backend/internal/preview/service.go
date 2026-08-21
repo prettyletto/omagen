@@ -71,6 +71,13 @@ func (s *Service) applyLocked(request Request) (Result, error) {
 	if active.SessionID != request.SessionID {
 		return Result{}, fmt.Errorf("%w: active=%s requested=%s", session.ErrSessionNotActive, active.SessionID, request.SessionID)
 	}
+	record, err := s.sessions.Load(request.SessionID)
+	if err != nil {
+		return Result{}, fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return Result{}, fmt.Errorf("%w: cannot preview while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
 	candidate, err := s.candidateDir(request)
 	if err != nil {
 		return Result{}, err
@@ -89,10 +96,6 @@ func (s *Service) applyLocked(request Request) (Result, error) {
 	pid, already, err := s.applier.ApplyThemePreview(themeName, logPath)
 	if err != nil {
 		return Result{}, fmt.Errorf("apply preview theme %s: %w", themeName, err)
-	}
-	record, err := s.sessions.Load(request.SessionID)
-	if err != nil {
-		return Result{}, fmt.Errorf("reload session after preview: %w", err)
 	}
 	record.PreviewVariant = string(request.Variant)
 	if err := s.sessions.Save(record); err != nil {

@@ -45,6 +45,9 @@ func (s *Service) Generate(
 			err,
 		)
 	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return Result{}, fmt.Errorf("%w: cannot generate while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
 	shellStyle := record.ShellStyle
 	desktopStyle := record.DesktopStyle
 	barStyle := session.NormalizeBarStyle(record.BarStyle)

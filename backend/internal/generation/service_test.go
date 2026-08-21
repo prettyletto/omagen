@@ -3,6 +3,7 @@ package generation
 import (
 	"bytes"
 	"context"
+	"errors"
 	"image"
 	"image/color"
 	"image/png"
@@ -65,6 +66,27 @@ func TestGenerate(t *testing.T) {
 		if content, err := os.ReadFile(background); err != nil || !bytes.Equal(content, imageData) {
 			t.Fatalf("variant %s has bad background: %v", variant.Variant, err)
 		}
+	}
+}
+
+func TestGenerateRejectsPendingApply(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "pending",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+		ApplyPhase:         session.ApplyPhaseCommitted,
+		AppliedTheme:       "theme-name",
+		AppliedGeneration:  "generation-1",
+		AppliedVariant:     "source",
+		AppliedDisplayName: "Theme Name",
+	}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: record.SessionID, SourceImage: "missing"})
+	if !errors.Is(err, session.ErrApplyInProgress) {
+		t.Fatalf("error=%v, want ErrApplyInProgress", err)
 	}
 }
 

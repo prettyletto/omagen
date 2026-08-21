@@ -20,8 +20,12 @@ type Service struct{ sessions *session.Store }
 func NewService(sessions *session.Store) *Service { return &Service{sessions: sessions} }
 
 func (s *Service) Open(sessionID string) (OpenResult, error) {
-	if _, err := s.sessions.Load(sessionID); err != nil {
+	record, err := s.sessions.Load(sessionID)
+	if err != nil {
 		return OpenResult{}, fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return OpenResult{}, fmt.Errorf("%w: cannot open Demo while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
 	}
 	state, stateErr := s.loadState(sessionID)
 	if stateErr != nil && !errors.Is(stateErr, os.ErrNotExist) {
