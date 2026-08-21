@@ -568,9 +568,15 @@ Item {
             if (root.pendingCancelAfterDemo) {
                 root.pendingCancelAfterDemo = false;
             }
-            // Never restore a theme while Demo windows may still be closing.
-            // The user can retry Demo shutdown after Hyprland has caught up.
-            // Permanent Apply intentionally remains pending for the same reason.
+            if (root.pendingApplyAfterDemo) {
+                // A failed Demo close must abort this Apply attempt. Keeping
+                // applyBusy/pendingApplyAfterDemo set would leave the UI
+                // waiting forever for a demoClosed signal that will not come.
+                root.pendingApplyAfterDemo = false;
+                root.pendingApplyVariant = "";
+                root.pendingApplyName = "";
+                root.applyBusy = false;
+            }
         }
         onThemeApplied: function(sessionId, generationId, variant, themeName) {
             if (root.closeAfterCancel)
