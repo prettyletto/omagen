@@ -631,7 +631,6 @@ Item {
         errorMessage: root.errorMessage
 
         onChooseImageRequested: root.chooseImage()
-        onSettingsRequested: root.openSettings()
         onExtraConfigsToggled: function(enabled) { root.extraConfigsEnabled = enabled }
         onContinueRequested: root.continueFromSetup()
         onHideRequested: root.close()
