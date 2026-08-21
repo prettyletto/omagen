@@ -3,6 +3,12 @@ set -Eeuo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT="${1:-$ROOT/bin/omagen}"
+TOOLCHAIN_VERSION="$(awk '$1 == "go" { print $2; exit }' "$ROOT/backend/go.mod")"
+
+if [[ -z "$TOOLCHAIN_VERSION" ]]; then
+    printf 'backend/go.mod does not declare a Go version\n' >&2
+    exit 1
+fi
 
 if [[ "$OUTPUT" != /* ]]; then
     OUTPUT="$ROOT/$OUTPUT"
@@ -16,7 +22,7 @@ mkdir -p "$(dirname -- "$OUTPUT")"
 (
     cd "$ROOT/backend"
     GOFLAGS= \
-    GOTOOLCHAIN=local \
+    GOTOOLCHAIN="go$TOOLCHAIN_VERSION" \
     GOEXPERIMENT=nodwarf5 \
     CGO_ENABLED=0 \
     GOOS=linux \
