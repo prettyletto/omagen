@@ -36,9 +36,7 @@ func (s *Service) Generate(
 	ctx context.Context,
 	request Request,
 ) (Result, error) {
-	record, err := s.sessions.Load(
-		request.SessionID,
-	)
+	record, err := s.loadActiveRecord(request.SessionID)
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"load session: %w",
@@ -159,25 +157,12 @@ func (s *Service) Generate(
 		return Result{}, fmt.Errorf("sync temporary generation: %w", err)
 	}
 
-	renamed, err := fsutil.RenameAndSyncNoReplace(tmpRoot, finalRoot)
-	if renamed {
-		committed = true
-	}
+	committed, err = s.commitGeneration(tmpRoot, finalRoot, request, generationID)
 	if err != nil {
-		return Result{}, fmt.Errorf(
-			"commit generation: %w",
-			err,
-		)
+		return Result{}, fmt.Errorf("commit generation: %w", err)
 	}
-	record, err = s.sessions.Load(request.SessionID)
-	if err != nil {
-		return Result{}, fmt.Errorf("reload session after generation: %w", err)
-	}
-	record.SourceImage = request.SourceImage
-	record.GenerationID = generationID
-	record.PreviewVariant = ""
-	if err := s.sessions.Save(record); err != nil {
-		return Result{}, fmt.Errorf("persist generation progress: %w", err)
+	if !committed {
+		return Result{}, fmt.Errorf("commit generation: no changes committed")
 	}
 
 	return buildResult(
@@ -185,6 +170,67 @@ func (s *Service) Generate(
 		finalRoot,
 		effectiveSettings,
 	), nil
+}
+
+func (s *Service) loadActiveRecord(sessionID string) (session.Record, error) {
+	lock, err := fsutil.AcquireFileLock(s.sessions.MutationLockPath())
+	if err != nil {
+		return session.Record{}, fmt.Errorf("acquire session mutation lock: %w", err)
+	}
+	defer lock.Close()
+	active, exists, err := s.sessions.LoadActive()
+	if err != nil {
+		return session.Record{}, fmt.Errorf("load active session: %w", err)
+	}
+	if !exists || active.SessionID != sessionID {
+		return session.Record{}, session.ErrSessionNotActive
+	}
+	record, err := s.sessions.Load(sessionID)
+	if err != nil {
+		return session.Record{}, fmt.Errorf("load session: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return session.Record{}, fmt.Errorf("%w: cannot generate while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
+	return record, nil
+}
+
+func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, generationID string) (bool, error) {
+	lock, err := fsutil.AcquireFileLock(s.sessions.MutationLockPath())
+	if err != nil {
+		return false, fmt.Errorf("acquire session mutation lock: %w", err)
+	}
+	defer lock.Close()
+	active, exists, err := s.sessions.LoadActive()
+	if err != nil {
+		return false, fmt.Errorf("load active session: %w", err)
+	}
+	if !exists || active.SessionID != request.SessionID {
+		return false, session.ErrSessionNotActive
+	}
+	record, err := s.sessions.Load(request.SessionID)
+	if err != nil {
+		return false, fmt.Errorf("reload session after generation: %w", err)
+	}
+	if record.ApplyPhase != session.ApplyPhaseNone {
+		return false, fmt.Errorf("%w: cannot commit generation while phase is %q", session.ErrApplyInProgress, record.ApplyPhase)
+	}
+	renamed, err := fsutil.RenameAndSyncNoReplace(tmpRoot, finalRoot)
+	if !renamed {
+		return false, err
+	}
+	if err != nil {
+		_ = fsutil.RemoveAllAndSync(finalRoot)
+		return false, err
+	}
+	record.SourceImage = request.SourceImage
+	record.GenerationID = generationID
+	record.PreviewVariant = ""
+	if err := s.sessions.Save(record); err != nil {
+		_ = fsutil.RemoveAllAndSync(finalRoot)
+		return false, fmt.Errorf("persist generation progress: %w", err)
+	}
+	return true, nil
 }
 
 type jobResult struct {

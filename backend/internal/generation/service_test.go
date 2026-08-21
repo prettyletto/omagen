@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
@@ -37,12 +38,20 @@ func generationSettingsStore(t *testing.T) *settings.Store {
 	return store
 }
 
-func TestGenerate(t *testing.T) {
-	store := generationStore(t)
-	record := session.Record{SessionID: "session", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
+func saveGenerationRecord(t *testing.T, store *session.Store, record session.Record) {
+	t.Helper()
 	if err := store.Save(record); err != nil {
 		t.Fatal(err)
 	}
+	if err := store.SaveActive(session.ActiveRecord{SessionID: record.SessionID, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGenerate(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{SessionID: "session", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
+	saveGenerationRecord(t, store, record)
 	imagePath := filepath.Join(t.TempDir(), "source.xyz")
 	imageData := testPNG(t)
 	if err := os.WriteFile(imagePath, imageData, 0o644); err != nil {
@@ -81,24 +90,41 @@ func TestGenerateRejectsPendingApply(t *testing.T) {
 		AppliedVariant:     "source",
 		AppliedDisplayName: "Theme Name",
 	}
-	if err := store.Save(record); err != nil {
-		t.Fatal(err)
-	}
+	saveGenerationRecord(t, store, record)
 	_, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: record.SessionID, SourceImage: "missing"})
 	if !errors.Is(err, session.ErrApplyInProgress) {
 		t.Fatalf("error=%v, want ErrApplyInProgress", err)
 	}
 }
 
+func TestCommitGenerationDiscardsWhenSessionWasCancelled(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{SessionID: "cancelled", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
+	saveGenerationRecord(t, store, record)
+	generationsRoot := filepath.Join(store.SessionDir(record.SessionID), "generations")
+	tmpRoot := filepath.Join(generationsRoot, ".generation.tmp")
+	finalRoot := filepath.Join(generationsRoot, "generation-1")
+	if err := os.MkdirAll(tmpRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ClearActive(record.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewService(store, generationSettingsStore(t)).commitGeneration(tmpRoot, finalRoot, Request{SessionID: record.SessionID, SourceImage: "source"}, "generation-1"); !errors.Is(err, session.ErrSessionNotActive) {
+		t.Fatalf("error=%v, want ErrSessionNotActive", err)
+	}
+	if _, err := os.Stat(finalRoot); !os.IsNotExist(err) {
+		t.Fatalf("cancelled generation was published, err=%v", err)
+	}
+}
+
 func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	store := generationStore(t)
-	if err := store.Save(session.Record{
+	saveGenerationRecord(t, store, session.Record{
 		SessionID:          "session",
 		OriginalTheme:      "theme",
 		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	imagePath := filepath.Join(t.TempDir(), "source.xyz")
 	imageData := testPNG(t)
@@ -174,7 +200,7 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 
 func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 	store := generationStore(t)
-	if err := store.Save(session.Record{
+	saveGenerationRecord(t, store, session.Record{
 		SessionID:          "styled-session",
 		OriginalTheme:      "theme",
 		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
@@ -182,9 +208,7 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 		ShellStyle:         session.ShellStyle{Surface: "accent", Detail: "edge"},
 		DesktopStyle:       session.DefaultDesktopStyle(),
 		BarStyle:           session.BarStyle{Surface: "accent", Density: "comfortable", Attention: "accent", Form: "docked"},
-	}); err != nil {
-		t.Fatal(err)
-	}
+	})
 
 	imagePath := filepath.Join(t.TempDir(), "source.png")
 	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
@@ -272,9 +296,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		}
 	}
 	record := session.Record{SessionID: "id", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "x", Path: "y"}}
-	if err := store.Save(record); err != nil {
-		t.Fatal(err)
-	}
+	saveGenerationRecord(t, store, record)
 	if _, err := svc.Generate(context.Background(), Request{SessionID: "id", SourceImage: filepath.Join(t.TempDir(), "none")}); err == nil {
 		t.Fatal("expected missing source error")
 	}
