@@ -11,6 +11,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type ThemeApplier interface {
@@ -115,6 +116,9 @@ func (s *Service) Apply(r Request) (Result, error) {
 	}
 	candidate := filepath.Join(s.sessions.SessionDir(r.SessionID), "generations", r.GenerationID, string(r.Variant))
 	if err := validateCandidate(candidate, s.sessions.SessionDir(r.SessionID)); err != nil {
+		return Result{}, err
+	}
+	if err := stageOptionalAssets(candidate, s.sessions.SessionDir(r.SessionID), r); err != nil {
 		return Result{}, err
 	}
 	destination := filepath.Join(s.themesRoot, name.Slug)
@@ -281,6 +285,44 @@ func validateCandidate(path, base string) error {
 		return fmt.Errorf("candidate backgrounds: %w", err)
 	}
 	return nil
+}
+
+func stageOptionalAssets(candidate, sessionDir string, request Request) error {
+	if request.GenerateUnlock {
+		source, err := candidateWallpaper(candidate)
+		if err != nil {
+			return fmt.Errorf("find wallpaper for unlock image: %w", err)
+		}
+		if err := theme.WriteUnlock(candidate, source); err != nil {
+			return fmt.Errorf("write unlock image: %w", err)
+		}
+	}
+	if request.CapturePreview {
+		capturePath := filepath.Join(sessionDir, "apply-preview.png")
+		if info, err := os.Stat(capturePath); err != nil {
+			return fmt.Errorf("inspect captured preview: %w", err)
+		} else if !info.Mode().IsRegular() {
+			return fmt.Errorf("captured preview is not a regular file")
+		}
+		if err := theme.WritePreview(candidate, capturePath); err != nil {
+			return fmt.Errorf("write live preview image: %w", err)
+		}
+	}
+	return nil
+}
+
+func candidateWallpaper(candidate string) (string, error) {
+	matches, err := filepath.Glob(filepath.Join(candidate, "backgrounds", "wallpaper.*"))
+	if err != nil {
+		return "", err
+	}
+	for _, path := range matches {
+		info, statErr := os.Stat(path)
+		if statErr == nil && info.Mode().IsRegular() {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no generated wallpaper found")
 }
 
 func publish(source, destination, parent, sessionID string) error {

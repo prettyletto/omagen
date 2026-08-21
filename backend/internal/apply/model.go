@@ -6,6 +6,8 @@ type Request struct {
 	SessionID, GenerationID string
 	Variant                 generation.Variant
 	ThemeName               string
+	GenerateUnlock          bool
+	CapturePreview          bool
 }
 type Result struct {
 	SessionID    string             `json:"session_id"`

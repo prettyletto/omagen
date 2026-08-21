@@ -216,10 +216,18 @@ func TestApplyThemePreviewWaitsForCriticalThemeApply(t *testing.T) {
 }
 
 func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	bin := t.TempDir()
 	realCommand := filepath.Join(bin, "omarchy-restart-terminal")
 	if err := os.WriteFile(realCommand, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
 		t.Fatal(err)
+	}
+	for _, command := range previewCacheCommands {
+		path := filepath.Join(bin, command)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\nprintf 'executed' > \"$HOME/preview-cache-command-ran\"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	t.Setenv("PATH", bin)
 
@@ -233,6 +241,7 @@ func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer sync.close()
+	shimDirectory := sync.directory
 
 	cmd := exec.Command("/bin/bash", "-lc", "omarchy-restart-terminal")
 	cmd.Env = append(os.Environ(), sync.environment()...)
@@ -242,10 +251,78 @@ func TestTerminalReloadSyncCanBeConsumedByDemo(t *testing.T) {
 	if err := sync.persist(); err != nil {
 		t.Fatal(err)
 	}
+	for _, command := range previewCacheCommands {
+		cmd := exec.Command("/bin/bash", "-lc", command)
+		cmd.Env = append(os.Environ(), sync.environment()...)
+		if output, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("run preview cache shim %s: %v: %s", command, err, output)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(home, "preview-cache-command-ran")); !os.IsNotExist(err) {
+		t.Fatalf("preview cache command ran, err=%v", err)
+	}
 	if err := WaitForPendingTerminalReload(sessionDir); err != nil {
 		t.Fatalf("wait for demo: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(previewLogs, terminalReloadPendingFile)); !os.IsNotExist(err) {
 		t.Fatalf("pending marker still exists, err=%v", err)
+	}
+	if _, err := os.Stat(shimDirectory); !os.IsNotExist(err) {
+		t.Fatalf("preview shim directory still exists, err=%v", err)
+	}
+}
+
+func TestTerminalReloadSyncCloseCleansPendingMarkerAndShims(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "omarchy-restart-terminal"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	previewLogs := filepath.Join(t.TempDir(), "preview-logs")
+	if err := os.MkdirAll(previewLogs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sync, err := newTerminalReloadSync(filepath.Join(previewLogs, "preview.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sync.persist(); err != nil {
+		t.Fatal(err)
+	}
+	if err := sync.close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(previewLogs, terminalReloadPendingFile)); !os.IsNotExist(err) {
+		t.Fatalf("pending marker still exists after close, err=%v", err)
+	}
+	if _, err := os.Stat(sync.directory); !os.IsNotExist(err) {
+		t.Fatalf("preview shim directory still exists after close, err=%v", err)
+	}
+}
+
+func TestNewTerminalReloadSyncRemovesOrphanedShimDirectories(t *testing.T) {
+	bin := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bin, "omarchy-restart-terminal"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+
+	previewLogs := filepath.Join(t.TempDir(), "preview-logs")
+	if err := os.MkdirAll(filepath.Join(previewLogs, ".terminal-reload-orphan"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(previewLogs, ".terminal-reload-orphan", "omarchy-theme-bg-cache"), []byte("stale"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sync, err := newTerminalReloadSync(filepath.Join(previewLogs, "preview.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sync.close()
+	if _, err := os.Stat(filepath.Join(previewLogs, ".terminal-reload-orphan")); !os.IsNotExist(err) {
+		t.Fatalf("orphaned shim directory still exists, err=%v", err)
 	}
 }

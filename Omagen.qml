@@ -22,6 +22,9 @@ Item {
     property bool demoActive: false
     property bool pendingDemo: false
     property bool pendingApplyAfterDemo: false
+    property bool pendingApplyCapture: false
+    property bool pendingApplyAbortAfterDemo: false
+    property bool pendingApplyUnlock: false
     property bool recoveryBusy: false
     property string route: "unknown"
     property var resumableSession: null
@@ -237,18 +240,61 @@ Item {
         if (filename === "") return "Omagen Theme"
         return filename.split(/\s+/).map(function(word) { return word.length ? word.charAt(0).toUpperCase() + word.slice(1) : word }).join(" ")
     }
-    function applyTheme(variant, name) {
+    function applyTheme(variant, name, generateUnlock, capturePreview) {
         if (!session.workspaceReady || applyBusy || previewBusy || cancelBusy || demoBusy) return
         errorMessage = ""; applyBusy = true
+
+        pendingApplyVariant = variant
+        pendingApplyName = name
+        pendingApplyUnlock = generateUnlock === true
+        pendingApplyCapture = capturePreview === true
+
+        if (pendingApplyCapture) {
+            pendingApplyAfterDemo = true
+            demoBusy = true
+            opened = false
+            if (demoActive) {
+                previewBusy = true
+                backend.applyPreview(session.sessionId, session.generationId, variant)
+            } else {
+                backend.openDemo(session.sessionId)
+            }
+            return
+        }
+
         if (demoActive) {
             pendingApplyAfterDemo = true
-            pendingApplyVariant = variant
-            pendingApplyName = name
             demoBusy = true
             backend.closeDemo(session.sessionId)
             return
         }
-        backend.applyTheme(session.sessionId, session.generationId, variant, name)
+        pendingApplyAfterDemo = false
+        backend.applyTheme(session.sessionId, session.generationId, variant, name, pendingApplyUnlock, false)
+    }
+
+    function resetPendingApply() {
+        pendingApplyAfterDemo = false
+        pendingApplyCapture = false
+        pendingApplyAbortAfterDemo = false
+        pendingApplyUnlock = false
+        pendingApplyVariant = ""
+        pendingApplyName = ""
+    }
+
+    function failPendingApply(message) {
+        errorMessage = message
+        previewBusy = false
+        pendingApplyCapture = false
+        if (demoActive) {
+            pendingApplyAbortAfterDemo = true
+            demoBusy = true
+            backend.closeDemo(session.sessionId)
+        } else {
+            resetPendingApply()
+            applyBusy = false
+            demoBusy = false
+            opened = true
+        }
     }
 
     function demoVariant(variant) {
@@ -284,6 +330,9 @@ Item {
         demoBusy = false;
         pendingDemo = false;
         pendingApplyAfterDemo = false;
+        pendingApplyCapture = false;
+        pendingApplyAbortAfterDemo = false;
+        pendingApplyUnlock = false;
         // The backend cancel command closes any demo, recovers an interrupted
         // Apply, restores the original theme/background, and removes the
         // session.  It is deliberately the single cleanup path for Quit and
@@ -311,6 +360,9 @@ Item {
         demoActive = false;
         pendingDemo = false;
         pendingApplyAfterDemo = false;
+        pendingApplyCapture = false;
+        pendingApplyAbortAfterDemo = false;
+        pendingApplyUnlock = false;
         pendingApplyVariant = "";
         pendingApplyName = "";
         applyBusy = false;
@@ -483,6 +535,12 @@ Item {
             if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
             session.markPreviewed(variant);
 
+            if (root.pendingApplyCapture) {
+                root.demoBusy = true;
+                backend.captureDemoPreview(session.sessionId);
+                return;
+            }
+
             if (root.pendingDemo) {
                 root.pendingDemo = false;
                 root.demoBusy = false;
@@ -496,6 +554,10 @@ Item {
             if (root.closeAfterCancel)
                 return;
             root.previewBusy = false;
+            if (root.pendingApplyCapture) {
+                root.failPendingApply(message)
+                return
+            }
             root.errorMessage = message;
             if (root.pendingDemo) {
                 root.pendingDemo = false;
@@ -512,6 +574,11 @@ Item {
                 return;
             }
             root.demoActive = true;
+            if (root.pendingApplyCapture) {
+                root.previewBusy = true;
+                backend.applyPreview(session.sessionId, session.generationId, root.pendingApplyVariant);
+                return;
+            }
             if (root.pendingDemo) {
                 root.previewBusy = true;
                 backend.applyPreview(session.sessionId, session.generationId, session.selectedVariant);
@@ -526,6 +593,33 @@ Item {
             root.demoBusy = false;
             root.demoActive = false;
             root.pendingDemo = false;
+            if (root.pendingApplyAfterDemo || root.pendingApplyCapture) {
+                root.resetPendingApply()
+                root.applyBusy = false
+            }
+            root.errorMessage = message;
+            root.opened = true;
+        }
+        onDemoCaptured: function(sessionId, previewPath) {
+            if (root.closeAfterCancel)
+                return;
+            if (sessionId !== session.sessionId) {
+                root.failPendingApply("Backend captured a different Demo session")
+                return;
+            }
+            if (!root.pendingApplyCapture)
+                return;
+            root.demoBusy = true;
+            backend.closeDemo(session.sessionId);
+        }
+        onDemoCaptureFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
+            if (root.pendingApplyCapture) {
+                root.failPendingApply(message)
+                return
+            }
+            root.demoBusy = false;
             root.errorMessage = message;
             root.opened = true;
         }
@@ -536,17 +630,25 @@ Item {
                 return;
             }
             root.demoActive = false;
+            if (root.pendingApplyAbortAfterDemo) {
+                root.resetPendingApply()
+                root.applyBusy = false
+                root.opened = true
+                return
+            }
             if (root.pendingApplyAfterDemo) {
-                root.pendingApplyAfterDemo = false;
                 const variant = root.pendingApplyVariant;
                 const name = root.pendingApplyName;
-                root.pendingApplyVariant = "";
-                root.pendingApplyName = "";
+                const generateUnlock = root.pendingApplyUnlock;
+                const capturePreview = root.pendingApplyCapture;
+                root.resetPendingApply();
                 backend.applyTheme(
                     session.sessionId,
                     session.generationId,
                     variant,
-                    name
+                    name,
+                    generateUnlock,
+                    capturePreview
                 );
                 return;
             }
@@ -554,13 +656,11 @@ Item {
         onDemoCloseFailed: function(message) {
             root.demoBusy = false;
             root.errorMessage = message;
-            if (root.pendingApplyAfterDemo) {
+            if (root.pendingApplyAfterDemo || root.pendingApplyAbortAfterDemo) {
                 // A failed Demo close must abort this Apply attempt. Keeping
                 // applyBusy/pendingApplyAfterDemo set would leave the UI
                 // waiting forever for a demoClosed signal that will not come.
-                root.pendingApplyAfterDemo = false;
-                root.pendingApplyVariant = "";
-                root.pendingApplyName = "";
+                root.resetPendingApply();
                 root.applyBusy = false;
             }
         }
@@ -691,7 +791,9 @@ Item {
         }
         onHideRequested: root.close()
         onCancelRequested: root.cancelSession()
-        onApplyRequested: function(variant, name) { root.applyTheme(variant, name) }
+        onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
+            root.applyTheme(variant, name, generateUnlock, capturePreview)
+        }
     }
 
     Views.SettingsWindow {

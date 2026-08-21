@@ -12,6 +12,12 @@ import (
 
 const terminalReloadWatchdog = 5 * time.Second
 const terminalReloadPendingFile = "terminal-reload.pending"
+const terminalReloadDirectoryPrefix = ".terminal-reload-"
+
+var previewCacheCommands = []string{
+	"omarchy-theme-switcher",
+	"omarchy-theme-bg-cache",
+}
 
 type terminalReloadSync struct {
 	directory string
@@ -29,7 +35,10 @@ func newTerminalReloadSync(logPath string) (*terminalReloadSync, error) {
 	if err := clearPendingTerminalReload(parent); err != nil {
 		return nil, fmt.Errorf("clear previous terminal reload marker: %w", err)
 	}
-	directory, err := os.MkdirTemp(parent, ".terminal-reload-")
+	if err := cleanupTerminalReloadDirectories(parent); err != nil {
+		return nil, fmt.Errorf("remove stale terminal reload directories: %w", err)
+	}
+	directory, err := os.MkdirTemp(parent, terminalReloadDirectoryPrefix)
 	if err != nil {
 		return nil, fmt.Errorf("create terminal reload marker directory: %w", err)
 	}
@@ -48,6 +57,13 @@ exit "$status"
 	if err := os.WriteFile(sync.shim, []byte(shim), 0755); err != nil {
 		_ = os.RemoveAll(directory)
 		return nil, fmt.Errorf("write terminal reload marker shim: %w", err)
+	}
+	const skip = "#!/bin/sh\nexit 0\n"
+	for _, command := range previewCacheCommands {
+		if err := os.WriteFile(filepath.Join(directory, command), []byte(skip), 0755); err != nil {
+			_ = os.RemoveAll(directory)
+			return nil, fmt.Errorf("write preview cache shim %s: %w", command, err)
+		}
 	}
 	return sync, nil
 }
@@ -104,7 +120,8 @@ func WaitForPendingTerminalReload(sessionDir string) error {
 	sync := &terminalReloadSync{directory: filepath.Dir(marker), marker: marker}
 	waitErr := sync.wait()
 	clearErr := clearPendingTerminalReload(parent)
-	return errors.Join(waitErr, clearErr)
+	cleanupErr := cleanupTerminalReloadDirectories(parent)
+	return errors.Join(waitErr, clearErr, cleanupErr)
 }
 
 func clearPendingTerminalReload(parent string) error {
@@ -132,6 +149,26 @@ func pendingTerminalReloadPath(parent string) string {
 	return filepath.Join(parent, terminalReloadPendingFile)
 }
 
+func cleanupTerminalReloadDirectories(parent string) error {
+	entries, err := os.ReadDir(parent)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var errs []error
+	for _, entry := range entries {
+		if !entry.IsDir() || !strings.HasPrefix(entry.Name(), terminalReloadDirectoryPrefix) {
+			continue
+		}
+		if err := os.RemoveAll(filepath.Join(parent, entry.Name())); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
 func validateMarkerPath(parent, marker string) error {
 	parent, err := filepath.Abs(parent)
 	if err != nil {
@@ -152,5 +189,17 @@ func (s *terminalReloadSync) close() error {
 	if s == nil || strings.TrimSpace(s.directory) == "" {
 		return nil
 	}
-	return os.RemoveAll(s.directory)
+	var errs []error
+	pendingPath := pendingTerminalReloadPath(filepath.Dir(s.directory))
+	if data, err := os.ReadFile(pendingPath); err == nil && filepath.Clean(strings.TrimSpace(string(data))) == filepath.Clean(s.marker) {
+		if err := os.Remove(pendingPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			errs = append(errs, err)
+		}
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		errs = append(errs, err)
+	}
+	if err := os.RemoveAll(s.directory); err != nil {
+		errs = append(errs, err)
+	}
+	return errors.Join(errs...)
 }

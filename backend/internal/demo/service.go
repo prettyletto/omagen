@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,9 +15,12 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type Service struct{ sessions *session.Store }
+
+const captureSettleDelay = 750 * time.Millisecond
 
 func NewService(sessions *session.Store) *Service { return &Service{sessions: sessions} }
 
@@ -245,6 +249,67 @@ func (s *Service) Close(sessionID string) (CloseResult, error) {
 	}
 	return CloseResult{OK: true, SessionID: sessionID, Closed: true}, nil
 }
+
+// CapturePreview takes a screenshot only for an Apply request. It deliberately
+// uses the Demo state monitor/workspace instead of the current focus, then
+// normalizes the result into the session's staged preview.png asset.
+func (s *Service) CapturePreview(sessionID string) (CaptureResult, error) {
+	if _, err := s.requireActiveIdle(sessionID); err != nil {
+		return CaptureResult{}, fmt.Errorf("inspect session: %w", err)
+	}
+	state, err := s.loadState(sessionID)
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("load demo state: %w", err)
+	}
+	monitor, err := resolveDemoMonitor(state)
+	if err != nil {
+		return CaptureResult{}, err
+	}
+	surviving, err := survivingWindows(state)
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("find demo windows: %w", err)
+	}
+	if missing := missingSlots(surviving); len(missing) > 0 {
+		return CaptureResult{}, fmt.Errorf("cannot capture Demo before all windows are ready: missing %s", strings.Join(slotNames(missing), ", "))
+	}
+	if err := focusMonitor(monitor.Name); err != nil {
+		return CaptureResult{}, err
+	}
+	if err := switchWorkspace(state.Workspace); err != nil {
+		return CaptureResult{}, err
+	}
+	if err := omarchy.WaitForPendingTerminalReload(s.sessions.SessionDir(sessionID)); err != nil {
+		return CaptureResult{}, fmt.Errorf("wait for Demo terminal reload: %w", err)
+	}
+	// Window classification completes before Open returns, but terminal/editor
+	// content and the shell bar need one compositor settle interval before the
+	// screenshot is useful as a gallery preview.
+	time.Sleep(captureSettleDelay)
+
+	sessionDir := s.sessions.SessionDir(sessionID)
+	rawPath := filepath.Join(sessionDir, ".demo-capture.png")
+	previewPath := filepath.Join(sessionDir, "apply-preview.png")
+	_ = os.Remove(rawPath)
+	cmd := exec.Command("grim", "-o", monitor.Name, rawPath)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return CaptureResult{}, fmt.Errorf("capture Demo monitor %q: %w: %s", monitor.Name, err, strings.TrimSpace(string(output)))
+	}
+	defer os.Remove(rawPath)
+	if err := theme.WritePreviewFile(previewPath, rawPath); err != nil {
+		return CaptureResult{}, fmt.Errorf("normalize Demo screenshot: %w", err)
+	}
+	return CaptureResult{OK: true, SessionID: sessionID, PreviewPath: previewPath}, nil
+}
+
+func slotNames(slots []Slot) []string {
+	result := make([]string, 0, len(slots))
+	for _, slot := range slots {
+		result = append(result, string(slot))
+	}
+	return result
+}
+
 func (s *Service) openResult(state State, reused bool) OpenResult {
 	return OpenResult{OK: true, SessionID: state.SessionID, Workspace: state.Workspace, DemoDir: state.DemoDir, LogPath: s.launchLogPath(state.SessionID), Reused: reused, Windows: cloneWindows(state.Windows)}
 }

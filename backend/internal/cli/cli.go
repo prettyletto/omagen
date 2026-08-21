@@ -171,14 +171,25 @@ func Run(
 }
 
 func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
-	if len(args) != 4 {
-		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name>")
+	if len(args) < 4 {
+		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview]")
 	}
 	variant, err := generation.ParseVariant(args[2])
 	if err != nil {
 		return fail(stderr, 2, "%v", err)
 	}
-	result, err := service.Apply(apply.Request{SessionID: args[0], GenerationID: args[1], Variant: variant, ThemeName: args[3]})
+	request := apply.Request{SessionID: args[0], GenerationID: args[1], Variant: variant, ThemeName: args[3]}
+	for _, arg := range args[4:] {
+		switch arg {
+		case "--unlock":
+			request.GenerateUnlock = true
+		case "--live-preview":
+			request.CapturePreview = true
+		default:
+			return fail(stderr, 2, "unknown apply option: %s", arg)
+		}
+	}
+	result, err := service.Apply(request)
 	if err != nil {
 		return fail(stderr, 1, "%v", err)
 	}
@@ -490,6 +501,15 @@ func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int
 			return fail(stderr, 2, "usage: omagen demo close <session_id>")
 		}
 		result, err := service.Close(args[1])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	case "capture":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen demo capture <session_id>")
+		}
+		result, err := service.CapturePreview(args[1])
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}

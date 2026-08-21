@@ -42,7 +42,7 @@ PanelWindow {
     signal variantSelected(string variant)
     signal testLiveRequested(string variant)
     signal demoRequested(string variant)
-    signal applyRequested(string variant, string name)
+    signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
 
     visible: active
     color: "transparent"
@@ -315,6 +315,8 @@ PanelWindow {
         id: themeNameDialog
         anchors.fill: parent
         busy: root.applyBusy
-        onConfirmed: function(name) { root.applyRequested(root.selectedVariant, name); }
+        onConfirmed: function(name, generateUnlock, capturePreview) {
+            root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview);
+        }
     }
 }

@@ -37,6 +37,8 @@ Item {
     signal demoOpenFailed(string message)
     signal demoClosed(string sessionId, bool closed)
     signal demoCloseFailed(string message)
+    signal demoCaptured(string sessionId, string previewPath)
+    signal demoCaptureFailed(string message)
 
     function beginSession(shellStyle, desktopStyle, barStyle) {
         const args = [root.executable, "session", "begin"];
@@ -63,9 +65,15 @@ Item {
     function generateTheme(sessionId, imagePath) { generationProcess.exec([root.executable, "generate", sessionId, imagePath]); }
     function describeGeneration(sessionId, generationId) { generationDescribeProcess.exec([root.executable, "generation", "describe", sessionId, generationId]); }
     function applyPreview(sessionId, generationId, variant) { previewProcess.exec([root.executable, "preview", "apply", sessionId, generationId, variant]); }
-    function applyTheme(sessionId, generationId, variant, name) { applyProcess.exec([root.executable, "apply", sessionId, generationId, variant, name]); }
+    function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview) {
+        const args = [root.executable, "apply", sessionId, generationId, variant, name];
+        if (generateUnlock) args.push("--unlock");
+        if (capturePreview) args.push("--live-preview");
+        applyProcess.exec(args);
+    }
     function openDemo(sessionId) { demoOpenProcess.exec([root.executable, "demo", "open", sessionId]); }
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
+    function captureDemoPreview(sessionId) { demoCaptureProcess.exec([root.executable, "demo", "capture", sessionId]); }
 
     Process {
         id: pingProcess
@@ -265,6 +273,20 @@ Item {
                 if (result.ok !== true || !result.session_id) { root.demoCloseFailed("Backend returned incomplete demo cleanup data"); return }
                 root.demoClosed(result.session_id, result.closed === true)
             } catch (error) { root.demoCloseFailed("Backend returned invalid demo cleanup JSON") }
+        }
+    }
+
+    Process {
+        id: demoCaptureProcess
+        stdout: StdioCollector { id: demoCaptureStdout; waitForEnd: true }
+        stderr: StdioCollector { id: demoCaptureStderr; waitForEnd: true }
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) { root.demoCaptureFailed(demoCaptureStderr.text.trim() || "Failed to capture Demo preview"); return }
+            try {
+                const result = JSON.parse(demoCaptureStdout.text)
+                if (result.ok !== true || !result.session_id || !result.preview_path) { root.demoCaptureFailed("Backend returned incomplete Demo capture data"); return }
+                root.demoCaptured(result.session_id, result.preview_path)
+            } catch (error) { root.demoCaptureFailed("Backend returned invalid Demo capture JSON") }
         }
     }
 }

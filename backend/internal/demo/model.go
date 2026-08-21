@@ -48,3 +48,9 @@ type CloseResult struct {
 	SessionID string `json:"session_id"`
 	Closed    bool   `json:"closed"`
 }
+
+type CaptureResult struct {
+	OK          bool   `json:"ok"`
+	SessionID   string `json:"session_id"`
+	PreviewPath string `json:"preview_path"`
+}

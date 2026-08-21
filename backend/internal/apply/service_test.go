@@ -2,6 +2,9 @@ package apply
 
 import (
 	"errors"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
@@ -89,6 +92,56 @@ func TestApplyFailureKeepsSessionActiveAndDoesNotPublish(t *testing.T) {
 	record, loadErr := store.Load(sessionID)
 	if loadErr != nil || record.ApplyPhase != session.ApplyPhasePrepared {
 		t.Fatalf("prepared transaction was not durable: record=%#v err=%v", record, loadErr)
+	}
+}
+
+func TestApplyStagesOptionalUnlockAndLivePreviewAssets(t *testing.T) {
+	service, store, sessionID := setupApplyTest(t, &testApplier{})
+	candidate := filepath.Join(store.SessionDir(sessionID), "generations", "generation-1", "source")
+	wallpaper := image.NewRGBA(image.Rect(0, 0, 4, 3))
+	wallpaper.Set(1, 1, color.RGBA{R: 255, A: 255})
+	wallpaperFile, err := os.Create(filepath.Join(candidate, "backgrounds", "wallpaper.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(wallpaperFile, wallpaper); err != nil {
+		_ = wallpaperFile.Close()
+		t.Fatal(err)
+	}
+	if err := wallpaperFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	capturePath := filepath.Join(store.SessionDir(sessionID), "apply-preview.png")
+	capture := image.NewRGBA(image.Rect(0, 0, 5, 4))
+	capture.Set(2, 2, color.RGBA{G: 255, A: 255})
+	captureFile, err := os.Create(capturePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(captureFile, capture); err != nil {
+		_ = captureFile.Close()
+		t.Fatal(err)
+	}
+	if err := captureFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.Apply(Request{
+		SessionID:      sessionID,
+		GenerationID:   "generation-1",
+		Variant:        generation.Variant("source"),
+		ThemeName:      "Assets Theme",
+		GenerateUnlock: true,
+		CapturePreview: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"unlock.png", "preview-unlock.png", "preview.png"} {
+		path := filepath.Join(result.ThemePath, name)
+		if info, statErr := os.Stat(path); statErr != nil || !info.Mode().IsRegular() {
+			t.Fatalf("optional asset %s missing: info=%v err=%v", name, info, statErr)
+		}
 	}
 }
 
