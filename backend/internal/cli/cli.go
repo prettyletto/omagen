@@ -236,6 +236,21 @@ func runSessionWithDependencies(
 		if !exists {
 			return writeJSON(stdout, stderr, resumeResponse{Active: false})
 		}
+		if applyService != nil {
+			handled, recoverErr := applyService.RecoverPending(active.SessionID)
+			if recoverErr != nil {
+				return fail(stderr, 1, "recover pending apply: %v", recoverErr)
+			}
+			if handled {
+				active, exists, err = serviceStoreActive(service)
+				if err != nil {
+					return fail(stderr, 1, "%v", err)
+				}
+				if !exists {
+					return writeJSON(stdout, stderr, resumeResponse{Active: false})
+				}
+			}
+		}
 		record, err := serviceStoreRecord(service, active.SessionID)
 		if err != nil {
 			return fail(stderr, 1, "%v", err)

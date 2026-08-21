@@ -2,9 +2,14 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/apply"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
@@ -107,7 +112,8 @@ func TestOutputHelpers(t *testing.T) {
 
 type cliOmarchy struct{}
 
-func (cliOmarchy) CurrentTheme() (string, error) { return "theme", nil }
+func (cliOmarchy) ApplyTheme(string, string) error { return nil }
+func (cliOmarchy) CurrentTheme() (string, error)   { return "theme", nil }
 func (cliOmarchy) CurrentBackground() (session.BackgroundRef, error) {
 	return session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}, nil
 }
@@ -131,5 +137,53 @@ func TestSessionHandlers(t *testing.T) {
 	}
 	if code := runGenerate([]string{"too-few"}, nil, &out, &stderr); code != 2 {
 		t.Fatalf("generate code=%d", code)
+	}
+}
+
+func TestSessionResumeRecoversPendingApplyBeforeInspectingWorkspace(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", filepath.Join(home, "cache"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, "state"))
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := session.Record{
+		SessionID:          "resume-apply",
+		OriginalTheme:      "original",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/background"},
+		ApplyPhase:         session.ApplyPhaseCommitted,
+		AppliedTheme:       "applied-theme",
+		AppliedGeneration:  "generation-1",
+		AppliedVariant:     "source",
+		AppliedDisplayName: "Applied theme",
+	}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveActive(session.ActiveRecord{SessionID: record.SessionID, CreatedAt: time.Now().UTC()}); err != nil {
+		t.Fatal(err)
+	}
+	service := session.NewService(store, cliOmarchy{})
+	applyService, err := apply.NewService(store, cliOmarchy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out, stderr bytes.Buffer
+	if code := runSessionWithDependencies([]string{"resume"}, service, nil, applyService, nil, nil, nil, &out, &stderr); code != 0 {
+		t.Fatalf("resume code=%d stderr=%q", code, stderr.String())
+	}
+	var result struct {
+		Active bool `json:"active"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.Active {
+		t.Fatalf("resume returned an unresolved active session: %s", out.String())
+	}
+	if _, err := os.Stat(store.SessionDir(record.SessionID)); !os.IsNotExist(err) {
+		t.Fatalf("pending apply session still exists, err=%v", err)
 	}
 }
