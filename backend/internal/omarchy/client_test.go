@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/prettyletto/omagen/backend/internal/session"
@@ -169,6 +170,48 @@ func TestRestoreCommands(t *testing.T) {
 	}
 	if got := string(refreshLog); got != "-q background setInstant "+background+"\n" {
 		t.Fatalf("refresh command = %q", got)
+	}
+}
+
+func TestApplyThemePreviewWaitsForCriticalThemeApply(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	themeSet := filepath.Join(bin, "omarchy")
+	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then sleep 0.15; printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; fi\n"
+	if err := os.WriteFile(themeSet, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reload := filepath.Join(bin, "omarchy-restart-terminal")
+	if err := os.WriteFile(reload, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	previewLogs := filepath.Join(t.TempDir(), "preview-logs")
+	if err := os.MkdirAll(previewLogs, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(previewLogs, "preview.log")
+	if _, already, err := NewClient(nil).ApplyThemePreview("new", logPath); err != nil || already {
+		t.Fatalf("preview apply already=%v err=%v", already, err)
+	}
+	data, err := os.ReadFile(filepath.Join(current, "theme.name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(data)) != "new" {
+		t.Fatalf("theme after preview=%q", strings.TrimSpace(string(data)))
+	}
+	if _, err := os.Stat(filepath.Join(previewLogs, terminalReloadPendingFile)); err != nil {
+		t.Fatalf("preview did not persist terminal reload marker: %v", err)
 	}
 }
 
