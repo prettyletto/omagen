@@ -192,8 +192,7 @@ PanelWindow {
                     Button {
                         Layout.fillWidth: true
                         visible: root.sourceImage !== ""
-                        text: root.busy ? "Starting…" : "Continue"
-                        iconText: "󰐕"
+                        text: root.busy ? "Starting…" : "> Continue"
                         leftAlign: true
                         foreground: Color.popups.text
                         accent: Color.accent
