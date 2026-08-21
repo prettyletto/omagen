@@ -12,6 +12,7 @@ PanelWindow {
     property bool busy: false
     property string generationId: ""
     property string previewVariant: ""
+    property bool workspaceResumable: false
     property int cursorIndex: 0
 
     signal resumeRequested()
@@ -32,7 +33,8 @@ PanelWindow {
         else resumeRequested();
     }
 
-    onActiveChanged: if (active) Qt.callLater(function() { keyCatcher.forceActiveFocus(); });
+    onActiveChanged: if (active) Qt.callLater(function() { root.cursorIndex = root.workspaceResumable ? 1 : 0; keyCatcher.forceActiveFocus(); });
+    onWorkspaceResumableChanged: if (!workspaceResumable) root.cursorIndex = 0;
 
     MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
 
@@ -97,7 +99,7 @@ PanelWindow {
                 }
                 Text {
                     Layout.fillWidth: true
-                    text: "Resume where you left off, or restore the original desktop theme and close Omagen."
+                    text: root.workspaceResumable ? "Resume where you left off, or restore the original desktop theme and close Omagen." : "The generated workspace is unavailable. Restore the original desktop theme and close Omagen."
                     color: Color.popups.text
                     opacity: 0.7
                     font.family: Style.font.family
@@ -129,12 +131,12 @@ PanelWindow {
                     }
                     Button {
                         Layout.fillWidth: true
-                        text: "Resume"
+                        text: root.workspaceResumable ? "Resume" : "Resume unavailable"
                         iconText: "󰐕"
                         leftAlign: true
                         foreground: Color.popups.text
                         hasCursor: root.cursorIndex === 1
-                        enabled: !root.busy
+                        enabled: !root.busy && root.workspaceResumable
                         onClicked: root.resumeRequested()
                     }
                 }

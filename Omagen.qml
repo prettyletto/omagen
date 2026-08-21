@@ -105,8 +105,11 @@ Item {
     }
 
     function resumePreviousSession() {
-        if (!resumableSession || recoveryBusy)
+        if (!resumableSession || recoveryBusy || resumableSession.workspace_resumable !== true) {
+            if (resumableSession && resumableSession.workspace_resumable !== true)
+                errorMessage = "The generated workspace is unavailable; restore and close to start again."
             return;
+        }
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
         shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
@@ -657,11 +660,12 @@ Item {
         onHideRequested: root.close()
     }
 
-    Views.RecoveryWindow {
-        active: root.opened && root.route === "recovery"
-        busy: root.recoveryBusy
-        generationId: root.resumableSession ? root.resumableSession.generation_id || "" : ""
-        previewVariant: root.resumableSession ? root.resumableSession.preview_variant || "" : ""
+        Views.RecoveryWindow {
+            active: root.opened && root.route === "recovery"
+            busy: root.recoveryBusy
+            generationId: root.resumableSession ? root.resumableSession.generation_id || "" : ""
+            previewVariant: root.resumableSession ? root.resumableSession.preview_variant || "" : ""
+            workspaceResumable: root.resumableSession ? root.resumableSession.workspace_resumable === true : false
         onResumeRequested: root.resumePreviousSession()
         onRestoreRequested: root.restorePreviousSession()
         onCloseRequested: { root.recoveryBusy = false; root.opened = false }
