@@ -182,7 +182,7 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 		t.Fatalf("unexpected generated root shell.toml: %v", err)
 	}
 	for section, wants := range map[string][]string{
-		"bar":      {`form = "docked"`, "size-horizontal = 30", "size-vertical = 32", "active = "},
+		"bar":      {"background-alpha = 0.0", "size-horizontal = 30", "size-vertical = 32", "active = "},
 		"popups":   {"background = "},
 		"menu":     {"selected-background = ", "selected-background-alpha = 0.18"},
 		"launcher": {"selected-background = ", "selected-background-alpha = 0.18"},
@@ -201,6 +201,13 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 				t.Errorf("shell.%s.toml missing %q:\n%s", section, want, text)
 			}
 		}
+	}
+	metadata, err := os.ReadFile(filepath.Join(sourceDir, "omagen.bar.toml"))
+	if err != nil {
+		t.Fatalf("read omagen.bar.toml: %v", err)
+	}
+	if !strings.Contains(string(metadata), `form = "docked"`) {
+		t.Fatalf("omagen.bar.toml missing docked form:\n%s", metadata)
 	}
 	if _, err := os.Stat(filepath.Join(sourceDir, "shell.notifications.toml")); !os.IsNotExist(err) {
 		t.Fatalf("unexpected notifications sidecar for accent edge style: %v", err)

@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 
@@ -12,12 +13,28 @@ PanelWindow {
     required property QtObject bar
     required property Item anchorItem
     property int geometryTick: 0
+    property string omagenBarForm: "continuous"
+    property bool metadataResolved: false
 
     readonly property var anchorWindow: anchorItem ? anchorItem.QsWindow.window : null
-    readonly property bool docked: {
-        var value = Color.shellValues["bar.form"]
-        return String(value || "continuous").toLowerCase() === "docked"
+    // Quattro keeps the active theme under this fixed path, independently of
+    // XDG_STATE_HOME used by Omagen's own session store.
+    readonly property string metadataPath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/omagen.bar.toml"
+    // Keep already-generated Docked themes working while they migrate from
+    // the old shell.bar.toml form key to Omagen-owned metadata.
+    readonly property bool legacyDocked: String(Color.shellValues["bar.form"] || "").toLowerCase() === "docked"
+    readonly property bool requestedDocked: root.metadataResolved
+        ? root.omagenBarForm === "docked"
+        : root.legacyDocked
+    readonly property bool geometrySupported: {
+        return root.bar !== null
+            && root.bar.moduleSlots !== undefined
+            && typeof root.bar.targetWindow === "function"
+            && root.bar.barSize !== undefined
+            && root.bar.vertical !== undefined
     }
+    readonly property bool docked: root.requestedDocked && root.geometrySupported
+    readonly property bool fallbackContinuous: root.requestedDocked && !root.geometrySupported
     // Transparency is still owned by Quattro's native bar gesture/config.
     // Docked only mirrors that state so double-clicking the bar hides the
     // section surfaces exactly as it hides the continuous native surface.
@@ -32,8 +49,32 @@ PanelWindow {
     readonly property real islandRadius: Math.max(Style.space(8), Style.cornerRadius)
     readonly property int islandPadding: Math.max(Style.space(5), 5)
 
+    FileView {
+        id: omagenBarMetadata
+        path: root.metadataPath
+        watchChanges: true
+        printErrors: false
+        onLoaded: root.applyMetadata(text())
+        onLoadFailed: root.applyMetadata("")
+        onFileChanged: reload()
+        Component.onCompleted: reload()
+    }
+
+    Timer {
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: omagenBarMetadata.reload()
+    }
+
+    function applyMetadata(raw) {
+        var match = String(raw || "").match(/^\s*form\s*=\s*["']([^"']+)["']\s*$/m)
+        omagenBarForm = match && String(match[1]).toLowerCase() === "docked" ? "docked" : "continuous"
+        metadataResolved = true
+    }
+
     screen: anchorWindow ? anchorWindow.screen : null
-    visible: docked && anchorWindow !== null && bar !== null
+    visible: (docked || fallbackContinuous) && anchorWindow !== null && bar !== null
     color: "transparent"
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "pretty-omagen-docked-bar"
@@ -61,10 +102,13 @@ PanelWindow {
     }
 
     function sectionBounds(region) {
+        if (!root.geometrySupported)
+            return root.fullBarBounds()
+
         var minAxis = Infinity
         var maxAxis = -Infinity
         var found = false
-        var slots = root.bar ? root.bar.moduleSlots : []
+        var slots = root.bar.moduleSlots || []
         for (var i = 0; i < slots.length; i++) {
             var slot = slots[i]
             if (!slot || slot.region !== region || !slot.activeItem || !slot.visible || !slot.activeItem.visible)
@@ -98,23 +142,32 @@ PanelWindow {
         return { x: startWithPadding, y: 0, width: Math.max(0, endWithPadding - startWithPadding), height: root.bar.barSize }
     }
 
+    function fullBarBounds() {
+        if (!root.screen || !root.bar)
+            return { x: 0, y: 0, width: 0, height: 0 }
+        if (root.bar.vertical)
+            return { x: 0, y: 0, width: root.bar.barSize, height: root.screen.height }
+        return { x: 0, y: 0, width: root.screen.width, height: root.bar.barSize }
+    }
+
     Repeater {
-        model: ["left", "center", "right"]
+        model: root.fallbackContinuous ? ["all"] : ["left", "center", "right"]
         delegate: Rectangle {
             required property string modelData
+            readonly property bool wholeBar: modelData === "all"
             readonly property var bounds: {
                 root.geometryTick
-                return root.sectionBounds(modelData)
+                return wholeBar ? root.fullBarBounds() : root.sectionBounds(modelData)
             }
 
-            visible: root.docked && bounds.width > 0 && bounds.height > 0
+            visible: (root.docked || root.fallbackContinuous) && bounds.width > 0 && bounds.height > 0
             x: bounds.x
             y: bounds.y
             width: bounds.width
             height: bounds.height
-            radius: root.islandRadius
+            radius: wholeBar ? 0 : root.islandRadius
             color: root.transparent ? "transparent" : root.surface
-            border.width: root.transparent ? 0 : 1
+            border.width: wholeBar || root.transparent ? 0 : 1
             border.color: Util.alpha(root.text, 0.28)
         }
     }

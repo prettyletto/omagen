@@ -27,9 +27,9 @@ func assertNoRootShell(t *testing.T, dir string) {
 	}
 }
 
-func assertNoShellOutputs(t *testing.T, dir string) {
+func assertNoGeneratedOutputs(t *testing.T, dir string) {
 	t.Helper()
-	for _, name := range generatedShellFiles {
+	for _, name := range append(generatedShellFiles, generatedOmagenFiles...) {
 		if _, err := os.Stat(filepath.Join(dir, name)); !os.IsNotExist(err) {
 			t.Fatalf("unexpected generated shell output %s: %v", name, err)
 		}
@@ -65,7 +65,7 @@ func TestWriteShellEmitsSurfaceAndDetailOverrides(t *testing.T) {
 	if err := WriteShell(dir, p, "flat", "native", "native", "native", "semantic", "continuous"); err != nil {
 		t.Fatal(err)
 	}
-	assertNoShellOutputs(t, dir)
+	assertNoGeneratedOutputs(t, dir)
 }
 
 func TestWriteShellUsesActualAccentForBarSurface(t *testing.T) {
@@ -109,9 +109,19 @@ func TestWriteShellEmitsDockedBarFormWithoutChangingOtherBarOptions(t *testing.T
 		t.Fatal(err)
 	}
 	text := readShellSection(t, dir, "bar")
-	for _, want := range []string{`form = "docked"`, "background-alpha = 0.0", `background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
+	for _, want := range []string{"background-alpha = 0.0", `background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("shell.bar.toml missing %q:\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "form =") {
+		t.Fatalf("shell.bar.toml should not contain Omagen-owned form metadata:\n%s", text)
+	}
+	metadata, err := os.ReadFile(filepath.Join(dir, "omagen.bar.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(metadata), `form = "docked"`) {
+		t.Fatalf("omagen.bar.toml missing docked form:\n%s", metadata)
 	}
 }

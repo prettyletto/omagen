@@ -18,10 +18,9 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 	}
 
 	if form == "docked" {
-		// The native bar keeps its widgets and input surface; Docked only makes
-		// its outer background transparent so the additive section-surface
-		// renderer can sit underneath those widgets.
-		b.WriteString("form = \"docked\"\nbackground-alpha = 0.0\n")
+		// The native bar keeps its widgets and input surface; Omagen's additive
+		// section-surface renderer sits underneath those widgets.
+		b.WriteString("background-alpha = 0.0\n")
 	}
 	switch surface {
 	case "dark":

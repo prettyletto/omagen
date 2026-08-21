@@ -35,6 +35,11 @@ Required:
 - Quickshell
 - Linux x86_64 for the bundled V1 backend binary
 
+Omagen's optional Docked bar form is an Omagen-owned additive decoration. It
+keeps Quattro's native left/center/right widget layout and falls back to the
+normal continuous bar when the active bar does not expose the geometry hooks
+needed to draw the three islands.
+
 The backend is bundled at `bin/omagen`; Go is not required for installation.
 
 Demo applications are optional. Omagen resolves available terminals,
