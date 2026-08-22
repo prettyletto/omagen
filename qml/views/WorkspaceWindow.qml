@@ -174,6 +174,7 @@ PanelWindow {
                         Text {
                             width: parent.width
                             text: root.generationId !== "" ? root.generationId : root.sessionId
+                            textFormat: Text.PlainText
                             elide: Text.ElideMiddle
                             horizontalAlignment: Text.AlignRight
                             color: Color.foreground
@@ -242,6 +243,7 @@ PanelWindow {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width * 0.4
                         text: root.errorMessage
+                        textFormat: Text.PlainText
                         color: Color.urgent
                         font.family: Style.font.family
                         font.pixelSize: Style.font.bodySmall

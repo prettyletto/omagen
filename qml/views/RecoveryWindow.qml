@@ -108,6 +108,7 @@ PanelWindow {
                 Text {
                     Layout.fillWidth: true
                     text: "Variant: " + (root.previewVariant || "Source") + "   ·   Generation: " + (root.generationId || "unknown")
+                    textFormat: Text.PlainText
                     color: Color.popups.text
                     opacity: 0.52
                     font.family: Style.font.family

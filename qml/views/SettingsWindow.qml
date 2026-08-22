@@ -275,6 +275,7 @@ PanelWindow {
                 visible: root.errorMessage !== ""
                 width: parent.width
                 text: root.errorMessage
+                textFormat: Text.PlainText
                 color: Color.urgent
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall

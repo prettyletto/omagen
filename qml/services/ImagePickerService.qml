@@ -23,14 +23,17 @@ Item {
     Process {
         id: picker
 
-        stdout: StdioCollector {
+        stdout: BoundedOutputParser {
             id: pickerStdout
-            waitForEnd: true
         }
 
-        stderr: StdioCollector {
+        stderr: BoundedOutputParser {
             id: pickerStderr
-            waitForEnd: true
+        }
+
+        onStarted: {
+            pickerStdout.reset();
+            pickerStderr.reset();
         }
 
         onExited: function(exitCode, exitStatus) {

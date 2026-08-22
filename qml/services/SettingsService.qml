@@ -49,8 +49,12 @@ Item {
 
     Process {
         id: getProcess
-        stdout: StdioCollector { id: getStdout; waitForEnd: true }
-        stderr: StdioCollector { id: getStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: getStdout }
+        stderr: BoundedOutputParser { id: getStderr }
+        onStarted: {
+            getStdout.reset();
+            getStderr.reset();
+        }
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
                 root.loadFailed(getStderr.text.trim() || "Failed to load settings");
@@ -66,8 +70,12 @@ Item {
 
     Process {
         id: saveProcess
-        stdout: StdioCollector { id: saveStdout; waitForEnd: true }
-        stderr: StdioCollector { id: saveStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: saveStdout }
+        stderr: BoundedOutputParser { id: saveStderr }
+        onStarted: {
+            saveStdout.reset();
+            saveStderr.reset();
+        }
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
                 root.saveFailed(saveStderr.text.trim() || "Failed to save settings");
@@ -83,8 +91,12 @@ Item {
 
     Process {
         id: resetProcess
-        stdout: StdioCollector { id: resetStdout; waitForEnd: true }
-        stderr: StdioCollector { id: resetStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: resetStdout }
+        stderr: BoundedOutputParser { id: resetStderr }
+        onStarted: {
+            resetStdout.reset();
+            resetStderr.reset();
+        }
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
                 root.resetFailed(resetStderr.text.trim() || "Failed to reset settings");

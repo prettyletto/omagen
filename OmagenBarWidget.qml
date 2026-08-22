@@ -5,6 +5,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "qml/components" as Components
+import "qml/services" as Services
 
 // The bar keeps the familiar left-click summon, while right-click exposes
 // the small lifecycle menu used by Omagen.  KeyboardPanel gives this menu
@@ -248,8 +249,12 @@ BarWidget {
 
     Process {
         id: quitProcess
-        stdout: StdioCollector { waitForEnd: true }
-        stderr: StdioCollector { waitForEnd: true }
+        stdout: Services.BoundedOutputParser { id: quitStdout }
+        stderr: Services.BoundedOutputParser { id: quitStderr }
+        onStarted: {
+            quitStdout.reset();
+            quitStderr.reset();
+        }
         onExited: root.quitBusy = false
     }
 
