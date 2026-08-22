@@ -4,6 +4,11 @@ Omagen is a Quickshell plugin with a QML presentation layer and a bundled Go
 backend. Quickshell owns the visible plugin lifecycle; the backend owns the
 filesystem, theme, Demo, and recovery operations that must survive UI reloads.
 
+The stable backend ownership and Studio attachment rules are recorded in the
+[engine contract](engine-contract.md). This contract is the boundary for new
+Studio capabilities; it does not replace the existing session or recovery
+engine.
+
 ## Omarchy plugin contract
 
 The root [manifest.json](../manifest.json) is the package contract:
