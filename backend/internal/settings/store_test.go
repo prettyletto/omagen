@@ -1,10 +1,12 @@
 package settings
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/palette"
 )
 
@@ -12,6 +14,19 @@ func testStore(t *testing.T) *Store {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "settings.json")
 	return &Store{path: path}
+}
+
+func TestLoadRejectsOversizedSettingsFile(t *testing.T) {
+	store := testStore(t)
+	if err := os.WriteFile(store.path, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(store.path, fsutil.MaxStateFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Load(); !errors.Is(err, fsutil.ErrFileTooLarge) {
+		t.Fatalf("Load() error = %v, want ErrFileTooLarge", err)
+	}
 }
 
 func TestLoadMissingReturnsDefaults(t *testing.T) {

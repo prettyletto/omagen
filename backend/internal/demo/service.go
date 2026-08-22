@@ -428,7 +428,7 @@ func (s *Service) saveState(state State) error {
 	return fsutil.AtomicWriteJSON(path, state, 0600)
 }
 func (s *Service) loadState(id string) (State, error) {
-	data, err := os.ReadFile(s.statePath(id))
+	data, err := fsutil.ReadFileLimited(s.statePath(id), fsutil.MaxStateFileBytes)
 	if err != nil {
 		return State{}, err
 	}
