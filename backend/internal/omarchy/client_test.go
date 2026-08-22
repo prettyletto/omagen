@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -226,6 +227,232 @@ func TestApplyThemePreviewWaitsForCriticalThemeApply(t *testing.T) {
 			t.Fatal("preview theme-set process did not finish")
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestApplyThemePreviewUsesStudioDriverWithNoHookPolicy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	driver := filepath.Join(bin, "studio-theme-set")
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/studio-driver-args\"\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\n"
+	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMAGEN_STUDIO_THEME_SET", driver)
+
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	logPath := filepath.Join(t.TempDir(), "preview.log")
+	if _, already, err := NewClient(nil).ApplyThemePreview("new", logPath); err != nil || already {
+		t.Fatalf("preview apply already=%v err=%v", already, err)
+	}
+	args, err := os.ReadFile(filepath.Join(home, "studio-driver-args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(args); got != "preview\nnew\n--no-hooks\n" {
+		t.Fatalf("studio driver args=%q", got)
+	}
+	data, err := os.ReadFile(filepath.Join(current, "theme.name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "new" {
+		t.Fatalf("theme after preview=%q", got)
+	}
+}
+
+func TestApplyThemePreviewPassesNonUIRetintPolicy(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	driver := filepath.Join(bin, "studio-theme-set")
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/studio-driver-args\"\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\n"
+	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMAGEN_STUDIO_THEME_SET", driver)
+	t.Setenv("OMAGEN_STUDIO_PREVIEW_APPS", "terminal,browser")
+
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, already, err := NewClient(nil).ApplyThemePreview("new", filepath.Join(t.TempDir(), "preview.log")); err != nil || already {
+		t.Fatalf("preview apply already=%v err=%v", already, err)
+	}
+	args, err := os.ReadFile(filepath.Join(home, "studio-driver-args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(args); got != "preview\nnew\n--no-hooks\n--run\nterminal,browser\n" {
+		t.Fatalf("studio driver args=%q", got)
+	}
+}
+
+func TestApplyThemeWithPolicyUsesStudioDriverWithoutHooks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	driver := filepath.Join(bin, "studio-theme-set")
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/studio-driver-args\"\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\nsleep 1\nprintf finished > \"$HOME/studio-driver-finished\"\n"
+	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMAGEN_STUDIO_THEME_SET", driver)
+
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := NewClient(nil).ApplyThemeWithPolicy("new", filepath.Join(t.TempDir(), "apply.log"), "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "studio-driver-finished")); !os.IsNotExist(err) {
+		t.Fatalf("Apply waited for post-commit driver work, stat err=%v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(home, "studio-driver-finished")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Studio driver did not finish post-commit work")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	args, err := os.ReadFile(filepath.Join(home, "studio-driver-args"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(args); got != "apply\nnew\n--no-hooks\n" {
+		t.Fatalf("studio driver args=%q", got)
+	}
+}
+
+func TestFinalizePreviewThemeWritesPermanentNameOnly(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(filepath.Join(current, "theme"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("omagen-preview-session-generation-source\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := NewClient(nil).FinalizePreviewTheme("permanent-theme"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(current, "theme.name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "permanent-theme" {
+		t.Fatalf("finalized theme=%q", got)
+	}
+
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("ryu\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := NewClient(nil).FinalizePreviewTheme("another-theme"); err == nil {
+		t.Fatal("expected non-preview finalization to fail")
+	}
+}
+
+func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
+	home := t.TempDir()
+	omarchyPath := t.TempDir()
+	commandBin := t.TempDir()
+	runtimeDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OMARCHY_PATH", omarchyPath)
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("OMARCHY_THEME_SKIP_BACKGROUND", "1")
+	t.Setenv("PATH", commandBin+":"+os.Getenv("PATH"))
+
+	if err := os.MkdirAll(filepath.Join(omarchyPath, "shell"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(omarchyPath, "shell/shell.qml"), []byte("Item {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	candidate := filepath.Join(home, ".config/omarchy/themes/candidate")
+	if err := os.MkdirAll(filepath.Join(candidate, "backgrounds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, contents := range map[string]string{
+		filepath.Join(candidate, "colors.toml"):        "[colors]\nprimary = '#ffffff'\n",
+		filepath.Join(candidate, "shell.toml"):         "[bar]\n",
+		filepath.Join(candidate, "backgrounds/bg.png"): "not-an-image-but-a-theme-asset\n",
+		filepath.Join(omarchyPath, "themes/.keep"):     "\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	writeCommand := func(name, body string) {
+		t.Helper()
+		path := filepath.Join(commandBin, name)
+		if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeCommand("omarchy-theme-set-templates", "exit 0")
+	writeCommand("omarchy-shell", "printf '%s\\n' \"$@\" >> \"$HOME/commands.log\"")
+	writeCommand("omarchy-restart-terminal", "printf terminal >> \"$HOME/allowlist.log\"; exit 1")
+	writeCommand("omarchy-theme-set-browser", "printf browser >> \"$HOME/allowlist.log\"")
+	writeCommand("omarchy-hook", "printf hook >> \"$HOME/disallowed.log\"")
+	writeCommand("omarchy-restart-hyprctl", "printf hyprctl >> \"$HOME/disallowed.log\"")
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source path")
+	}
+	driver := filepath.Join(filepath.Dir(currentFile), "../../../bin/studio-theme-set")
+	output, err := exec.Command(driver, "preview", "candidate", "--no-hooks", "--run", "terminal,browser", "--skip", "hyprland").CombinedOutput()
+	if err != nil {
+		t.Fatalf("studio-theme-set preview: %v: %s", err, output)
+	}
+	if !strings.Contains(string(output), "adapter=terminal status=failed") {
+		t.Fatalf("missing non-fatal adapter failure in output: %s", output)
+	}
+
+	activeTheme, err := os.ReadFile(filepath.Join(home, ".local/state/omarchy/current/theme.name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(activeTheme)); got != "candidate" {
+		t.Fatalf("active theme=%q", got)
+	}
+	allowlist, err := os.ReadFile(filepath.Join(home, "allowlist.log"))
+	if err != nil || !strings.Contains(string(allowlist), "terminal") || !strings.Contains(string(allowlist), "browser") {
+		t.Fatalf("allowlist log=%q err=%v", allowlist, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, "disallowed.log")); !os.IsNotExist(err) {
+		t.Fatalf("disallowed command ran, err=%v", err)
 	}
 }
 

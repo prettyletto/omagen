@@ -27,10 +27,49 @@ type inspectingApplier struct {
 
 type postSwitchErrorApplier struct{}
 
+type policyApplier struct {
+	applyCalled  bool
+	policyCalled bool
+	run          string
+	skip         string
+}
+
+type fastPreviewApplier struct {
+	theme       string
+	finalized   string
+	applyCalled bool
+}
+
 func (postSwitchErrorApplier) ApplyTheme(string, string) error {
 	return errors.New("post-switch failure")
 }
 func (postSwitchErrorApplier) CurrentTheme() (string, error) { return "test-theme", nil }
+
+func (a *policyApplier) ApplyTheme(string, string) error {
+	a.applyCalled = true
+	return nil
+}
+func (a *policyApplier) ApplyThemeWithPolicy(_, _, run, skip string) error {
+	a.policyCalled = true
+	a.run = run
+	a.skip = skip
+	return nil
+}
+
+func (a *fastPreviewApplier) ApplyTheme(string, string) error {
+	a.applyCalled = true
+	return nil
+}
+func (a *fastPreviewApplier) ApplyThemeWithPolicy(string, string, string, string) error {
+	a.applyCalled = true
+	return nil
+}
+func (a *fastPreviewApplier) CurrentTheme() (string, error) { return a.theme, nil }
+func (a *fastPreviewApplier) FinalizePreviewTheme(theme string) error {
+	a.finalized = theme
+	a.theme = theme
+	return nil
+}
 
 func (a *inspectingApplier) ApplyTheme(string, string) error { a.called = true; return nil }
 func (a *inspectingApplier) CurrentTheme() (string, error)   { return a.theme, nil }
@@ -38,6 +77,60 @@ func (a *inspectingApplier) CurrentTheme() (string, error)   { return a.theme, n
 func (a *testApplier) ApplyTheme(theme, _ string) error {
 	a.theme = theme
 	return a.err
+}
+
+func TestApplyUsesStudioPolicyByDefaultWhenAvailable(t *testing.T) {
+	applier := &policyApplier{}
+	service, _, sessionID := setupApplyTest(t, applier)
+	variant, _ := generation.ParseVariant("source")
+	if _, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Policy Theme"}); err != nil {
+		t.Fatal(err)
+	}
+	if !applier.policyCalled || applier.applyCalled {
+		t.Fatalf("policy_called=%t native_apply_called=%t", applier.policyCalled, applier.applyCalled)
+	}
+}
+
+func TestApplyFinalizesMatchingLivePreviewWithoutRetinting(t *testing.T) {
+	applier := &fastPreviewApplier{theme: "omagen-preview-session-1-generation-1-source"}
+	service, store, sessionID := setupApplyTest(t, applier)
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.GenerationID = "generation-1"
+	record.PreviewVariant = "source"
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(service.currentThemeRoot, "backgrounds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "colors.toml"), []byte("from-preview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "backgrounds", "wallpaper.png"), []byte("preview-image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	variant, _ := generation.ParseVariant("source")
+	result, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Fast Theme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applier.finalized != "fast-theme" || applier.applyCalled {
+		t.Fatalf("finalized=%q full_apply_called=%t", applier.finalized, applier.applyCalled)
+	}
+	contents, err := os.ReadFile(filepath.Join(result.ThemePath, "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "from-preview\n" {
+		t.Fatalf("published materialized preview=%q", contents)
+	}
+	if _, exists, err := store.LoadActive(); err != nil || exists {
+		t.Fatalf("active session remains after fast finalize: exists=%t err=%v", exists, err)
+	}
 }
 
 func setupApplyTest(t *testing.T, applier ThemeApplier) (*Service, *session.Store, string) {

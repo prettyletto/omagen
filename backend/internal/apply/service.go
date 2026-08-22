@@ -18,6 +18,14 @@ type ThemeApplier interface {
 	ApplyTheme(themeName, logPath string) error
 }
 
+type policyAwareThemeApplier interface {
+	ApplyThemeWithPolicy(themeName, logPath, retintRun, retintSkip string) error
+}
+
+type previewFinalizer interface {
+	FinalizePreviewTheme(themeName string) error
+}
+
 type themeInspector interface {
 	CurrentTheme() (string, error)
 }
@@ -30,9 +38,10 @@ type themeRestorer interface {
 }
 
 type Service struct {
-	sessions   *session.Store
-	applier    ThemeApplier
-	themesRoot string
+	sessions         *session.Store
+	applier          ThemeApplier
+	themesRoot       string
+	currentThemeRoot string
 }
 
 func NewService(sessions *session.Store, applier ThemeApplier) (*Service, error) {
@@ -40,7 +49,12 @@ func NewService(sessions *session.Store, applier ThemeApplier) (*Service, error)
 	if err != nil {
 		return nil, fmt.Errorf("resolve user home: %w", err)
 	}
-	return &Service{sessions: sessions, applier: applier, themesRoot: filepath.Join(home, ".config", "omarchy", "themes")}, nil
+	return &Service{
+		sessions:         sessions,
+		applier:          applier,
+		themesRoot:       filepath.Join(home, ".config", "omarchy", "themes"),
+		currentThemeRoot: filepath.Join(home, ".local", "state", "omarchy", "current", "theme"),
+	}, nil
 }
 
 func (s *Service) Apply(r Request) (Result, error) {
@@ -121,6 +135,11 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if err := stageOptionalAssets(candidate, s.sessions.SessionDir(r.SessionID), r); err != nil {
 		return Result{}, err
 	}
+	fastFinalize := s.canFinalizePreview(record, r)
+	publishSource := candidate
+	if fastFinalize {
+		publishSource = s.currentThemeRoot
+	}
 	destination := filepath.Join(s.themesRoot, name.Slug)
 	if _, err := os.Lstat(destination); err == nil {
 		if !destinationOwnedBy(destination, r.SessionID) {
@@ -140,12 +159,26 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist prepared apply: %w", err)
 	}
-	if err := publish(candidate, destination, s.themesRoot, r.SessionID); err != nil {
+	if err := publish(publishSource, destination, s.themesRoot, r.SessionID); err != nil {
 		return Result{}, fmt.Errorf("publish theme: %w", err)
 	}
 	logPath := filepath.Join(s.sessions.SessionDir(r.SessionID), "apply.log")
-	if err := s.applier.ApplyTheme(name.Slug, logPath); err != nil {
-		return Result{}, fmt.Errorf("apply theme %q: %w", name.Display, err)
+	var applyErr error
+	if fastFinalize {
+		finalizer := s.applier.(previewFinalizer)
+		applyErr = finalizer.FinalizePreviewTheme(name.Slug)
+	} else if policyApplier, ok := s.applier.(policyAwareThemeApplier); ok {
+		// Studio Apply is the normal path. It preserves the native critical
+		// transaction while keeping arbitrary hooks and cache warmers out of
+		// the plugin-owned workflow.
+		applyErr = policyApplier.ApplyThemeWithPolicy(name.Slug, logPath, r.RetintRun, r.RetintSkip)
+	} else {
+		// Keep compatibility with narrow test/fallback appliers that only
+		// implement the original native operation.
+		applyErr = s.applier.ApplyTheme(name.Slug, logPath)
+	}
+	if applyErr != nil {
+		return Result{}, fmt.Errorf("apply theme %q: %w", name.Display, applyErr)
 	}
 	record.ApplyPhase = session.ApplyPhaseCommitted
 	if err := s.sessions.Save(record); err != nil {
@@ -158,6 +191,33 @@ func (s *Service) Apply(r Request) (Result, error) {
 		return Result{}, err
 	}
 	return Result{SessionID: r.SessionID, GenerationID: r.GenerationID, Variant: r.Variant, ThemeName: name.Slug, DisplayName: name.Display, ThemePath: destination}, nil
+}
+
+func (s *Service) canFinalizePreview(record session.Record, request Request) bool {
+	if request.GenerateUnlock || request.CapturePreview || request.RetintRun != "" || request.RetintSkip != "" {
+		return false
+	}
+	if record.GenerationID != request.GenerationID || record.PreviewVariant != string(request.Variant) {
+		return false
+	}
+	finalizer, ok := s.applier.(previewFinalizer)
+	if !ok || finalizer == nil {
+		return false
+	}
+	inspector, ok := s.applier.(themeInspector)
+	if !ok {
+		return false
+	}
+	current, err := inspector.CurrentTheme()
+	if err != nil || current != previewThemeName(request) {
+		return false
+	}
+	info, err := os.Stat(s.currentThemeRoot)
+	return err == nil && info.IsDir()
+}
+
+func previewThemeName(request Request) string {
+	return strings.ToLower(fmt.Sprintf("omagen-preview-%s-%s-%s", request.SessionID, request.GenerationID, request.Variant))
 }
 
 // RecoverPending resolves an Apply transaction left in PREPARED or COMMITTED

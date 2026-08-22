@@ -17,6 +17,7 @@ PanelWindow {
     property bool demoBusy: false
     property bool demoActive: false
     property bool applyBusy: false
+    property bool applyRecoveryRequired: false
     property bool extraConfigsEnabled: false
     property string suggestedThemeName: ""
     property bool workspaceReady: false
@@ -267,11 +268,11 @@ PanelWindow {
                         spacing: Style.space(8)
 
                         Button {
-                            text: root.backBusy ? "Returning…" : (root.cancelBusy ? "Restoring…" : (root.extraConfigsEnabled ? "Back to configuration" : "Cancel"))
+                            text: root.backBusy ? "Returning…" : (root.cancelBusy ? "Restoring…" : (root.applyRecoveryRequired ? "Cancel & restore" : (root.extraConfigsEnabled ? "Back to configuration" : "Cancel")))
                             foreground: Color.foreground
                             bordered: true
                             enabled: !root.backBusy && !root.cancelBusy && !root.previewBusy && !root.applyBusy
-                            onClicked: root.extraConfigsEnabled ? root.backToConfigurationRequested() : root.cancelRequested()
+                            onClicked: root.applyRecoveryRequired ? root.cancelRequested() : (root.extraConfigsEnabled ? root.backToConfigurationRequested() : root.cancelRequested())
                         }
                         Button {
                             text: root.previewBusy ? "Applying…" : "Test live"

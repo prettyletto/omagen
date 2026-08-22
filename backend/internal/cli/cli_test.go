@@ -83,6 +83,19 @@ func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
+func TestParseRetintOptions(t *testing.T) {
+	run, skip, err := parseRetintOptions([]string{"--run", "all", "--skip", "browser,hyprland"})
+	if err != nil || run != "all" || skip != "browser,hyprland" {
+		t.Fatalf("run=%q skip=%q err=%v", run, skip, err)
+	}
+	if _, _, err := parseRetintOptions([]string{"--skip"}); err == nil {
+		t.Fatal("expected missing --skip value to fail")
+	}
+	if _, _, err := parseRetintOptions([]string{"--unknown"}); err == nil {
+		t.Fatal("expected unknown retint option to fail")
+	}
+}
+
 func TestRunPing(t *testing.T) {
 	var out, err bytes.Buffer
 	if code := Run([]string{"ping"}, &out, &err); code != 0 {

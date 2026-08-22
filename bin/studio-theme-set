@@ -1,0 +1,413 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# Studio-owned, source-derived preview driver.
+#
+# This intentionally follows the installed omarchy-theme-set transaction up to
+# the point where the active theme and shell have been promoted. Preview mode
+# never runs arbitrary theme hooks. Its post-apply work is an explicit,
+# Studio-owned allowlist of independent adapters that run in parallel.
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: studio-theme-set {preview|apply} <theme-name> [--no-hooks]
+       [--run <policy>] [--skip <adapters>]
+
+Apply a Studio candidate to the live desktop without running arbitrary theme
+hooks. Preview mode is always no-hook; --no-hooks is accepted explicitly for
+callers that want to document the policy. The default app policy is all
+reviewed adapters.
+
+Run policy is one of: none, terminal, all, or a comma-separated list of
+reviewed adapters. --apps remains an alias for --run. --skip removes reviewed
+adapters from that selection. Adapter names are:
+hyprland,btop,opencode,helix,foot,tmux,gnome,pi,claude,browser,vscode,
+obsidian,keyboard.
+EOF
+}
+
+if [[ ${1:-} != "preview" && ${1:-} != "apply" || $# -lt 2 ]]; then
+  usage
+  exit 2
+fi
+
+MODE="$1"
+THEME_INPUT="$2"
+shift 2
+RUN_POLICY="${OMAGEN_STUDIO_PREVIEW_APPS:-all}"
+SKIP_POLICY="${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-keyboard}"
+DEFAULT_KEYBOARD_SKIP=0
+if [[ -z "${OMAGEN_STUDIO_PREVIEW_APPS:-}" && -z "${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-}" ]]; then
+  DEFAULT_KEYBOARD_SKIP=1
+  SKIP_POLICY=""
+fi
+while (($# > 0)); do
+  arg="$1"
+  case "$arg" in
+    --no-hooks) ;;
+    --run|--apps)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: %s requires a policy\n' "$arg" >&2
+        usage
+        exit 2
+      fi
+      RUN_POLICY="$2"
+      DEFAULT_KEYBOARD_SKIP=0
+      shift
+      ;;
+    --skip)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: --skip requires adapter names\n' >&2
+        usage
+        exit 2
+      fi
+      SKIP_POLICY="$2"
+      DEFAULT_KEYBOARD_SKIP=0
+      shift
+      ;;
+    *)
+      printf 'studio-theme-set: unsupported preview option: %s\n' "$arg" >&2
+      usage
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+if (( DEFAULT_KEYBOARD_SKIP )); then
+  SKIP_POLICY="keyboard"
+fi
+
+# Resolve the running Omarchy checkout using the same supported locations as
+# the plugin installer. Do not edit any package-owned source.
+for candidate in "${OMARCHY_PATH:-}" "$HOME/.local/share/omarchy" "/usr/share/omarchy"; do
+  if [[ -n "$candidate" && -f "$candidate/shell/shell.qml" ]]; then
+    export OMARCHY_PATH="$candidate"
+    break
+  fi
+done
+
+if [[ -z "${OMARCHY_PATH:-}" || ! -d "$OMARCHY_PATH/themes" ]]; then
+  printf 'studio-theme-set: cannot resolve OMARCHY_PATH\n' >&2
+  exit 1
+fi
+
+CURRENT_THEME_PATH="$HOME/.local/state/omarchy/current/theme"
+NEXT_THEME_PATH="$HOME/.local/state/omarchy/current/next-theme"
+CURRENT_BACKGROUND_LINK="$HOME/.local/state/omarchy/current/background"
+BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
+THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
+USER_THEMES_PATH="$HOME/.config/omarchy/themes"
+OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
+
+run_parallel() {
+  local pid
+  local pids=()
+
+  for command in "$@"; do
+    bash -lc "$command" &
+    pids+=("$!")
+  done
+
+  for pid in "${pids[@]}"; do
+    wait "$pid"
+  done
+}
+
+# Keep this declaration in the same order as Omarchy's post_theme_commands
+# array. Selection filters this ordered list; execution remains parallel.
+RETINT_ADAPTERS=(
+  terminal
+  hyprland
+  btop
+  opencode
+  helix
+  foot
+  tmux
+  gnome
+  pi
+  claude
+  browser
+  vscode
+  obsidian
+  keyboard
+)
+
+retint_command() {
+  case "$1" in
+    terminal) printf '%s' 'omarchy-restart-terminal' ;;
+    hyprland) printf '%s' 'omarchy-restart-hyprctl' ;;
+    btop) printf '%s' 'omarchy-restart-btop' ;;
+    opencode) printf '%s' 'omarchy-restart-opencode' ;;
+    helix) printf '%s' 'omarchy-restart-helix' ;;
+    foot) printf '%s' 'omarchy-theme-set-foot' ;;
+    tmux) printf '%s' 'omarchy-theme-set-tmux' ;;
+    gnome) printf '%s' 'omarchy-theme-set-gnome' ;;
+    pi) printf '%s' 'omarchy-theme-set-pi' ;;
+    claude) printf '%s' 'omarchy-theme-set-claude' ;;
+    browser) printf '%s' 'omarchy-theme-set-browser' ;;
+    vscode) printf '%s' 'omarchy-theme-set-vscode' ;;
+    obsidian) printf '%s' 'omarchy-theme-set-obsidian' ;;
+    keyboard) printf '%s' 'omarchy-theme-set-keyboard' ;;
+    *) return 1 ;;
+  esac
+}
+
+selected_retint_adapters() {
+  local requested adapter found
+  RETINT_SELECTION=()
+  case "$RUN_POLICY" in
+    none) ;;
+    terminal) RETINT_SELECTION=(terminal) ;;
+    all) RETINT_SELECTION=("${RETINT_ADAPTERS[@]}") ;;
+    *)
+      IFS=',' read -r -a requested_adapters <<< "$RUN_POLICY"
+      for requested in "${requested_adapters[@]}"; do
+        requested="${requested//[[:space:]]/}"
+        [[ -n "$requested" ]] || continue
+        found=0
+        for adapter in "${RETINT_ADAPTERS[@]}"; do
+          if [[ "$requested" == "$adapter" ]]; then
+            RETINT_SELECTION+=("$adapter")
+            found=1
+            break
+          fi
+        done
+        if (( ! found )); then
+          printf 'studio-theme-set: unknown retint adapter: %s\n' "$requested" >&2
+          return 2
+        fi
+      done
+      ;;
+  esac
+
+  IFS=',' read -r -a skipped_adapters <<< "$SKIP_POLICY"
+  for requested in "${skipped_adapters[@]}"; do
+    requested="${requested//[[:space:]]/}"
+    [[ -n "$requested" ]] || continue
+    if [[ "$requested" == "all" ]]; then
+      RETINT_SELECTION=()
+      continue
+    fi
+    found=0
+    for adapter in "${RETINT_ADAPTERS[@]}"; do
+      if [[ "$requested" == "$adapter" ]]; then
+        found=1
+        break
+      fi
+    done
+    if (( ! found )); then
+      printf 'studio-theme-set: unknown skipped retint adapter: %s\n' "$requested" >&2
+      return 2
+    fi
+    filtered_selection=()
+    for adapter in "${RETINT_SELECTION[@]}"; do
+      [[ "$adapter" == "$requested" ]] || filtered_selection+=("$adapter")
+    done
+    RETINT_SELECTION=("${filtered_selection[@]}")
+  done
+}
+
+run_retint_adapter() {
+  local adapter="$1"
+  local command
+  command=$(retint_command "$adapter")
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'preview retint adapter=%s status=skipped reason=command-missing command=%s\n' "$adapter" "$command"
+    return 0
+  fi
+  printf 'preview retint adapter=%s status=started command=%s\n' "$adapter" "$command"
+  if bash -lc "$command"; then
+    printf 'preview retint adapter=%s status=success\n' "$adapter"
+  else
+    printf 'preview retint adapter=%s status=failed command=%s\n' "$adapter" "$command" >&2
+    return 1
+  fi
+}
+
+run_selected_retints() {
+  local adapter pid
+  local pids=()
+  for adapter in "${RETINT_SELECTION[@]}"; do
+    run_retint_adapter "$adapter" &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    # Retint adapters are post-commit convenience work. A broken or
+    # unavailable adapter must never turn an already-live theme transaction
+    # into a failed Apply; the per-adapter log above is the diagnostic.
+    wait "$pid" || true
+  done
+  return 0
+}
+
+warm_apply_caches() {
+  # Applying a new user theme changes the theme directory signature used by
+  # the native image-based theme picker. Warm it after the permanent theme is
+  # live so the next Super+Ctrl+Shift+Space does not pay that scan/thumbnail
+  # cost. These are cache-only helpers and must never delay Apply or affect
+  # its success.
+  if command -v omarchy-theme-switcher >/dev/null 2>&1; then
+    omarchy-theme-switcher --preload >/dev/null 2>&1 &
+  fi
+  if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
+    omarchy-theme-bg-cache >/dev/null 2>&1 &
+  fi
+}
+
+shell_ipc() {
+  timeout 2 omarchy-shell "$@" >/dev/null 2>&1
+}
+
+snapshot_background_path() {
+  local background="$1"
+  local name="$2"
+  local snapshot extension
+
+  [[ -f "$background" ]] || return
+
+  mkdir -p "$BACKGROUND_TRANSITION_CACHE"
+  extension=${background##*.}
+  snapshot="$BACKGROUND_TRANSITION_CACHE/$name-$$.$extension"
+  ln "$background" "$snapshot" 2>/dev/null || cp "$background" "$snapshot"
+  echo "$snapshot"
+}
+
+snapshot_current_background() {
+  local current_background
+
+  current_background=$(readlink -f "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  snapshot_background_path "$current_background" "previous"
+}
+
+choose_theme_background() {
+  local backgrounds=()
+  local current_background index next_index i
+
+  CHOSEN_THEME_BACKGROUND=""
+  mapfile -d '' -t backgrounds < <(
+    find -L "$HOME/.config/omarchy/backgrounds/$THEME_NAME/" "$CURRENT_THEME_PATH/backgrounds/" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+      -print0 2>/dev/null | sort -z
+  )
+
+  (( ${#backgrounds[@]} > 0 )) || return 1
+
+  current_background=$(readlink "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  index=-1
+  for i in "${!backgrounds[@]}"; do
+    if [[ ${backgrounds[$i]} == "$current_background" ]]; then
+      index=$i
+      break
+    fi
+  done
+
+  if (( index == -1 )); then
+    CHOSEN_THEME_BACKGROUND="${backgrounds[0]}"
+  else
+    next_index=$(((index + 1) % ${#backgrounds[@]}))
+    CHOSEN_THEME_BACKGROUND="${backgrounds[$next_index]}"
+  fi
+}
+
+set_theme_background_link() {
+  choose_theme_background || return 1
+  ln -nsf "$CHOSEN_THEME_BACKGROUND" "$CURRENT_BACKGROUND_LINK"
+}
+
+set_theme_background() {
+  local new_background new_background_snapshot
+
+  if ! choose_theme_background; then
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    return
+  fi
+
+  new_background="$CHOSEN_THEME_BACKGROUND"
+  new_background_snapshot=$(snapshot_background_path "$new_background" "next")
+
+  if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
+    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    (sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
+  elif [[ -f "$new_background_snapshot" ]]; then
+    shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    (sleep 3; rm -f "$new_background_snapshot") &
+  else
+    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload" || \
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    if [[ -f "$OLD_BACKGROUND_SNAPSHOT" ]]; then
+      (sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
+    fi
+  fi
+
+  ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+}
+
+THEME_NAME=$(echo "$THEME_INPUT" | sed -E 's/<[^>]+>//g' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+THEME_HEADLESS=0
+if [[ ${OMARCHY_THEME_HEADLESS:-} == "1" || ${OMARCHY_THEME_OFFLINE:-} == "1" ]]; then
+  THEME_HEADLESS=1
+fi
+
+if [[ ! -d "$OMARCHY_THEMES_PATH/$THEME_NAME" ]] && [[ ! -d "$USER_THEMES_PATH/$THEME_NAME" ]]; then
+  printf "Theme '%s' does not exist\n" "$THEME_NAME" >&2
+  exit 1
+fi
+
+if ! selected_retint_adapters; then
+  exit 2
+fi
+
+# Serialize with the native theme-set operation. The Studio driver owns the
+# command boundary, but the shared staging/current paths remain Omarchy-owned.
+exec 9>"$THEME_SET_LOCK"
+flock 9
+
+rm -rf "$NEXT_THEME_PATH"
+mkdir -p "$NEXT_THEME_PATH"
+
+# Copy official theme first, then overlay user customizations on top.
+cp -r "$OMARCHY_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+cp -r "$USER_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+
+if [[ ! -f "$NEXT_THEME_PATH/colors.toml" && -f "$NEXT_THEME_PATH/alacritty.toml" ]]; then
+  omarchy-theme-colors-from-alacritty "$NEXT_THEME_PATH"
+fi
+
+omarchy-theme-set-templates
+
+OLD_BACKGROUND_SNAPSHOT=""
+if [[ "$THEME_HEADLESS" != "1" && ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]]; then
+  OLD_BACKGROUND_SNAPSHOT=$(snapshot_current_background)
+fi
+
+rm -rf "$CURRENT_THEME_PATH"
+mv "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+echo "$THEME_NAME" >"$HOME/.local/state/omarchy/current/theme.name"
+
+colors_payload=$([[ -f "$CURRENT_THEME_PATH/colors.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/colors.toml")
+shell_payload=$([[ -f "$CURRENT_THEME_PATH/shell.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/shell.toml")
+if [[ "$THEME_HEADLESS" == "1" ]]; then
+  [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]] || set_theme_background_link || true
+elif [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]]; then
+  shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+else
+  set_theme_background
+fi
+
+# Release the shared critical section before the Studio-owned allowlist runs.
+flock -u 9
+
+if [[ "$THEME_HEADLESS" != "1" ]]; then
+  if [[ "$MODE" == "apply" ]]; then
+    warm_apply_caches
+  fi
+  # This is a Studio-owned allowlist. It intentionally excludes arbitrary user
+  # hooks and only runs the adapters selected by the explicit policy. Missing
+  # optional commands are reported as skipped; selected command failures are
+  # reported individually after all parallel adapters finish.
+  printf '%s retint run=%s skip=%s selected=%s\n' "$MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}"
+  run_selected_retints
+fi

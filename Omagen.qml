@@ -21,6 +21,7 @@ Item {
     property bool backBusy: false
     property bool previewBusy: false
     property bool applyBusy: false
+    property bool applyRecoveryRequired: false
     property bool demoBusy: false
     property bool demoActive: false
     property bool pendingDemo: false
@@ -270,7 +271,7 @@ Item {
     }
     function applyTheme(variant, name, generateUnlock, capturePreview) {
         if (!session.workspaceReady || applyBusy || previewBusy || cancelBusy || demoBusy) return
-        errorMessage = ""; applyBusy = true
+        errorMessage = ""; applyBusy = true; applyRecoveryRequired = false
 
         pendingApplyVariant = variant
         pendingApplyName = name
@@ -411,6 +412,7 @@ Item {
         pendingApplyVariant = "";
         pendingApplyName = "";
         applyBusy = false;
+        applyRecoveryRequired = false;
         route = "setup";
         cancelReturnRoute = "workspace";
         resumableSession = null;
@@ -767,6 +769,7 @@ Item {
             if (root.closeAfterCancel)
                 return;
             applyBusy = false;
+            applyRecoveryRequired = true;
             errorMessage = message;
             root.opened = true;
         }
@@ -870,6 +873,7 @@ Item {
         generationBusy: root.generationBusy || root.describeBusy
         previewBusy: root.previewBusy
         applyBusy: root.applyBusy
+        applyRecoveryRequired: root.applyRecoveryRequired
         extraConfigsEnabled: root.extraConfigsEnabled
         suggestedThemeName: root.suggestedThemeName()
         demoBusy: root.demoBusy

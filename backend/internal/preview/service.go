@@ -18,6 +18,10 @@ type ThemeApplier interface {
 	ApplyThemePreview(themeName, logPath string) (pid int, alreadyActive bool, err error)
 }
 
+type policyAwareThemeApplier interface {
+	ApplyThemePreviewWithPolicy(themeName, logPath, retintRun, retintSkip string) (pid int, alreadyActive bool, err error)
+}
+
 type Service struct {
 	sessions       *session.Store
 	applier        ThemeApplier
@@ -93,7 +97,17 @@ func (s *Service) applyLocked(request Request) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	pid, already, err := s.applier.ApplyThemePreview(themeName, logPath)
+	var pid int
+	var already bool
+	if request.RetintRun != "" || request.RetintSkip != "" {
+		policyApplier, ok := s.applier.(policyAwareThemeApplier)
+		if !ok {
+			return Result{}, fmt.Errorf("preview retint policy requested but the theme driver does not support it")
+		}
+		pid, already, err = policyApplier.ApplyThemePreviewWithPolicy(themeName, logPath, request.RetintRun, request.RetintSkip)
+	} else {
+		pid, already, err = s.applier.ApplyThemePreview(themeName, logPath)
+	}
 	if err != nil {
 		return Result{}, fmt.Errorf("apply preview theme %s: %w", themeName, err)
 	}
