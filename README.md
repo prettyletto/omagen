@@ -72,6 +72,15 @@ An image-derived Omagen theme generated from a neon anime wallpaper:
   <img src="assets/examples/ushinawareta-theme.webp" alt="Ushinawareta generated Omagen theme" width="480">
 </p>
 
+### Neon Blue
+
+An image-derived Omagen theme generated from a blue scanline anime wallpaper:
+
+<p align="center">
+  <img src="assets/examples/neon-blue-wallpaper.webp" alt="Neon Blue source wallpaper" width="480">
+  <img src="assets/examples/neon-blue-theme.webp" alt="Neon Blue generated Omagen theme" width="480">
+</p>
+
 See the [Examples gallery](docs/examples.md) for the complete set of generated themes.
 
 ## Features
