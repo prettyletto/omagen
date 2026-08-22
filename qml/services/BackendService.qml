@@ -94,10 +94,16 @@ Item {
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
     function captureDemoPreview(sessionId) { demoCaptureProcess.exec([root.executable, "demo", "capture", sessionId]); }
 
+    function resetOutputs(stdout, stderr) {
+        stdout.reset();
+        stderr.reset();
+    }
+
     Process {
         id: pingProcess
-        stdout: StdioCollector { id: pingStdout; waitForEnd: true }
-        stderr: StdioCollector { id: pingStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: pingStdout }
+        stderr: BoundedOutputParser { id: pingStderr }
+        onStarted: root.resetOutputs(pingStdout, pingStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
                 const message = pingStderr.text.trim();
@@ -112,8 +118,9 @@ Item {
 
     Process {
         id: resumeProcess
-        stdout: StdioCollector { id: resumeStdout; waitForEnd: true }
-        stderr: StdioCollector { id: resumeStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: resumeStdout }
+        stderr: BoundedOutputParser { id: resumeStderr }
+        onStarted: root.resetOutputs(resumeStdout, resumeStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.sessionResumeCheckFailed(resumeStderr.text.trim() || "Failed to inspect previous session"); return }
             try { root.sessionResumeChecked(JSON.parse(resumeStdout.text)) } catch (error) { root.sessionResumeCheckFailed("Backend returned invalid resume data") }
@@ -122,8 +129,9 @@ Item {
 
     Process {
         id: recoverProcess
-        stdout: StdioCollector { id: recoverStdout; waitForEnd: true }
-        stderr: StdioCollector { id: recoverStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: recoverStdout }
+        stderr: BoundedOutputParser { id: recoverStderr }
+        onStarted: root.resetOutputs(recoverStdout, recoverStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.sessionRecoverFailed(recoverStderr.text.trim() || "Failed to restore previous session"); return }
             root.sessionRecovered()
@@ -133,15 +141,15 @@ Item {
     Process {
         id: sessionBeginProcess
 
-        stdout: StdioCollector {
+        stdout: BoundedOutputParser {
             id: sessionBeginStdout
-            waitForEnd: true
         }
 
-        stderr: StdioCollector {
+        stderr: BoundedOutputParser {
             id: sessionBeginStderr
-            waitForEnd: true
         }
+
+        onStarted: root.resetOutputs(sessionBeginStdout, sessionBeginStderr)
 
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
@@ -191,15 +199,15 @@ Item {
     Process {
         id: sessionCancelProcess
 
-        stdout: StdioCollector {
+        stdout: BoundedOutputParser {
             id: sessionCancelStdout
-            waitForEnd: true
         }
 
-        stderr: StdioCollector {
+        stderr: BoundedOutputParser {
             id: sessionCancelStderr
-            waitForEnd: true
         }
+
+        onStarted: root.resetOutputs(sessionCancelStdout, sessionCancelStderr)
 
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) {
@@ -230,8 +238,9 @@ Item {
     Process {
         id: generationProcess
         property string sessionId: ""
-        stdout: StdioCollector { id: generationStdout; waitForEnd: true }
-        stderr: StdioCollector { id: generationStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: generationStdout }
+        stderr: BoundedOutputParser { id: generationStderr }
+        onStarted: root.resetOutputs(generationStdout, generationStderr)
         onExited: function(exitCode, exitStatus) {
             const requestSessionId = sessionId;
             if (exitCode !== 0) { root.generationFailed(requestSessionId, generationStderr.text.trim() || "Theme generation failed"); return }
@@ -242,8 +251,9 @@ Item {
     Process {
         id: generationDescribeProcess
         property string sessionId: ""
-        stdout: StdioCollector { id: generationDescribeStdout; waitForEnd: true }
-        stderr: StdioCollector { id: generationDescribeStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: generationDescribeStdout }
+        stderr: BoundedOutputParser { id: generationDescribeStderr }
+        onStarted: root.resetOutputs(generationDescribeStdout, generationDescribeStderr)
         onExited: function(exitCode, exitStatus) {
             const requestSessionId = sessionId;
             if (exitCode !== 0) { root.generationDescribeFailed(requestSessionId, generationDescribeStderr.text.trim() || "Failed to load generated palettes"); return }
@@ -254,8 +264,9 @@ Item {
     Process {
         id: generationDiscardProcess
         property string sessionId: ""
-        stdout: StdioCollector { id: generationDiscardStdout; waitForEnd: true }
-        stderr: StdioCollector { id: generationDiscardStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: generationDiscardStdout }
+        stderr: BoundedOutputParser { id: generationDiscardStderr }
+        onStarted: root.resetOutputs(generationDiscardStdout, generationDiscardStderr)
         onExited: function(exitCode, exitStatus) {
             const requestSessionId = sessionId;
             if (exitCode !== 0) {
@@ -277,8 +288,9 @@ Item {
 
     Process {
         id: previewProcess
-        stdout: StdioCollector { id: previewStdout; waitForEnd: true }
-        stderr: StdioCollector { id: previewStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: previewStdout }
+        stderr: BoundedOutputParser { id: previewStderr }
+        onStarted: root.resetOutputs(previewStdout, previewStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.previewApplyFailed(previewStderr.text.trim() || "Failed to apply preview"); return }
             try { const result=JSON.parse(previewStdout.text); if (!result.session_id || !result.generation_id || !result.variant) { root.previewApplyFailed("Backend returned incomplete preview data"); return } root.previewApplied(result.session_id,result.generation_id,result.variant,result.theme_name||"") } catch (error) { root.previewApplyFailed("Backend returned invalid preview JSON") }
@@ -287,8 +299,9 @@ Item {
 
     Process {
         id: applyProcess
-        stdout: StdioCollector { id: applyStdout; waitForEnd: true }
-        stderr: StdioCollector { id: applyStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: applyStdout }
+        stderr: BoundedOutputParser { id: applyStderr }
+        onStarted: root.resetOutputs(applyStdout, applyStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.themeApplyFailed(applyStderr.text.trim() || "Failed to apply theme"); return }
             try { const result = JSON.parse(applyStdout.text); if (!result.session_id || !result.generation_id || !result.variant || !result.theme_name) { root.themeApplyFailed("Backend returned incomplete apply data"); return } root.themeApplied(result.session_id, result.generation_id, result.variant, result.theme_name) } catch (error) { root.themeApplyFailed("Backend returned invalid apply JSON") }
@@ -297,8 +310,9 @@ Item {
 
     Process {
         id: demoOpenProcess
-        stdout: StdioCollector { id: demoOpenStdout; waitForEnd: true }
-        stderr: StdioCollector { id: demoOpenStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: demoOpenStdout }
+        stderr: BoundedOutputParser { id: demoOpenStderr }
+        onStarted: root.resetOutputs(demoOpenStdout, demoOpenStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.demoOpenFailed(demoOpenStderr.text.trim() || "Failed to open demo workspace"); return }
             try {
@@ -311,8 +325,9 @@ Item {
 
     Process {
         id: demoCloseProcess
-        stdout: StdioCollector { id: demoCloseStdout; waitForEnd: true }
-        stderr: StdioCollector { id: demoCloseStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: demoCloseStdout }
+        stderr: BoundedOutputParser { id: demoCloseStderr }
+        onStarted: root.resetOutputs(demoCloseStdout, demoCloseStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.demoCloseFailed(demoCloseStderr.text.trim() || "Failed to close demo workspace"); return }
             try {
@@ -325,8 +340,9 @@ Item {
 
     Process {
         id: demoCaptureProcess
-        stdout: StdioCollector { id: demoCaptureStdout; waitForEnd: true }
-        stderr: StdioCollector { id: demoCaptureStderr; waitForEnd: true }
+        stdout: BoundedOutputParser { id: demoCaptureStdout }
+        stderr: BoundedOutputParser { id: demoCaptureStderr }
+        onStarted: root.resetOutputs(demoCaptureStdout, demoCaptureStderr)
         onExited: function(exitCode, exitStatus) {
             if (exitCode !== 0) { root.demoCaptureFailed(demoCaptureStderr.text.trim() || "Failed to capture Demo preview"); return }
             try {

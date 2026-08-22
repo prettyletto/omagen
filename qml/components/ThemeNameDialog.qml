@@ -79,7 +79,7 @@ Item {
                 enabled: !root.busy
                 onClicked: root.capturePreview = !root.capturePreview
             }
-            Text { visible: root.errorMessage !== ""; width: parent.width; text: root.errorMessage; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
+            Text { visible: root.errorMessage !== ""; width: parent.width; text: root.errorMessage; textFormat: Text.PlainText; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
             Item { width: 1; height: root.errorMessage !== "" ? 0 : 14 }
             Row { anchors.right: parent.right; spacing: 10
                 Rectangle { width: 95; height: 38; radius: 8; color: Util.alpha(Color.popups.text, 0.06); border.width: 1; border.color: Color.popups.border; opacity: root.busy ? .4 : 1

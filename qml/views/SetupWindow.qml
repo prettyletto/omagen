@@ -162,6 +162,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     visible: root.sourceImage !== ""
                     text: root.sourceImage
+                    textFormat: Text.PlainText
                     color: Color.popups.text
                     opacity: 0.58
                     font.family: Style.font.family
@@ -236,6 +237,7 @@ PanelWindow {
                     Layout.fillWidth: true
                     visible: root.errorMessage !== ""
                     text: root.errorMessage
+                    textFormat: Text.PlainText
                     color: Color.urgent
                     font.family: Style.font.family
                     font.pixelSize: Style.font.bodySmall
