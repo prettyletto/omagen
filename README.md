@@ -112,7 +112,7 @@ Start with an image, review the generated directions, and tune the palette
 defaults from Settings:
 
 <p align="center">
-  <img src="assets/screenshots/setup.webp" alt="Omagen setup" width="320">
+  <img src="assets/screenshots/onboarding.webp" alt="Omagen setup" width="320">
   <img src="assets/screenshots/settings.webp" alt="Omagen settings" width="320">
 </p>
 
