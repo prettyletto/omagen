@@ -173,19 +173,32 @@ func Run(
 
 func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
 	if len(args) < 4 {
-		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview]")
+		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview] [--run <adapters>] [--skip <adapters>]")
 	}
 	variant, err := generation.ParseVariant(args[2])
 	if err != nil {
 		return fail(stderr, 2, "%v", err)
 	}
 	request := apply.Request{SessionID: args[0], GenerationID: args[1], Variant: variant, ThemeName: args[3]}
-	for _, arg := range args[4:] {
+	for i := 4; i < len(args); i++ {
+		arg := args[i]
 		switch arg {
 		case "--unlock":
 			request.GenerateUnlock = true
 		case "--live-preview":
 			request.CapturePreview = true
+		case "--run", "--apps":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return fail(stderr, 2, "usage: %s requires adapter names", arg)
+			}
+			request.RetintRun = args[i+1]
+			i++
+		case "--skip":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return fail(stderr, 2, "usage: --skip requires adapter names")
+			}
+			request.RetintSkip = args[i+1]
+			i++
 		default:
 			return fail(stderr, 2, "unknown apply option: %s", arg)
 		}
@@ -495,14 +508,18 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 	}
 	switch args[0] {
 	case "apply":
-		if len(args) != 4 {
-			return fail(stderr, 2, "usage: omagen preview apply <session_id> <generation_id> <variant>")
+		if len(args) < 4 {
+			return fail(stderr, 2, "usage: omagen preview apply <session_id> <generation_id> <variant> [--run <adapters>] [--skip <adapters>]")
 		}
 		variant, err := generation.ParseVariant(args[3])
 		if err != nil {
 			return fail(stderr, 2, "%v", err)
 		}
-		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant})
+		retintRun, retintSkip, err := parseRetintOptions(args[4:])
+		if err != nil {
+			return fail(stderr, 2, "%v", err)
+		}
+		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant, RetintRun: retintRun, RetintSkip: retintSkip})
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
@@ -518,6 +535,28 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 	default:
 		return fail(stderr, 2, "unknown preview subcommand: %s", args[0])
 	}
+}
+
+func parseRetintOptions(args []string) (run, skip string, err error) {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--run", "--apps":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return "", "", fmt.Errorf("%s requires adapter names", args[i])
+			}
+			run = args[i+1]
+			i++
+		case "--skip":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return "", "", fmt.Errorf("--skip requires adapter names")
+			}
+			skip = args[i+1]
+			i++
+		default:
+			return "", "", fmt.Errorf("unknown retint option: %s", args[i])
+		}
+	}
+	return run, skip, nil
 }
 
 func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int {

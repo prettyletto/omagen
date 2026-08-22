@@ -15,11 +15,31 @@ import (
 )
 
 type Client struct {
-	stderr io.Writer
+	stderr               io.Writer
+	studioPreviewCommand string
 }
 
 func NewClient(stderr io.Writer) *Client {
-	return &Client{stderr: stderr}
+	return &Client{stderr: stderr, studioPreviewCommand: resolveStudioPreviewCommand()}
+}
+
+func resolveStudioPreviewCommand() string {
+	if configured := strings.TrimSpace(os.Getenv("OMAGEN_STUDIO_THEME_SET")); configured != "" {
+		if info, err := os.Stat(configured); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
+			return configured
+		}
+		return ""
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	configured := filepath.Join(filepath.Dir(executable), "studio-theme-set")
+	info, err := os.Stat(configured)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+		return ""
+	}
+	return configured
 }
 
 func (c *Client) CurrentTheme() (string, error) {
@@ -75,6 +95,10 @@ func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
 }
 
 func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error) {
+	return c.ApplyThemePreviewWithPolicy(themeName, logPath, "", "")
+}
+
+func (c *Client) ApplyThemePreviewWithPolicy(themeName, logPath, retintRun, retintSkip string) (int, bool, error) {
 	current, currentErr := c.CurrentTheme()
 	if currentErr == nil && current == themeName {
 		return 0, true, nil
@@ -89,7 +113,7 @@ func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error)
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
 	environment = append(environment, reloadSync.environment()...)
-	pid, _, err := c.runThemeSetUntilCritical(themeName, logPath, environment, 10*time.Second)
+	pid, _, err := c.runStudioThemeSetUntilCriticalWithPolicy(themeName, logPath, environment, 10*time.Second, retintRun, retintSkip)
 	if err != nil {
 		_ = reloadSync.close()
 		return pid, false, err
@@ -116,19 +140,106 @@ func (c *Client) ApplyTheme(themeName, logPath string) error {
 	return err
 }
 
+func (c *Client) ApplyThemeWithPolicy(themeName, logPath, retintRun, retintSkip string) error {
+	if c.studioPreviewCommand == "" {
+		return fmt.Errorf("Studio theme driver is not installed")
+	}
+	environment := []string{
+		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
+	}
+	// The core theme transaction is committed once the active theme and the
+	// shared theme-set lock are settled. Retint adapters are post-commit work;
+	// waiting for every application helper here can strand the UI if one hangs.
+	// The Studio driver remains alive to finish those adapters in parallel.
+	_, _, err := c.runStudioThemeSetApplyUntilCriticalWithPolicy(themeName, logPath, environment, 30*time.Second, retintRun, retintSkip)
+	return err
+}
+
+// FinalizePreviewTheme promotes an already-live Studio preview to its
+// permanent theme name without repeating the theme transaction or retinting
+// applications. The caller verifies the preview provenance before invoking
+// this method; this guard prevents accidentally renaming an unrelated active
+// theme.
+func (c *Client) FinalizePreviewTheme(themeName string) error {
+	if strings.TrimSpace(themeName) == "" || strings.ContainsAny(themeName, "\r\n") {
+		return fmt.Errorf("invalid finalized theme name")
+	}
+	current, err := c.CurrentTheme()
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(current, "omagen-preview-") {
+		return fmt.Errorf("active theme %q is not an Omagen preview", current)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	currentDir := filepath.Join(home, ".local", "state", "omarchy", "current")
+	temp, err := os.CreateTemp(currentDir, ".theme.name-*.tmp")
+	if err != nil {
+		return fmt.Errorf("stage finalized theme name: %w", err)
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if _, err := temp.WriteString(themeName + "\n"); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("write finalized theme name: %w", err)
+	}
+	if err := temp.Sync(); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("sync finalized theme name: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("close finalized theme name: %w", err)
+	}
+	if err := os.Rename(tempPath, filepath.Join(currentDir, "theme.name")); err != nil {
+		return fmt.Errorf("promote finalized theme name: %w", err)
+	}
+	directory, err := os.Open(currentDir)
+	if err != nil {
+		return fmt.Errorf("open current theme directory: %w", err)
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil {
+		return fmt.Errorf("sync current theme directory: %w", err)
+	}
+	return nil
+}
+
 func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
 	return c.runThemeSetUntilCriticalWithCleanup(theme, logPath, environment, timeoutDuration, nil)
 }
 
 func (c *Client) runThemeSetUntilCriticalWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false)
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false, "", "", "")
+}
+
+func (c *Client) runStudioThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
+	return c.runStudioThemeSetUntilCriticalWithPolicy(theme, logPath, environment, timeoutDuration, "", "")
+}
+
+func (c *Client) runStudioThemeSetUntilCriticalWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false, "preview", "", "")
+}
+
+func (c *Client) runStudioThemeSetUntilCriticalWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, false, "preview", retintRun, retintSkip)
+}
+
+func (c *Client) runStudioThemeSetApplyUntilCriticalWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, false, "apply", retintRun, retintSkip)
 }
 
 func (c *Client) runThemeSetToCompletionWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true)
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true, "", "", "")
 }
 
-func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool) (int, bool, error) {
+func (c *Client) runStudioThemeSetToCompletionWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, true, "apply", retintRun, retintSkip)
+}
+
+func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool, studioMode, retintRun, retintSkip string) (int, bool, error) {
 	var cleanupOnce sync.Once
 	waitTarget := "critical apply"
 	if waitForCompletion {
@@ -163,7 +274,24 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 		return 0, false, fmt.Errorf("open theme-set log: %w", err)
 	}
 
-	cmd := exec.Command("omarchy", "theme", "set", theme)
+	command := "omarchy"
+	arguments := []string{"theme", "set", theme}
+	if studioMode != "" && c.studioPreviewCommand != "" {
+		command = c.studioPreviewCommand
+		arguments = []string{studioMode, theme, "--no-hooks"}
+		if retintRun != "" {
+			arguments = append(arguments, "--run", retintRun)
+		}
+		if retintSkip != "" {
+			arguments = append(arguments, "--skip", retintSkip)
+		}
+		if retintRun == "" && retintSkip == "" {
+			if policy := strings.TrimSpace(os.Getenv("OMAGEN_STUDIO_PREVIEW_APPS")); policy != "" {
+				arguments = append(arguments, "--run", policy)
+			}
+		}
+	}
+	cmd := exec.Command(command, arguments...)
 	cmd.Env = replaceEnvironment(os.Environ(), environment...)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile

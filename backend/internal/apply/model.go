@@ -8,6 +8,8 @@ type Request struct {
 	ThemeName               string
 	GenerateUnlock          bool
 	CapturePreview          bool
+	RetintRun               string
+	RetintSkip              string
 }
 type Result struct {
 	SessionID    string             `json:"session_id"`

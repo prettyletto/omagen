@@ -6,6 +6,8 @@ type Request struct {
 	SessionID    string
 	GenerationID string
 	Variant      generation.Variant
+	RetintRun    string
+	RetintSkip   string
 }
 
 type Result struct {
