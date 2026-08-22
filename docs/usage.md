@@ -46,7 +46,7 @@ preview**. Extra configs open a styling step before palette generation; see
 [Styling and palette settings](styling.md).
 
 <p align="center">
-  <img src="../assets/screenshots/setup.webp" alt="Omagen setup" width="420">
+  <img src="../assets/screenshots/onboarding.webp" alt="Omagen setup" width="420">
 </p>
 
 ## Configure extra desktop previews
