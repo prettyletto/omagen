@@ -843,7 +843,7 @@ Item {
         barStyle: root.barStyle
         onBarStyleSelected: function(style) { root.barStyle = style }
         onContinueRequested: root.beginSession()
-        onBackRequested: root.route = "setup"
+        onBackRequested: root.quitSession()
         onHideRequested: root.close()
     }
 
