@@ -33,7 +33,6 @@ func (s *Store) Load() (Settings, error) {
 	if err != nil {
 		return Settings{}, fmt.Errorf("open settings: %w", err)
 	}
-
 	settings := Defaults()
 	if err := decodeStrict(bytes.NewReader(data), &settings); err != nil {
 		return Settings{}, fmt.Errorf("decode settings: %w", err)
