@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
@@ -28,6 +29,27 @@ func generationStore(t *testing.T) *session.Store {
 		t.Fatal(err)
 	}
 	return store
+}
+
+func TestGenerateRejectsOversizedSourceBeforeCreatingGenerationState(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{SessionID: "oversized-source", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
+	saveGenerationRecord(t, store, record)
+	imagePath := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(imagePath, fsutil.MaxFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: record.SessionID, SourceImage: imagePath})
+	if !errors.Is(err, fsutil.ErrFileTooLarge) {
+		t.Fatalf("Generate() error = %v, want ErrFileTooLarge", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(store.SessionDir(record.SessionID), "generations")); !os.IsNotExist(statErr) {
+		t.Fatalf("generation state was created before source rejection: %v", statErr)
+	}
 }
 
 func generationSettingsStore(t *testing.T) *settings.Store {

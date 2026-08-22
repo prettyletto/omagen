@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
@@ -39,6 +40,28 @@ func TestOpenRejectsPendingApplyBeforeTouchingDemoWorkspace(t *testing.T) {
 	service := NewService(store)
 	if _, err := service.Open(record.SessionID); !errors.Is(err, session.ErrApplyInProgress) {
 		t.Fatalf("error=%v, want ErrApplyInProgress", err)
+	}
+}
+
+func TestLoadStateRejectsOversizedStateFile(t *testing.T) {
+	testenv.Isolate(t)
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := NewService(store)
+	statePath := service.statePath("oversized-demo")
+	if err := os.MkdirAll(filepath.Dir(statePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(statePath, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(statePath, fsutil.MaxStateFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.loadState("oversized-demo"); !errors.Is(err, fsutil.ErrFileTooLarge) {
+		t.Fatalf("loadState() error = %v, want ErrFileTooLarge", err)
 	}
 }
 
