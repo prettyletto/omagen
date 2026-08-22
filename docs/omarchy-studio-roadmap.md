@@ -1,6 +1,6 @@
 # Omarchy Studio nightly roadmap
 
-Status: planning baseline
+Status: N1 complete; N2 is the next sequential slice
 
 Branch: `nightly`
 
@@ -249,21 +249,28 @@ package-owned files.
 
 Tasks:
 
-- [ ] Capture the installed `omarchy-theme-set` version and source hash.
-- [ ] Inventory stock/user theme overlay precedence.
-- [ ] Inventory built-in and user templates.
-- [ ] Inventory generated outputs and their real readers.
-- [ ] Inventory shell IPC and theme payload behavior.
-- [ ] Inventory Hyprland reload and user-override ordering.
-- [ ] Inventory post-apply application retint commands.
-- [ ] Inventory arbitrary theme-set hooks and their side effects.
-- [ ] Define a drift report for changes to the installed Omarchy script.
+- [x] Capture the installed `omarchy-theme-set` version and source hash.
+- [x] Inventory stock/user theme overlay precedence.
+- [x] Inventory built-in and user templates.
+- [x] Inventory generated outputs and their real readers.
+- [x] Inventory shell IPC and theme payload behavior.
+- [x] Inventory Hyprland reload and user-override ordering.
+- [x] Inventory post-apply application retint commands.
+- [x] Inventory arbitrary theme-set hooks and their side effects.
+- [x] Define a drift report for changes to the installed Omarchy script.
 
 Done when:
 
 - Studio can explain every output it is about to generate or preserve.
 - An Omarchy update can be detected as a driver compatibility event.
 - No Studio workflow depends on editing `/usr/share/omarchy/`.
+
+N1 evidence: [`omarchy-theme-pipeline.md`](omarchy-theme-pipeline.md) records
+the installed boundary, and
+[`scripts/omarchy-theme-pipeline-drift.sh`](../scripts/omarchy-theme-pipeline-drift.sh)
+checks the recorded Omarchy version and package-owned script hashes without
+mutating the desktop. Hyprland IPC version was not verified during capture
+because `hyprctl version` timed out; this remains an explicit evidence gap.
 
 ### N2 — Build the Studio theme-set driver
 
@@ -597,4 +604,22 @@ Known limitations: N1 Omarchy pipeline inventory and drift reporting remain;
   N2 explicit restore/inspect modes, scope flags, trusted hook opt-in, bounded
   driver logs, and post-step runtime verification remain future work
 Next slice: N1 Omarchy theme pipeline inventory
+```
+
+```text
+Date: 2026-08-22
+Slice: N1 Omarchy theme pipeline inventory
+Branch: nightly
+Changed owners: documentation and read-only compatibility tooling
+Validation evidence: installed Omarchy 4.0.0-1 inventory captured; drift report
+passes all four recorded version/hash checks; shell syntax, direct checker
+execution, and git diff validation pass; focused Go tests, race tests, and vet
+pass in the repository gate
+Runtime evidence: source inspection records stock/user overlay ordering,
+template and section-override behavior, generated readers, shell payload/IPC,
+Hyprland source order, retint commands, and hook side effects
+Known limitations: the full gate cannot reach its final package checks because
+the pre-existing uncommitted backend edits make bin/omagen differ from a
+deterministic rebuild; Hyprland IPC version timed out during inventory capture
+Next slice: N2 Studio theme-set driver modes, scopes, and verification
 ```

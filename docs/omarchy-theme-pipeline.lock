@@ -1,0 +1,6 @@
+# N1 compatibility snapshot. Regenerate after an intentional Omarchy review.
+schema=1
+omarchy_version=4.0.0-1
+theme_set_sha256=9dd2872607a7dc057a2b492c9b3ce62c9fcac002a487e3109b0353b4973204fc
+theme_set_templates_sha256=add9154d012c12b5628128d71efcf216ed62024cef2370e3c5c470378c06d45f
+hook_sha256=c64ea844feb1849375e7cd43dde98933293b0e0f0f522e1ba2c6572d86386c7b
