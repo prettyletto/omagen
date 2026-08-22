@@ -229,11 +229,11 @@ Goal: make the current backend a protected foundation before expanding Studio.
 Tasks:
 
 - [x] Document the current session state machine and ownership boundaries.
-- [ ] Add contract tests for begin, resume, generation, preview, Apply, Cancel,
+- [x] Add contract tests for begin, resume, generation, preview, Apply, Cancel,
       Quit, configuration Back, crash recovery, and cleanup.
 - [x] Record the exact current Apply ordering and recovery assumptions.
-- [ ] Define which backend interfaces may evolve and which must remain stable.
-- [ ] Define how new Studio capabilities attach to an active session.
+- [x] Define which backend interfaces may evolve and which must remain stable.
+- [x] Define how new Studio capabilities attach to an active session.
 - [x] Preserve the current CLI/package contract during the first nightly slices.
 
 Done when:
@@ -582,18 +582,19 @@ Update this section after each completed slice:
 
 ```text
 Date: 2026-08-22
-Slice: Studio theme-set driver, fast Apply, recovery, and cache-warm wrap-up
+Slice: N0 engine contract freeze
 Branch: nightly
-Changed owners: Omagen backend Apply/Preview/Omarchy client, Studio driver,
-  Workspace recovery UI, development documentation
-Validation evidence: full v1-check.sh PASS; Go tests, race tests, vet, QML
-  validation, package validation; source/installed driver and backend hashes match
-Live visual evidence: user confirmed Apply and the recovery-safe UI worked
-  correctly; native theme-picker cache warm-up is installed and awaiting one
-  post-install latency observation
-Rollback evidence: Apply failure recovery, prepared/committed recovery, Cancel,
-  Quit, generation Back, and ownership-protected cleanup are covered by tests
-Known limitations: explicit restore/inspect driver modes, scope flags, trusted
-  hook opt-in, drift reporting, and the Live Canvas remain future work
-Next slice: N3 Live Omarchy desktop canvas
+Changed owners: backend service contract documentation and cross-service
+  lifecycle contract tests
+Validation evidence: focused internal/contract tests pass; the full
+  GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh gate passes with Go tests,
+  race tests, vet, bundled backend verification, package validation, Demo asset
+  checks, and QML validation
+Contract evidence: Begin, Generate, Preview, configuration Back/Discard, Demo
+  Apply guard, Cancel/Quit restoration, permanent Apply commit, crash recovery,
+  and inactive ownership cleanup are covered through service APIs
+Known limitations: N1 Omarchy pipeline inventory and drift reporting remain;
+  N2 explicit restore/inspect modes, scope flags, trusted hook opt-in, bounded
+  driver logs, and post-step runtime verification remain future work
+Next slice: N1 Omarchy theme pipeline inventory
 ```
