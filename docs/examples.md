@@ -70,5 +70,14 @@ generated theme across the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/sakura-gate-wallpaper.webp" alt="Sakura Gate source wallpaper" width="480"> | <img src="../assets/examples/sakura-gate-theme.webp" alt="Sakura Gate generated Omagen theme" width="480"> |
 
+## Eva Deep
+
+This example uses a pink-and-blue Evangelion-inspired wallpaper and the
+generated `eva-deep` desktop preview.
+
+| Source wallpaper | Generated theme |
+| --- | --- |
+| <img src="../assets/examples/eva-deep-wallpaper.webp" alt="Eva Deep source wallpaper" width="480"> | <img src="../assets/examples/eva-deep-theme.webp" alt="Eva Deep generated Omagen theme" width="480"> |
+
 More generated themes will be added to this gallery as new wallpaper/theme
 pairs are captured.
