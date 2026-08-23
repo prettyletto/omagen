@@ -95,7 +95,7 @@ required=(
     "qml/services/BackendService.qml"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"
-    "qml/views/WorkspaceWindow.qml"
+    "qml/views/LiveCanvasPanel.qml"
 )
 for relative in "${required[@]}"; do
     [[ -e "$ROOT/$relative" ]] || fail "missing required file: $relative"

@@ -1,9 +1,11 @@
 package preview
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +14,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 const previewThemePrefix = "omagen-preview-"
@@ -137,6 +140,7 @@ func (s *Service) ApplyCheckpoint(request Request) (result Result, err error) {
 			return Result{}, fmt.Errorf("verify reapplied preview theme %s: %w", themeName, err)
 		}
 	}
+	applyStyleOverrides(&record, request.Styles)
 	record.PreviewVariant = string(request.Variant)
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist preview navigation: %w", err)
@@ -245,11 +249,13 @@ func (s *Service) applyLocked(request Request) (result Result, returnErr error) 
 	if _, err := journal.Progress(operation.ID, "critical live state observed", driverEvidence, nil); err != nil {
 		return Result{}, fmt.Errorf("record preview promotion: %w", err)
 	}
-	state, err := json.Marshal(map[string]string{
-		"theme_name":    themeName,
-		"generation_id": request.GenerationID,
-		"variant":       string(request.Variant),
-		"mode":          "preview",
+	state, err := json.Marshal(map[string]any{
+		"theme_name":      themeName,
+		"generation_id":   request.GenerationID,
+		"variant":         string(request.Variant),
+		"mode":            "preview",
+		"color_overrides": request.ColorOverrides,
+		"style_overrides": request.Styles,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("encode preview checkpoint: %w", err)
@@ -265,6 +271,7 @@ func (s *Service) applyLocked(request Request) (result Result, returnErr error) 
 	if _, err := journal.CompleteOperation(operation.ID, protocol.StatusSucceeded, "preview is live", "critical state active; post-commit adapters may still be running"); err != nil {
 		return Result{}, fmt.Errorf("complete preview protocol: %w", err)
 	}
+	applyStyleOverrides(&record, request.Styles)
 	record.PreviewVariant = string(request.Variant)
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist preview progress: %w", err)
@@ -329,7 +336,174 @@ func (s *Service) candidateDir(r Request) (string, error) {
 	if err := validatePathInside(sessionDir, candidate); err != nil {
 		return "", fmt.Errorf("validate candidate ownership: %w", err)
 	}
+	if len(r.ColorOverrides) > 0 || r.Styles != nil {
+		shellStyle, barStyle, rewriteShell, err := s.colorOverrideStyles(r.SessionID)
+		if err != nil {
+			return "", err
+		}
+		return s.materializeOverride(sessionDir, candidate, r, shellStyle, barStyle, rewriteShell)
+	}
 	return filepath.Abs(candidate)
+}
+
+func (s *Service) colorOverrideStyles(sessionID string) (session.ShellStyle, session.BarStyle, bool, error) {
+	record, err := s.sessions.Load(sessionID)
+	if err != nil {
+		return session.ShellStyle{}, session.BarStyle{}, false, fmt.Errorf("load session for color override: %w", err)
+	}
+	if !record.ExtraConfigs {
+		return session.ShellStyle{}, session.BarStyle{}, false, nil
+	}
+	shellStyle := session.NormalizeShellStyle(record.ShellStyle)
+	barStyle := session.NormalizeBarStyle(record.BarStyle)
+	if !shellStyle.Valid() || !barStyle.Valid() {
+		return session.ShellStyle{}, session.BarStyle{}, false, nil
+	}
+	return shellStyle, barStyle, true, nil
+}
+
+func (s *Service) materializeOverride(
+	sessionDir, source string,
+	request Request,
+	shellStyle session.ShellStyle,
+	barStyle session.BarStyle,
+	rewriteShell bool,
+) (string, error) {
+	overrideHash, err := overrideHash(request)
+	if err != nil {
+		return "", fmt.Errorf("hash preview overrides: %w", err)
+	}
+	base, err := theme.ReadColors(source)
+	if err != nil {
+		return "", fmt.Errorf("read candidate palette: %w", err)
+	}
+	overridden := base
+	if len(request.ColorOverrides) > 0 {
+		overridden, err = theme.ApplyColorOverrides(base, request.ColorOverrides)
+		if err != nil {
+			return "", err
+		}
+	}
+	root := filepath.Join(sessionDir, "preview-candidates")
+	if err := fsutil.EnsureDir(root, 0o755); err != nil {
+		return "", fmt.Errorf("create preview candidate directory: %w", err)
+	}
+	destination := filepath.Join(root, fmt.Sprintf("%s-%s", request.Variant, overrideHash[:16]))
+	if info, statErr := os.Stat(destination); statErr == nil && info.IsDir() {
+		if err := validateCandidateContents(destination); err != nil {
+			return "", fmt.Errorf("validate existing color candidate: %w", err)
+		}
+		if err := writeOverrideFiles(destination, overridden, request, shellStyle, barStyle, rewriteShell); err != nil {
+			return "", err
+		}
+		return filepath.Abs(destination)
+	} else if statErr != nil && !os.IsNotExist(statErr) {
+		return "", fmt.Errorf("inspect color candidate: %w", statErr)
+	}
+
+	temporary, err := os.MkdirTemp(root, ".color-override-*.tmp")
+	if err != nil {
+		return "", fmt.Errorf("create temporary color candidate: %w", err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.RemoveAll(temporary)
+		}
+	}()
+
+	if err := copyCandidateTree(source, temporary); err != nil {
+		return "", fmt.Errorf("copy color candidate: %w", err)
+	}
+	if err := writeOverrideFiles(temporary, overridden, request, shellStyle, barStyle, rewriteShell); err != nil {
+		return "", err
+	}
+	if _, err := fsutil.RenameAndSyncNoReplace(temporary, destination); err != nil {
+		if os.IsExist(err) {
+			if validateErr := validateCandidateContents(destination); validateErr == nil {
+				if writeErr := writeOverrideFiles(destination, overridden, request, shellStyle, barStyle, rewriteShell); writeErr != nil {
+					return "", writeErr
+				}
+				return filepath.Abs(destination)
+			}
+		}
+		return "", fmt.Errorf("commit color candidate: %w", err)
+	}
+	committed = true
+	return filepath.Abs(destination)
+}
+
+func writeOverrideFiles(dir string, palette theme.Palette, request Request, shellStyle session.ShellStyle, barStyle session.BarStyle, rewriteShell bool) error {
+	if len(request.ColorOverrides) > 0 {
+		if err := theme.WriteColors(dir, palette); err != nil {
+			return fmt.Errorf("write overridden palette: %w", err)
+		}
+	}
+	if request.Styles != nil {
+		styles := *request.Styles
+		styles.Shell = session.NormalizeShellStyle(styles.Shell)
+		styles.Desktop = session.NormalizeDesktopStyle(styles.Desktop)
+		styles.Bar = session.NormalizeBarStyle(styles.Bar)
+		if err := theme.WriteHyprland(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Inactive, styles.Desktop.BorderSpeed); err != nil {
+			return fmt.Errorf("rewrite overridden hyprland style: %w", err)
+		}
+		if err := theme.WriteShell(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility); err != nil {
+			return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
+		}
+		return nil
+	}
+	if !rewriteShell {
+		return nil
+	}
+	if err := theme.WriteShell(dir, palette, shellStyle.Surface, shellStyle.Detail, shellStyle.Tooltip, shellStyle.Notifications, barStyle.Surface, barStyle.Density, barStyle.Attention, barStyle.Form, barStyle.Visibility); err != nil {
+		return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
+	}
+	return nil
+}
+
+func colorOverrideHash(overrides map[string]string) (string, error) {
+	payload, err := json.Marshal(overrides)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(payload)), nil
+}
+
+func overrideHash(request Request) (string, error) {
+	if request.Styles == nil {
+		return colorOverrideHash(request.ColorOverrides)
+	}
+	payload, err := json.Marshal(struct {
+		Colors map[string]string `json:"colors,omitempty"`
+		Styles *StyleOverrides   `json:"styles,omitempty"`
+	}{Colors: request.ColorOverrides, Styles: request.Styles})
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", sha256.Sum256(payload)), nil
+}
+
+func copyCandidateTree(source, destination string) error {
+	return filepath.WalkDir(source, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := destination
+		if relative != "." {
+			target = filepath.Join(destination, relative)
+		}
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		if !entry.Type().IsRegular() {
+			return fmt.Errorf("unsupported candidate entry %s", relative)
+		}
+		return fsutil.CopyFileAtomic(path, target, 0o644)
+	})
 }
 
 func validateCandidateContents(dir string) error {
@@ -429,7 +603,22 @@ func (s *Service) newPreviewLog(r Request) (string, error) {
 }
 
 func previewThemeName(r Request) string {
-	return strings.ToLower(fmt.Sprintf("%s%s-%s-%s", previewThemePrefix, r.SessionID, r.GenerationID, r.Variant))
+	name := fmt.Sprintf("%s%s-%s-%s", previewThemePrefix, r.SessionID, r.GenerationID, r.Variant)
+	if len(r.ColorOverrides) > 0 || r.Styles != nil {
+		hash, _ := overrideHash(r)
+		name += "-colors-" + hash[:16]
+	}
+	return strings.ToLower(name)
+}
+
+func applyStyleOverrides(record *session.Record, styles *StyleOverrides) {
+	if record == nil || styles == nil {
+		return
+	}
+	record.ShellStyle = session.NormalizeShellStyle(styles.Shell)
+	record.DesktopStyle = session.NormalizeDesktopStyle(styles.Desktop)
+	record.BarStyle = session.NormalizeBarStyle(styles.Bar)
+	record.ExtraConfigs = true
 }
 
 func validateComponent(name, value string) error {

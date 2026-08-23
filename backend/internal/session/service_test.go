@@ -57,6 +57,27 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 }
 
+func TestServiceBeginNormalizesDesktopStyleDefaultsBeforeValidation(t *testing.T) {
+	s := testStore(t)
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	svc := NewService(s, fake)
+
+	begin, err := svc.Begin(
+		DefaultShellStyle(),
+		DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", Shape: "native", Spacing: "native", Depth: "native", Inactive: "native"},
+		DefaultBarStyle(),
+	)
+	if err != nil {
+		t.Fatalf("default desktop style was rejected: %v", err)
+	}
+	if begin.DesktopStyle.BorderSpeed != 36 || begin.DesktopStyle.BorderSize != -1 || begin.DesktopStyle.BorderSizeMode != "default" {
+		t.Fatalf("desktop speed was not normalized: %#v", begin.DesktopStyle)
+	}
+	if err := svc.Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCancelAfterRegenerationRestoresInitialBaseline(t *testing.T) {
 	s := testStore(t)
 	record := testRecord("regenerated")

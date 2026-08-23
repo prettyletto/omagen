@@ -12,12 +12,14 @@ type ShellStyle struct {
 // DesktopStyle remains the window-level configuration used by existing
 // themes. ShellStyle is additive and only controls Quattro shell.toml.
 type DesktopStyle struct {
-	BorderStyle string `json:"border_style"`
-	BorderSize  int    `json:"border_size"`
-	Shape       string `json:"shape"`
-	Spacing     string `json:"spacing"`
-	Depth       string `json:"depth"`
-	Inactive    string `json:"inactive_style"`
+	BorderStyle    string `json:"border_style"`
+	BorderSize     int    `json:"border_size"`
+	BorderSizeMode string `json:"border_size_mode"`
+	BorderSpeed    int    `json:"border_speed"`
+	Shape          string `json:"shape"`
+	Spacing        string `json:"spacing"`
+	Depth          string `json:"depth"`
+	Inactive       string `json:"inactive_style"`
 }
 type BarStyle struct {
 	Surface    string `json:"surface"`
@@ -61,12 +63,38 @@ func (s BarStyle) Valid() bool {
 }
 
 func DefaultDesktopStyle() DesktopStyle {
-	return DesktopStyle{BorderStyle: "solid", BorderSize: 0, Shape: "native", Spacing: "native", Depth: "native", Inactive: "native"}
+	return DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36, Shape: "native", Spacing: "native", Depth: "native", Inactive: "native"}
 }
 
-// NormalizeDesktopStyle keeps sessions written before inactive-window modes
-// were introduced compatible with the native behavior.
+// NormalizeDesktopStyle keeps sessions written before border-size modes and
+// inactive-window modes were introduced compatible with the native behavior.
 func NormalizeDesktopStyle(s DesktopStyle) DesktopStyle {
+	if s.BorderSizeMode == "" {
+		// Before border-size modes existed, zero meant "do not override the
+		// theme". Migrate that legacy representation to Default. Positive
+		// values remain explicit fixed sizes.
+		if s.BorderSize == 0 {
+			s.BorderSize = -1
+			s.BorderSizeMode = "default"
+		} else if s.BorderSize < 0 {
+			s.BorderSizeMode = "default"
+		} else {
+			s.BorderSizeMode = "fixed"
+		}
+	}
+	switch s.BorderSizeMode {
+	case "default":
+		s.BorderSize = -1
+	case "none":
+		s.BorderSize = 0
+	case "fixed":
+		if s.BorderSize < 1 {
+			s.BorderSize = 1
+		}
+	}
+	if s.BorderSpeed == 0 {
+		s.BorderSpeed = 36
+	}
 	if s.Inactive == "" {
 		s.Inactive = "native"
 	}
@@ -75,8 +103,13 @@ func NormalizeDesktopStyle(s DesktopStyle) DesktopStyle {
 
 func (s DesktopStyle) Valid() bool {
 	return validChoice(s.BorderStyle, "solid", "split", "split_top", "split_bottom", "blend", "neon", "spin") &&
-		s.BorderSize >= 0 && s.BorderSize <= 10 &&
-		validChoice(s.Shape, "native", "soft", "rounded") &&
+		validChoice(s.BorderSizeMode, "default", "none", "fixed") &&
+		s.BorderSize >= -1 && s.BorderSize <= 24 &&
+		((s.BorderSizeMode == "default" && s.BorderSize == -1) ||
+			(s.BorderSizeMode == "none" && s.BorderSize == 0) ||
+			(s.BorderSizeMode == "fixed" && s.BorderSize >= 1)) &&
+		s.BorderSpeed >= 10 && s.BorderSpeed <= 100 &&
+		validChoice(s.Shape, "native", "subtle", "soft", "rounded", "pill") &&
 		validChoice(s.Spacing, "native", "compact", "airy") &&
 		validChoice(s.Depth, "native", "flat", "shadow") &&
 		validChoice(s.Inactive, "native", "shadow", "blur")

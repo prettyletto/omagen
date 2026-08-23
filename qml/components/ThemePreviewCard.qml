@@ -12,7 +12,7 @@ Item {
     property string borderStyle: "solid"
     property bool configurationPreview: false
     property int activeSection: 0
-    property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: -1, borderSizeMode: "default", shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
     property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
     property bool selected: false
@@ -45,13 +45,16 @@ Item {
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
     readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
     readonly property string inactiveWindowStyle: root.configurationPreview ? (root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native") : "native"
-    readonly property real previewBorderWidth: root.configurationPreview && Number(root.desktopStyle.borderSize) > 0
-        ? Number(root.desktopStyle.borderSize) : 2
+    readonly property real previewBorderWidth: !root.configurationPreview || Number(root.desktopStyle.borderSize) < 0
+        ? 2 : Number(root.desktopStyle.borderSize)
     readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
-        // Match the Hyprland output: Native inherits Omarchy's square
-        // baseline, Soft writes rounding=3, Rounded writes rounding=8.
+        // Match the Hyprland output: Native keeps the theme baseline, then
+        // five semantic presets increase rounding without exposing compositor
+        // implementation details in the preview.
+        : root.desktopStyle.shape === "pill" ? 18
         : root.desktopStyle.shape === "rounded" ? 10
-        : root.desktopStyle.shape === "soft" ? 4 : 0
+        : root.desktopStyle.shape === "soft" ? 5
+        : root.desktopStyle.shape === "subtle" ? 2 : 0
     readonly property real windowMargin: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 14
         : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 5 : 8
     readonly property real paneGap: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 12

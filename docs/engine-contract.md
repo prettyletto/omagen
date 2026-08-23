@@ -101,10 +101,11 @@ The contract tests in `backend/internal/contract` exercise the service APIs
 through temporary XDG roots and faked native Omarchy operations. They prove
 state ownership, restoration, preview cleanup, permanent commit, pending-Apply
 guards, and inactive cleanup. QML routing remains a separate presentation
-boundary: `PreviewConfigWindow` routes Back to `quitSession`, while the
-generated workspace routes Back to `generation.Service.Discard` through
-`returnToConfiguration`.
+boundary: Setup, Recovery, Settings, and the monitor-bound Live Canvas each
+route to the session services without owning rollback themselves.
 
 Focused tests are not live-desktop proof. Live theme readers, shell IPC,
 Hyprland behavior, and visual interaction remain explicitly separate evidence
-layers for later N1/N3 work.
+layers for later N1/N3 work. The session composition and generated workspace
+are now controlled through the monitor-bound Live Canvas panel; the obsolete
+full-screen PreviewConfigWindow and WorkspaceWindow surfaces have been removed.
