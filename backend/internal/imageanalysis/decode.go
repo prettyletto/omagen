@@ -7,7 +7,8 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
-	"os"
+
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/tiff"
@@ -17,7 +18,7 @@ import (
 const maxPixels int64 = 40_000_000
 
 func DecodeFile(path string) (*Analysis, error) {
-	file, err := os.Open(path)
+	file, err := fsutil.OpenRegularFile(path, fsutil.MaxFileBytes)
 	if err != nil {
 		return nil, fmt.Errorf("open image: %w", err)
 	}

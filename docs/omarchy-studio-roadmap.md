@@ -1,6 +1,6 @@
 # Omarchy Studio nightly roadmap
 
-Status: N1 complete; N2 is the next sequential slice
+Status: N2 preview protocol/driver scope complete; native-reader proof deferred
 
 Branch: `nightly`
 
@@ -282,16 +282,24 @@ Tasks:
 - [x] Create a source-derived Studio driver in the plugin/repository boundary.
 - [x] Preserve staging, locking, theme promotion, background transition, and
       shell payload semantics.
-- [ ] Add explicit modes: preview, apply, restore, and inspect.
-- [ ] Add explicit scope flags: theme, shell, Hyprland, apps, background.
-- [ ] Add wait modes for critical promotion and full completion.
+- [x] Add explicit modes: preview, apply, restore, and inspect.
+- [x] Add explicit scope flags: theme, shell, Hyprland, apps, background.
+- [x] Add wait modes for critical promotion and full completion.
 - [x] Add `--no-hooks` behavior for Studio preview.
 - [x] Add a Studio-owned post-apply allowlist.
-- [ ] Add an explicit opt-in for trusted user hooks where compatibility requires
+- [x] Add an explicit opt-in for trusted user hooks where compatibility requires
       them.
-- [ ] Bound and persist driver logs per session/generation.
-- [ ] Verify the active theme and shell/Hyprland state after each critical step.
+- [x] Bound and persist driver logs per session/generation.
+- [ ] Deferred: verify the active theme and shell/Hyprland state after each
+      critical step when native-reader acceptance becomes part of scope.
 - [x] Make driver failure return to the session recovery path.
+- [x] Add a durable operation protocol with nested operations and checkpoints.
+- [x] Stream protocol snapshots and live events over a Unix-domain socket.
+- [x] Record preview and Apply milestones through the protocol seam.
+- [x] Expose protocol inspection and back/forward navigation commands.
+- [x] Add a compact reusable Back/Forward history control to the current
+      workspace UI.
+- [x] Connect cursor navigation to a scope-aware native change executor.
 
 Suggested interface:
 
@@ -618,8 +626,54 @@ pass in the repository gate
 Runtime evidence: source inspection records stock/user overlay ordering,
 template and section-override behavior, generated readers, shell payload/IPC,
 Hyprland source order, retint commands, and hook side effects
-Known limitations: the full gate cannot reach its final package checks because
-the pre-existing uncommitted backend edits make bin/omagen differ from a
-deterministic rebuild; Hyprland IPC version timed out during inventory capture
+Known limitations: Hyprland IPC version timed out during inventory capture;
+the inventory remains read-only evidence rather than live compositor proof
 Next slice: N2 Studio theme-set driver modes, scopes, and verification
+```
+
+```text
+Date: 2026-08-22
+Slice: N2 protocol foundation
+Branch: nightly
+Changed owners: backend protocol journal, preview/apply orchestration, and
+CLI inspection/streaming commands
+Validation evidence: protocol journal, concurrency, persistence, navigation,
+Unix socket, CLI, preview, and Apply tests pass; socket tests were run with
+host permission because the restricted sandbox rejects Unix socket setup
+Package evidence: the complete scripts/v1-check.sh gate passes, including
+reproducible bundled-backend verification, plugin validation, and QML lint
+Protocol evidence: operation trees, durable JSONL events, checkpoint branches,
+cursor back/forward, live subscriptions, external-writer refresh, and
+preview/Apply milestone reporting are implemented
+UI evidence: the installed workspace exposes a compact reusable Back/Forward
+history control, and the selected palette follows the protocol checkpoint state
+Known limitations: native Hyprland reader acceptance remains an environment-
+dependent runtime proof; the current verifier records theme, colors, shell, and
+background evidence without claiming that a generated hyprland.lua is live.
+The Unix socket subscription still needs a first-class QML live-event consumer.
+Next slice: N2 native-reader verification and socket-backed live event consumer
+```
+
+```text
+Date: 2026-08-22
+Slice: N2 driver and executor implementation
+Branch: nightly
+Changed owners: Studio theme-set driver, preview/apply orchestration, protocol
+navigation executor, CLI flags, and installed workspace controls
+Validation evidence: scripts/v1-check.sh passes after deterministic bundled
+backend rebuild; Go tests, race tests, vet, driver syntax, plugin validation,
+and QML lint pass
+Runtime evidence: the rebuilt backend, driver, and reusable Back/Forward QML
+control are installed with matching source hashes; the shell reloads the
+plugin without QML errors
+Implemented contract: preview/apply/restore/inspect modes, explicit scopes,
+critical/full/none wait modes, trusted-hook opt-in, bounded persistent logs,
+native evidence recording, and cursor navigation that reapplies the target
+checkpoint before committing protocol movement
+Known limitations: active Hyprland reader acceptance remains an
+environment-dependent runtime proof; the current verifier records theme,
+colors, shell, and background evidence without claiming that a generated
+hyprland.lua is live. The Unix socket subscription still needs a first-class
+QML live-event consumer.
+Next slice: N2 native-reader verification and socket-backed live event consumer
 ```

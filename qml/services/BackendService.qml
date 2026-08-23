@@ -41,6 +41,10 @@ Item {
     signal demoCloseFailed(string message)
     signal demoCaptured(string sessionId, string previewPath)
     signal demoCaptureFailed(string message)
+    signal protocolSnapshotLoaded(string sessionId, var snapshot)
+    signal protocolSnapshotFailed(string sessionId, string message)
+    signal protocolNavigationCompleted(string sessionId, var navigation)
+    signal protocolNavigationFailed(string sessionId, string message)
 
     function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle) {
         if (!shellStyle)
@@ -93,6 +97,18 @@ Item {
     function openDemo(sessionId) { demoOpenProcess.exec([root.executable, "demo", "open", sessionId]); }
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
     function captureDemoPreview(sessionId) { demoCaptureProcess.exec([root.executable, "demo", "capture", sessionId]); }
+    function inspectProtocol(sessionId) {
+        protocolInspectProcess.sessionId = sessionId;
+        protocolInspectProcess.exec([root.executable, "protocol", "inspect", sessionId]);
+    }
+    function navigateProtocolBack(sessionId) {
+        protocolBackProcess.sessionId = sessionId;
+        protocolBackProcess.exec([root.executable, "protocol", "back", sessionId]);
+    }
+    function navigateProtocolForward(sessionId) {
+        protocolForwardProcess.sessionId = sessionId;
+        protocolForwardProcess.exec([root.executable, "protocol", "forward", sessionId]);
+    }
 
     function resetOutputs(stdout, stderr) {
         stdout.reset();
@@ -350,6 +366,81 @@ Item {
                 if (result.ok !== true || !result.session_id || !result.preview_path) { root.demoCaptureFailed("Backend returned incomplete Demo capture data"); return }
                 root.demoCaptured(result.session_id, result.preview_path)
             } catch (error) { root.demoCaptureFailed("Backend returned invalid Demo capture JSON") }
+        }
+    }
+
+    Process {
+        id: protocolInspectProcess
+        property string sessionId: ""
+        stdout: BoundedOutputParser { id: protocolInspectStdout }
+        stderr: BoundedOutputParser { id: protocolInspectStderr }
+        onStarted: root.resetOutputs(protocolInspectStdout, protocolInspectStderr)
+        onExited: function(exitCode, exitStatus) {
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) {
+                root.protocolSnapshotFailed(requestSessionId, protocolInspectStderr.text.trim() || "Failed to inspect change history");
+                return;
+            }
+            try {
+                const result = JSON.parse(protocolInspectStdout.text);
+                if (!result.session_id || !result.snapshot) {
+                    root.protocolSnapshotFailed(requestSessionId, "Backend returned incomplete change history");
+                    return;
+                }
+                root.protocolSnapshotLoaded(result.session_id, result.snapshot);
+            } catch (error) {
+                root.protocolSnapshotFailed(requestSessionId, "Backend returned invalid change history JSON");
+            }
+        }
+    }
+
+    Process {
+        id: protocolBackProcess
+        property string sessionId: ""
+        stdout: BoundedOutputParser { id: protocolBackStdout }
+        stderr: BoundedOutputParser { id: protocolBackStderr }
+        onStarted: root.resetOutputs(protocolBackStdout, protocolBackStderr)
+        onExited: function(exitCode, exitStatus) {
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) {
+                root.protocolNavigationFailed(requestSessionId, protocolBackStderr.text.trim() || "Cannot move back in change history");
+                return;
+            }
+            try {
+                const result = JSON.parse(protocolBackStdout.text);
+                if (!result.to_checkpoint_id || !result.state) {
+                    root.protocolNavigationFailed(requestSessionId, "Backend returned incomplete back navigation data");
+                    return;
+                }
+                root.protocolNavigationCompleted(requestSessionId, result);
+            } catch (error) {
+                root.protocolNavigationFailed(requestSessionId, "Backend returned invalid back navigation JSON");
+            }
+        }
+    }
+
+    Process {
+        id: protocolForwardProcess
+        property string sessionId: ""
+        stdout: BoundedOutputParser { id: protocolForwardStdout }
+        stderr: BoundedOutputParser { id: protocolForwardStderr }
+        onStarted: root.resetOutputs(protocolForwardStdout, protocolForwardStderr)
+        onExited: function(exitCode, exitStatus) {
+            const requestSessionId = sessionId;
+            if (exitCode !== 0) {
+                root.protocolNavigationFailed(requestSessionId, protocolForwardStderr.text.trim() || "Cannot move forward in change history");
+                return;
+            }
+            try {
+                const result = JSON.parse(protocolForwardStdout.text);
+                if (!result.to_checkpoint_id || !result.state) {
+                    root.protocolNavigationFailed(requestSessionId, "Backend returned incomplete forward navigation data");
+                    return;
+                }
+                root.protocolNavigationCompleted(requestSessionId, result);
+            } catch (error) {
+                root.protocolNavigationFailed(requestSessionId, "Backend returned invalid forward navigation JSON");
+            }
         }
     }
 }

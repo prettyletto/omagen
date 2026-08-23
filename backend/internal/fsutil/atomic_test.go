@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -23,6 +24,40 @@ func TestAtomicWriteFileReplacesExistingFile(t *testing.T) {
 	}
 	if string(got) != "new" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestReadFileLimitedRejectsOversizedAndNonRegularFiles(t *testing.T) {
+	root := t.TempDir()
+	oversized := filepath.Join(root, "oversized.json")
+	if err := os.WriteFile(oversized, []byte("12345"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFileLimited(oversized, 4); !errors.Is(err, ErrFileTooLarge) {
+		t.Fatalf("ReadFileLimited() error = %v, want ErrFileTooLarge", err)
+	}
+
+	fifo := filepath.Join(root, "state.json")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFileLimited(fifo, 4); err == nil {
+		t.Fatal("ReadFileLimited() accepted a directory")
+	}
+}
+
+func TestCopyFileAtomicLimitedRejectsOversizedSource(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	destination := filepath.Join(root, "destination")
+	if err := os.WriteFile(source, []byte("12345"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := CopyFileAtomicLimited(source, destination, 0o644, 4); !errors.Is(err, ErrFileTooLarge) {
+		t.Fatalf("CopyFileAtomicLimited() error = %v, want ErrFileTooLarge", err)
+	}
+	if _, err := os.Stat(destination); !os.IsNotExist(err) {
+		t.Fatalf("destination exists after rejected copy: %v", err)
 	}
 }
 

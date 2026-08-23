@@ -30,6 +30,10 @@ Item {
     property bool pendingApplyAbortAfterDemo: false
     property bool pendingApplyUnlock: false
     property bool recoveryBusy: false
+    property bool protocolBusy: false
+    property bool protocolCanBack: false
+    property bool protocolCanForward: false
+    property string protocolMessage: ""
     property string route: "unknown"
     property var resumableSession: null
     property string pendingApplyVariant: ""
@@ -262,6 +266,41 @@ Item {
         errorMessage = ""; previewBusy = true;
         backend.applyPreview(session.sessionId, session.generationId, variant);
     }
+    function refreshProtocol() {
+        if (!session.active || session.sessionId === "" || protocolBusy)
+            return;
+        protocolBusy = true;
+        backend.inspectProtocol(session.sessionId);
+    }
+    function updateProtocolAvailability(snapshot) {
+        protocolCanBack = false;
+        protocolCanForward = false;
+        const checkpoints = snapshot && snapshot.checkpoints ? snapshot.checkpoints : [];
+        const currentId = snapshot ? snapshot.current_checkpoint_id || "" : "";
+        for (let i = 0; i < checkpoints.length; i++) {
+            const checkpoint = checkpoints[i];
+            if (checkpoint.id !== currentId)
+                continue;
+            protocolCanBack = (checkpoint.parent_id || "") !== "";
+            protocolCanForward = (checkpoint.children || []).length > 0;
+            return;
+        }
+    }
+    function navigateProtocol(direction) {
+        if (!session.workspaceReady || protocolBusy || previewBusy || cancelBusy || applyBusy || session.sessionId === "")
+            return;
+        protocolMessage = "";
+        protocolBusy = true;
+        if (direction === "back")
+            backend.navigateProtocolBack(session.sessionId);
+        else
+            backend.navigateProtocolForward(session.sessionId);
+    }
+    function applyProtocolState(state) {
+        if (!state || !state.variant || !session.hasPalette(state.variant))
+            return;
+        session.selectVariant(state.variant);
+    }
     function suggestedThemeName() {
         let filename = root.sourceImage || ""
         if (filename === "") return "Omagen Theme"
@@ -417,7 +456,14 @@ Item {
         cancelReturnRoute = "workspace";
         resumableSession = null;
         recoveryBusy = false;
+        protocolBusy = false;
+        protocolCanBack = false;
+        protocolCanForward = false;
+        protocolMessage = "";
     }
+
+    onOpenedChanged: if (opened && route === "workspace") Qt.callLater(root.refreshProtocol)
+    onRouteChanged: if (opened && route === "workspace") Qt.callLater(root.refreshProtocol)
 
     State.SessionState {
         id: session
@@ -587,6 +633,7 @@ Item {
             root.sessionBusy=false;
             root.regenerationPending=false;
             session.setGeneration(generationId, variants);
+            root.refreshProtocol();
         }
         onGenerationDescribeFailed: function(sessionId, message) {
             if (root.cancelBusy || !session.active || sessionId !== session.sessionId)
@@ -623,6 +670,7 @@ Item {
             root.previewBusy = false;
             if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
             session.markPreviewed(variant);
+            root.refreshProtocol();
 
             if (root.pendingApplyCapture) {
                 root.demoBusy = true;
@@ -773,6 +821,36 @@ Item {
             errorMessage = message;
             root.opened = true;
         }
+
+        onProtocolSnapshotLoaded: function(sessionId, snapshot) {
+            if (!session.active || sessionId !== session.sessionId)
+                return;
+            root.protocolBusy = false;
+            root.updateProtocolAvailability(snapshot);
+        }
+        onProtocolSnapshotFailed: function(sessionId, message) {
+            if (!session.active || sessionId !== session.sessionId)
+                return;
+            root.protocolBusy = false;
+            root.protocolCanBack = false;
+            root.protocolCanForward = false;
+            root.protocolMessage = message;
+        }
+        onProtocolNavigationCompleted: function(sessionId, navigation) {
+            if (!session.active || sessionId !== session.sessionId)
+                return;
+            root.applyProtocolState(navigation.state);
+            root.protocolMessage = "History cursor moved and the preview was reapplied.";
+            root.protocolBusy = false;
+            root.refreshProtocol();
+        }
+        onProtocolNavigationFailed: function(sessionId, message) {
+            if (!session.active || sessionId !== session.sessionId)
+                return;
+            root.protocolBusy = false;
+            root.protocolMessage = message;
+            root.refreshProtocol();
+        }
     }
 
     State.SettingsState {
@@ -884,6 +962,10 @@ Item {
         previewVariant: session.previewVariant
         palettes: session.palettes
         errorMessage: root.errorMessage
+        protocolCanBack: root.protocolCanBack
+        protocolCanForward: root.protocolCanForward
+        protocolBusy: root.protocolBusy
+        protocolMessage: root.protocolMessage
 
         onVariantSelected: function(variant) { root.selectVariant(variant) }
         onTestLiveRequested: function(variant) { root.testLive(variant) }
@@ -899,6 +981,8 @@ Item {
         onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
             root.applyTheme(variant, name, generateUnlock, capturePreview)
         }
+        onProtocolBackRequested: root.navigateProtocol("back")
+        onProtocolForwardRequested: root.navigateProtocol("forward")
     }
 
     Views.SettingsWindow {

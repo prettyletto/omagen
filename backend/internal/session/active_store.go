@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -17,7 +16,7 @@ func (s *Store) ActivePath() string       { return filepath.Join(s.StateRoot(), 
 func (s *Store) MutationLockPath() string { return filepath.Join(s.StateRoot(), "session.lock") }
 
 func (s *Store) LoadActive() (ActiveRecord, bool, error) {
-	data, err := os.ReadFile(s.ActivePath())
+	data, err := fsutil.ReadFileLimited(s.ActivePath(), fsutil.MaxStateFileBytes)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
 			return ActiveRecord{}, false, nil

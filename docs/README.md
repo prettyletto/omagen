@@ -14,3 +14,5 @@ the focused guides for styling, Demo, recovery, or development.
   Quit, and interrupted operations.
 - [Development](development.md) — local plugin development and validation.
 - [Architecture](architecture.md) — the plugin contract and runtime design.
+- [Studio protocol](studio-protocol.md) — live operation events, checkpoints,
+  socket streaming, and back/forward navigation.

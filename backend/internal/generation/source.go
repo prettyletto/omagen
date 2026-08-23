@@ -28,7 +28,7 @@ func cacheSourceImage(
 		"source",
 	)
 
-	if err := fsutil.CopyFileAtomic(sourcePath, destination, 0o644); err != nil {
+	if err := fsutil.CopyFileAtomicLimited(sourcePath, destination, 0o644, fsutil.MaxFileBytes); err != nil {
 		return "", fmt.Errorf(
 			"cache source image: %w",
 			err,

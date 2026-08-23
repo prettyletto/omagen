@@ -96,6 +96,19 @@ func TestParseRetintOptions(t *testing.T) {
 	}
 }
 
+func TestParseStudioOptions(t *testing.T) {
+	options, err := parseStudioOptions([]string{"--scope", "theme,shell", "--wait", "full", "--run", "terminal", "--allow-trusted-hooks"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Scope != "theme,shell" || options.WaitMode != "full" || options.RetintRun != "terminal" || !options.AllowTrustedHooks {
+		t.Fatalf("options=%#v", options)
+	}
+	if _, err := parseStudioOptions([]string{"--wait", "eventually"}); err == nil {
+		t.Fatal("expected invalid wait mode to fail")
+	}
+}
+
 func TestRunPing(t *testing.T) {
 	var out, err bytes.Buffer
 	if code := Run([]string{"ping"}, &out, &err); code != 0 {

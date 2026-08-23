@@ -14,9 +14,16 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
+const maxStudioLogBytes int64 = 1 << 20
+
 type Client struct {
 	stderr               io.Writer
 	studioPreviewCommand string
+}
+
+type studioOptionsAware interface {
+	ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) (pid int, alreadyActive bool, err error)
+	ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) error
 }
 
 func NewClient(stderr io.Writer) *Client {
@@ -87,6 +94,39 @@ func (c *Client) CurrentBackground() (session.BackgroundRef, error) {
 	return session.BackgroundRef{Kind: "external", Path: resolved}, nil
 }
 
+// VerifyNativeState checks the files and readers that form the stable native
+// evidence available without inventing a shell-specific IPC query. It is
+// deliberately conservative: theme.name, the promoted theme directory,
+// colors.toml, shell.toml, and the current background link must be readable.
+func (c *Client) VerifyNativeState(expectedTheme string) (string, error) {
+	current, err := c.CurrentTheme()
+	if err != nil {
+		return "", fmt.Errorf("verify active theme: %w", err)
+	}
+	if current != expectedTheme {
+		return "", fmt.Errorf("verify active theme: expected %q, got %q", expectedTheme, current)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	themeRoot := filepath.Join(home, ".local", "state", "omarchy", "current", "theme")
+	for _, name := range []string{"colors.toml", "shell.toml"} {
+		info, statErr := os.Stat(filepath.Join(themeRoot, name))
+		if statErr != nil {
+			return "", fmt.Errorf("verify native reader input %s: %w", name, statErr)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return "", fmt.Errorf("verify native reader input %s: not a non-empty regular file", name)
+		}
+	}
+	background, err := c.CurrentBackground()
+	if err != nil {
+		return "", fmt.Errorf("verify current background: %w", err)
+	}
+	return fmt.Sprintf("theme.name=%s colors.toml=read shell.toml=read background=%s:%s", current, background.Kind, background.Path), nil
+}
+
 func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
 	_, _, err := c.runThemeSetUntilCritical(theme, filepath.Join(sessionDir, "theme-set.log"), []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=1",
@@ -99,6 +139,10 @@ func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error)
 }
 
 func (c *Client) ApplyThemePreviewWithPolicy(themeName, logPath, retintRun, retintSkip string) (int, bool, error) {
+	return c.ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, "", "", false)
+}
+
+func (c *Client) ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) (int, bool, error) {
 	current, currentErr := c.CurrentTheme()
 	if currentErr == nil && current == themeName {
 		return 0, true, nil
@@ -112,6 +156,7 @@ func (c *Client) ApplyThemePreviewWithPolicy(themeName, logPath, retintRun, reti
 	environment := []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
+	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
 	environment = append(environment, reloadSync.environment()...)
 	pid, _, err := c.runStudioThemeSetUntilCriticalWithPolicy(themeName, logPath, environment, 10*time.Second, retintRun, retintSkip)
 	if err != nil {
@@ -141,18 +186,36 @@ func (c *Client) ApplyTheme(themeName, logPath string) error {
 }
 
 func (c *Client) ApplyThemeWithPolicy(themeName, logPath, retintRun, retintSkip string) error {
+	return c.ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, "", "", false)
+}
+
+func (c *Client) ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) error {
 	if c.studioPreviewCommand == "" {
 		return fmt.Errorf("Studio theme driver is not installed")
 	}
 	environment := []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
+	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
 	// The core theme transaction is committed once the active theme and the
 	// shared theme-set lock are settled. Retint adapters are post-commit work;
 	// waiting for every application helper here can strand the UI if one hangs.
 	// The Studio driver remains alive to finish those adapters in parallel.
 	_, _, err := c.runStudioThemeSetApplyUntilCriticalWithPolicy(themeName, logPath, environment, 30*time.Second, retintRun, retintSkip)
 	return err
+}
+
+func appendStudioOptions(environment []string, scope, waitMode string, allowTrustedHooks bool) []string {
+	if scope != "" {
+		environment = append(environment, "OMAGEN_STUDIO_SCOPE="+scope)
+	}
+	if waitMode != "" {
+		environment = append(environment, "OMAGEN_STUDIO_WAIT="+waitMode)
+	}
+	if allowTrustedHooks {
+		environment = append(environment, "OMAGEN_STUDIO_ALLOW_TRUSTED_HOOKS=1")
+	}
+	return environment
 }
 
 // FinalizePreviewTheme promotes an already-live Studio preview to its
@@ -268,11 +331,31 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 	}
 	defer lockFile.Close()
 
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		clean()
 		return 0, false, fmt.Errorf("open theme-set log: %w", err)
 	}
+	logReader, logWriter, err := os.Pipe()
+	if err != nil {
+		_ = logFile.Close()
+		clean()
+		return 0, false, fmt.Errorf("prepare bounded theme-set log: %w", err)
+	}
+	logDone := make(chan error, 1)
+	go func() {
+		writer := &boundedLogWriter{dst: logFile, remaining: maxStudioLogBytes}
+		_, copyErr := io.Copy(writer, logReader)
+		if writer.truncated {
+			_, _ = io.WriteString(logFile, "\n[omagen] log truncated at 1048576 bytes\n")
+		}
+		if syncErr := logFile.Sync(); copyErr == nil {
+			copyErr = syncErr
+		}
+		_ = logReader.Close()
+		_ = logFile.Close()
+		logDone <- copyErr
+	}()
 
 	command := "omarchy"
 	arguments := []string{"theme", "set", theme}
@@ -293,16 +376,23 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 	}
 	cmd := exec.Command(command, arguments...)
 	cmd.Env = replaceEnvironment(os.Environ(), environment...)
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
+		_ = logWriter.Close()
+		_ = logReader.Close()
+		<-logDone
 		clean()
 		return 0, false, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
 	}
 	pid := cmd.Process.Pid
-	_ = logFile.Close()
+	closeLog := func() error {
+		if err := logWriter.Close(); err != nil {
+			return err
+		}
+		return <-logDone
+	}
 
 	waitCh := make(chan error, 1)
 	go func() {
@@ -318,8 +408,12 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 	for {
 		select {
 		case err := <-waitCh:
+			logErr := closeLog()
 			currentTheme, readErr := c.CurrentTheme()
 			if err == nil && readErr == nil && currentTheme == theme && themeSetLockFree(lockFile) {
+				if logErr != nil {
+					return pid, false, fmt.Errorf("persist theme-set log: %w", logErr)
+				}
 				return pid, false, nil
 			}
 			logData, _ := os.ReadFile(logPath)
@@ -341,9 +435,37 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 				<-waitCh
 			}
+			_ = closeLog()
 			return pid, false, fmt.Errorf("timed out waiting for theme %q %s", theme, waitTarget)
 		}
 	}
+}
+
+type boundedLogWriter struct {
+	dst       io.Writer
+	remaining int64
+	truncated bool
+}
+
+func (w *boundedLogWriter) Write(data []byte) (int, error) {
+	if w.remaining <= 0 {
+		w.truncated = true
+		return len(data), nil
+	}
+	limit := int64(len(data))
+	if limit > w.remaining {
+		limit = w.remaining
+		w.truncated = true
+	}
+	n, err := w.dst.Write(data[:limit])
+	w.remaining -= int64(n)
+	if err != nil {
+		return n, err
+	}
+	if n < len(data) {
+		return len(data), nil
+	}
+	return n, nil
 }
 
 func replaceEnvironment(base []string, replacements ...string) []string {

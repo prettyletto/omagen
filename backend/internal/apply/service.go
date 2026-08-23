@@ -1,6 +1,7 @@
 package apply
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/protocol"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
@@ -22,8 +24,16 @@ type policyAwareThemeApplier interface {
 	ApplyThemeWithPolicy(themeName, logPath, retintRun, retintSkip string) error
 }
 
+type optionsAwareThemeApplier interface {
+	ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) error
+}
+
 type previewFinalizer interface {
 	FinalizePreviewTheme(themeName string) error
+}
+
+type nativeStateVerifier interface {
+	VerifyNativeState(expectedTheme string) (string, error)
 }
 
 type themeInspector interface {
@@ -151,6 +161,35 @@ func (s *Service) Apply(r Request) (Result, error) {
 	} else if !os.IsNotExist(err) {
 		return Result{}, fmt.Errorf("inspect theme destination: %w", err)
 	}
+	journal, protocolPaths, err := protocol.OpenForSession(s.sessions.StateRoot(), r.SessionID)
+	if err != nil {
+		return Result{}, fmt.Errorf("open apply protocol: %w", err)
+	}
+	operation, err := journal.StartOperation(protocol.OperationInput{
+		Name:         "apply",
+		SessionID:    r.SessionID,
+		GenerationID: r.GenerationID,
+		Variant:      string(r.Variant),
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("start apply protocol: %w", err)
+	}
+	protocolComplete := false
+	defer func() {
+		if !protocolComplete {
+			_, _ = journal.CompleteOperation(operation.ID, protocol.StatusFailed, "apply operation failed", "apply did not reach committed protocol state")
+		}
+	}()
+	stageOperation, err := journal.StartOperation(protocol.OperationInput{
+		ParentID:     operation.ID,
+		Name:         "publish destination",
+		SessionID:    r.SessionID,
+		GenerationID: r.GenerationID,
+		Variant:      string(r.Variant),
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("start apply staging protocol: %w", err)
+	}
 	record.ApplyPhase = session.ApplyPhasePrepared
 	record.AppliedTheme = name.Slug
 	record.AppliedGeneration = r.GenerationID
@@ -160,26 +199,90 @@ func (s *Service) Apply(r Request) (Result, error) {
 		return Result{}, fmt.Errorf("persist prepared apply: %w", err)
 	}
 	if err := publish(publishSource, destination, s.themesRoot, r.SessionID); err != nil {
+		_, _ = journal.CompleteOperation(stageOperation.ID, protocol.StatusFailed, err.Error(), "owned destination was not published")
 		return Result{}, fmt.Errorf("publish theme: %w", err)
+	}
+	if _, err := journal.CompleteOperation(stageOperation.ID, protocol.StatusSucceeded, "destination published", "owned destination staged"); err != nil {
+		return Result{}, fmt.Errorf("complete apply staging protocol: %w", err)
+	}
+	if _, err := journal.Progress(operation.ID, "candidate published", "owned destination staged", nil); err != nil {
+		return Result{}, fmt.Errorf("record apply staging: %w", err)
+	}
+	driverOperation, err := journal.StartOperation(protocol.OperationInput{
+		ParentID:     operation.ID,
+		Name:         "native theme driver",
+		SessionID:    r.SessionID,
+		GenerationID: r.GenerationID,
+		Variant:      string(r.Variant),
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("start apply driver protocol: %w", err)
 	}
 	logPath := filepath.Join(s.sessions.SessionDir(r.SessionID), "apply.log")
 	var applyErr error
 	if fastFinalize {
+		if _, err := journal.Progress(operation.ID, "preview finalization started", "reusing already-live preview", nil); err != nil {
+			return Result{}, fmt.Errorf("record preview finalization: %w", err)
+		}
 		finalizer := s.applier.(previewFinalizer)
 		applyErr = finalizer.FinalizePreviewTheme(name.Slug)
 	} else if policyApplier, ok := s.applier.(policyAwareThemeApplier); ok {
 		// Studio Apply is the normal path. It preserves the native critical
 		// transaction while keeping arbitrary hooks and cache warmers out of
 		// the plugin-owned workflow.
-		applyErr = policyApplier.ApplyThemeWithPolicy(name.Slug, logPath, r.RetintRun, r.RetintSkip)
+		if r.Scope != "" || r.WaitMode != "" || r.AllowTrustedHooks {
+			optionsApplier, optionsOK := s.applier.(optionsAwareThemeApplier)
+			if !optionsOK {
+				return Result{}, fmt.Errorf("Apply driver options requested but the theme driver does not support them")
+			}
+			applyErr = optionsApplier.ApplyThemeWithOptions(name.Slug, logPath, r.RetintRun, r.RetintSkip, r.Scope, r.WaitMode, r.AllowTrustedHooks)
+		} else {
+			applyErr = policyApplier.ApplyThemeWithPolicy(name.Slug, logPath, r.RetintRun, r.RetintSkip)
+		}
 	} else {
 		// Keep compatibility with narrow test/fallback appliers that only
 		// implement the original native operation.
 		applyErr = s.applier.ApplyTheme(name.Slug, logPath)
 	}
 	if applyErr != nil {
+		_, _ = journal.CompleteOperation(driverOperation.ID, protocol.StatusFailed, applyErr.Error(), "native theme driver failed")
 		return Result{}, fmt.Errorf("apply theme %q: %w", name.Display, applyErr)
 	}
+	driverEvidence := "theme promotion and theme-set lock verified"
+	if verifier, ok := s.applier.(nativeStateVerifier); ok {
+		driverEvidence, err = verifier.VerifyNativeState(name.Slug)
+		if err != nil {
+			_, _ = journal.CompleteOperation(driverOperation.ID, protocol.StatusFailed, err.Error(), "native reader verification failed")
+			return Result{}, fmt.Errorf("verify applied theme %q: %w", name.Display, err)
+		}
+	}
+	if _, err := journal.CompleteOperation(driverOperation.ID, protocol.StatusSucceeded, "native theme driver reached critical state", driverEvidence); err != nil {
+		return Result{}, fmt.Errorf("complete apply driver protocol: %w", err)
+	}
+	if _, err := journal.Progress(operation.ID, "critical live state observed", driverEvidence, nil); err != nil {
+		return Result{}, fmt.Errorf("record apply promotion: %w", err)
+	}
+	state, err := json.Marshal(map[string]string{
+		"theme_name":    name.Slug,
+		"generation_id": r.GenerationID,
+		"variant":       string(r.Variant),
+		"mode":          "apply",
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("encode apply checkpoint: %w", err)
+	}
+	checkpoint, err := journal.CreateCheckpoint(protocol.CheckpointInput{
+		OperationID: operation.ID,
+		Name:        name.Slug,
+		State:       state,
+	})
+	if err != nil {
+		return Result{}, fmt.Errorf("record apply checkpoint: %w", err)
+	}
+	if _, err := journal.CompleteOperation(operation.ID, protocol.StatusSucceeded, "theme committed", "critical state active; post-commit adapters may still be running"); err != nil {
+		return Result{}, fmt.Errorf("complete apply protocol: %w", err)
+	}
+	protocolComplete = true
 	record.ApplyPhase = session.ApplyPhaseCommitted
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist committed apply: %w", err)
@@ -190,7 +293,18 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if err := s.finishCommitted(r.SessionID); err != nil {
 		return Result{}, err
 	}
-	return Result{SessionID: r.SessionID, GenerationID: r.GenerationID, Variant: r.Variant, ThemeName: name.Slug, DisplayName: name.Display, ThemePath: destination}, nil
+	return Result{
+		SessionID:          r.SessionID,
+		GenerationID:       r.GenerationID,
+		Variant:            r.Variant,
+		ThemeName:          name.Slug,
+		DisplayName:        name.Display,
+		ThemePath:          destination,
+		ProtocolOperation:  operation.ID,
+		ProtocolCheckpoint: checkpoint.ID,
+		ProtocolEvents:     protocolPaths.Events,
+		ProtocolSocket:     protocolPaths.Socket,
+	}, nil
 }
 
 func (s *Service) canFinalizePreview(record session.Record, request Request) bool {

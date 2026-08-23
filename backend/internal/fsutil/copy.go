@@ -10,19 +10,25 @@ import (
 )
 
 func CopyFileAtomic(source, destination string, mode fs.FileMode) error {
-	input, err := os.Open(source)
+	return CopyFileAtomicLimited(source, destination, mode, MaxFileBytes)
+}
+
+func CopyFileAtomicLimited(source, destination string, mode fs.FileMode, maxBytes int64) error {
+	input, err := OpenRegularFile(source, maxBytes)
 	if err != nil {
 		return fmt.Errorf("open source %s: %w", source, err)
 	}
 	defer input.Close()
-	info, err := input.Stat()
-	if err != nil {
-		return fmt.Errorf("stat source %s: %w", source, err)
-	}
-	if !info.Mode().IsRegular() {
-		return fmt.Errorf("source %s is not a regular file", source)
-	}
-	return AtomicWrite(destination, mode, func(w io.Writer) error { _, err := io.Copy(w, input); return err })
+	return AtomicWrite(destination, mode, func(w io.Writer) error {
+		written, err := io.Copy(w, io.LimitReader(input, maxBytes+1))
+		if err != nil {
+			return err
+		}
+		if written > maxBytes {
+			return fmt.Errorf("%w: source %s exceeds %d bytes", ErrFileTooLarge, source, maxBytes)
+		}
+		return nil
+	})
 }
 
 func LinkOrCopyAtomic(source, destination string, mode fs.FileMode) error {

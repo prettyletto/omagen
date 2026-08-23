@@ -37,6 +37,11 @@ func TestCurrentThemeAndBackground(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("  nord\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	for _, name := range []string{"colors.toml", "shell.toml"} {
+		if err := os.WriteFile(filepath.Join(themeRoot, name), []byte("[section]\nvalue = true\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	background := filepath.Join(themeRoot, "bg.png")
 	if err := os.WriteFile(background, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
@@ -51,6 +56,9 @@ func TestCurrentThemeAndBackground(t *testing.T) {
 	got, err := c.CurrentBackground()
 	if err != nil || got != (session.BackgroundRef{Kind: "theme", Path: "bg.png"}) {
 		t.Fatalf("background=%#v err=%v", got, err)
+	}
+	if evidence, err := c.VerifyNativeState("nord"); err != nil || !strings.Contains(evidence, "colors.toml=read") || !strings.Contains(evidence, "shell.toml=read") {
+		t.Fatalf("native evidence=%q err=%v", evidence, err)
 	}
 	if err := os.WriteFile(filepath.Join(current, "theme.name"), nil, 0o644); err != nil {
 		t.Fatal(err)
@@ -300,6 +308,49 @@ func TestApplyThemePreviewPassesNonUIRetintPolicy(t *testing.T) {
 	}
 	if got := string(args); got != "preview\nnew\n--no-hooks\n--run\nterminal,browser\n" {
 		t.Fatalf("studio driver args=%q", got)
+	}
+}
+
+func TestStudioThemeSetLogIsBounded(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	driver := filepath.Join(bin, "studio-theme-set")
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\n/usr/bin/dd if=/dev/zero bs=1048576 count=2 2>/dev/null\n"
+	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	terminal := filepath.Join(bin, "omarchy-restart-terminal")
+	if err := os.WriteFile(terminal, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	t.Setenv("OMAGEN_STUDIO_THEME_SET", driver)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(t.TempDir(), "bounded.log")
+	if _, _, err := NewClient(nil).ApplyThemePreview("new", logPath); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() > maxStudioLogBytes+128 {
+		t.Fatalf("log size=%d, want at most %d", info.Size(), maxStudioLogBytes+128)
+	}
+	data, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "log truncated") {
+		t.Fatal("bounded log did not record truncation marker")
 	}
 }
 
