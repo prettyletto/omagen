@@ -248,7 +248,7 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	service := newServiceWithThemeRoot(store, previewApplier{}, themeRoot)
 	styles := &StyleOverrides{
 		Shell:   session.ShellStyle{Surface: "contrast", Detail: "focus", Tooltip: "accent", Notifications: "accent"},
-		Desktop: session.DesktopStyle{BorderStyle: "neon", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+		Desktop: session.DesktopStyle{BorderStyle: "neon", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "frosted_balanced"},
 		Bar:     session.BarStyle{Surface: "dark", Density: "comfortable", Attention: "accent", Form: "docked", Visibility: "islands"},
 	}
 	result, err := service.Apply(Request{SessionID: record.SessionID, GenerationID: "generation-1", Variant: generation.Source, Styles: styles})
@@ -263,7 +263,7 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"border_size = 2", "rounding = 8", "inactive_opacity = 0.58", "blur = { enabled = true"} {
+	for _, want := range []string{"border_size = 2", "rounding = 8", "inactive_opacity = 0.68", "blur = { enabled = true"} {
 		if !strings.Contains(string(hyprland), want) {
 			t.Errorf("live composition hyprland.lua missing %q:\n%s", want, hyprland)
 		}
@@ -285,7 +285,7 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.DesktopStyle.Inactive != "blur" || updated.BarStyle.Form != "docked" || updated.ShellStyle.Detail != "focus" {
+	if updated.DesktopStyle.Inactive != "frosted_balanced" || updated.BarStyle.Form != "docked" || updated.ShellStyle.Detail != "focus" {
 		t.Fatalf("session did not retain live composition: %#v", updated)
 	}
 }

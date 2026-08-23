@@ -1,7 +1,7 @@
 # Omarchy Studio nightly roadmap
 
 Status: N3 Live Canvas v1, N3.1 color studio, and N3.2 window composition
-foundation implemented; live desktop proof pending
+foundation implemented; the four-engine split is implemented; live desktop proof pending
 
 Branch: `nightly`
 
@@ -494,6 +494,12 @@ Completed in this slice:
 - [x] Add spacing presets: Default, Compact, and Airy.
 - [x] Add depth presets: Default, Flat, and Shadow.
 - [x] Add inactive-window modes: Native, Shadowed, and Backdrop blur.
+- [x] Split active and inactive window surfaces into independent compositor
+      profiles, with explicit frosted opacity/dim/blur paths.
+- [x] Add a separate Animations engine for window, workspace, border, and
+      reduced-motion settings instead of coupling motion to Window surfaces.
+- [x] Persist Window and Animations choices through begin, resume, preview,
+      regeneration, and generated Hyprland Lua.
 - [x] Add an editable spinning-border speed control.
 - [x] Keep the spinning border loop alive for already-mapped windows through a
       generated compositor-owned timer.
@@ -513,8 +519,8 @@ own runtime-reader and visual validation. The QML socket live-event consumer,
 full color suggestion/provenance/contrast work, and complete Window runtime
 proof remain unfinished.
 
-Next slice: N3.2 runtime validation and polish for Window, followed by Shell
-and Bar labs.
+Next slice: live runtime validation of active/inactive glass and animation
+readers, followed by Shell and Bar labs.
 
 ### N4 — Define the Studio document and live profiles
 

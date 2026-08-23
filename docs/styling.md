@@ -59,7 +59,7 @@ between surfaces matters.
 
 Choose **In-depth** in setup to choose desktop composition before generating
 the six directions. The configuration window contains
-Window, Shell, and Bar sections. Each choice updates the Source card so the
+Window, Shell, Bar, and Animations sections. Each choice updates the Source card so the
 composition can be judged alongside the extracted palette.
 
 ### Window
@@ -75,15 +75,27 @@ Window controls are:
 - **Corner shape:** Five fixed presets — Native, Subtle, Soft, Rounded, and Pill.
 - **Pane spacing:** Native, Compact, Airy.
 - **Depth:** Native, Flat, Shadow.
-- **Inactive windows:** Native, Shadowed, Backdrop blur.
+- **Active and inactive windows:** Each has Native or Frosted backdrop (Light,
+  Balanced, or Rich) treatment. Inactive also offers Soft dim.
 
-Shadowed dims unfocused windows and gives them a stronger receding shadow.
-Backdrop blur dims and lowers inactive opacity while enabling Hyprland's
-background blur treatment; opaque applications may only show the dimming
-because native Hyprland blur affects translucent surfaces.
+Soft dim keeps inactive windows readable while moving attention to the focused
+window. Frosted backdrop uses a translucent inactive surface and Hyprland
+background blur. The generated profiles use `ignore_opacity = true` so the
+inactive opacity does not collapse the backdrop sample into a dark shadow.
+Light is the low-cost option, Balanced is the recommended
+default, and Rich uses a larger multipass blur. The Live Canvas layer also uses
+`ignore_alpha = 0.20` and profile-specific panel alpha so the glass surface is
+visibly translucent. Opaque application pixels stay
+sharp: native Hyprland blur affects only the backdrop visible through a
+translucent surface.
+
+Active and inactive profiles are separate compositor paths. A focused surface
+can be translucent while inactive panes use a stronger dim, or either path can
+remain native. This makes the blur choice explicit instead of pretending that
+one inactive toggle can blur opaque application content.
 
 The Live Canvas is a Quickshell layer surface rather than a managed window.
-When Backdrop blur is selected, Omagen therefore emits a scoped Hyprland
+When a Frosted backdrop profile is selected, Omagen therefore emits a scoped Hyprland
 `hl.layer_rule` for the `omagen-live-canvas` namespace, enables popup blur for
 that surface, and lowers the panel background opacity so the compositor can
 sample the wallpaper and windows behind it. The rule is intentionally scoped
@@ -93,6 +105,13 @@ only blur the backdrop visible through a translucent surface.
 
 These choices describe the generated theme's window presentation. They do not
 change Hyprland's layout while you are making the selection.
+
+### Animations
+
+Animations are a separate Hyprland engine. Window motion controls open, close,
+and resize transitions; workspace motion controls workspace switching; border
+motion controls animated focus borders. Reduced motion disables those
+transitions without changing Window, Shell, or Bar surfaces.
 
 ### Shell
 

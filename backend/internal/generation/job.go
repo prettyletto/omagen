@@ -15,13 +15,14 @@ import (
 )
 
 type job struct {
-	variant      Variant
-	sourceImage  string
-	analysis     *imageanalysis.Analysis
-	settings     settingspkg.Settings
-	shellStyle   session.ShellStyle
-	desktopStyle session.DesktopStyle
-	barStyle     session.BarStyle
+	variant         Variant
+	sourceImage     string
+	analysis        *imageanalysis.Analysis
+	settings        settingspkg.Settings
+	shellStyle      session.ShellStyle
+	desktopStyle    session.DesktopStyle
+	barStyle        session.BarStyle
+	animationsStyle session.AnimationsStyle
 }
 
 func (j job) run(
@@ -184,7 +185,7 @@ func (j job) run(
 		}
 	}
 	if j.desktopStyle.Valid() {
-		if err := theme.WriteHyprland(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Inactive, j.desktopStyle.BorderSpeed); err != nil {
+		if err := theme.WriteHyprlandWithAnimations(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Active, j.desktopStyle.Inactive, j.desktopStyle.BorderSpeed, j.animationsStyle); err != nil {
 			return fmt.Errorf("write hyprland style: %w", err)
 		}
 	}

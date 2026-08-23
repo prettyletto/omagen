@@ -19,8 +19,57 @@ type DesktopStyle struct {
 	Shape          string `json:"shape"`
 	Spacing        string `json:"spacing"`
 	Depth          string `json:"depth"`
-	Inactive       string `json:"inactive_style"`
+	// Active controls the focused-window surface. Native keeps full opacity;
+	// frosted profiles expose compositor backdrop blur through active opacity.
+	Active string `json:"active_style"`
+	// Inactive controls the inactive-window presentation. "blur" remains a
+	// backwards-compatible alias for the balanced frosted-backdrop profile.
+	Inactive string `json:"inactive_style"`
 }
+
+// AnimationsStyle owns compositor motion independently from Window, Shell,
+// and Bar composition. Border motion remains backward compatible with the
+// legacy DesktopStyle.BorderSpeed field when this engine is omitted.
+type AnimationsStyle struct {
+	Window        string `json:"window"`
+	Workspace     string `json:"workspace"`
+	Border        string `json:"border"`
+	BorderSpeed   int    `json:"border_speed"`
+	ReducedMotion bool   `json:"reduced_motion"`
+}
+
+func DefaultAnimationsStyle() AnimationsStyle {
+	return AnimationsStyle{Window: "native", Workspace: "native", Border: "native", BorderSpeed: 36}
+}
+
+func NormalizeAnimationsStyle(s AnimationsStyle) AnimationsStyle {
+	if s.Window == "" {
+		s.Window = "native"
+	}
+	if s.Workspace == "" {
+		s.Workspace = "native"
+	}
+	if s.Border == "" {
+		s.Border = "native"
+	}
+	if s.BorderSpeed == 0 {
+		s.BorderSpeed = 36
+	}
+	if s.ReducedMotion {
+		s.Window = "none"
+		s.Workspace = "none"
+		s.Border = "static"
+	}
+	return s
+}
+
+func (s AnimationsStyle) Valid() bool {
+	return validChoice(s.Window, "native", "smooth", "snappy", "none") &&
+		validChoice(s.Workspace, "native", "smooth", "snappy", "none") &&
+		validChoice(s.Border, "native", "static", "spin") &&
+		s.BorderSpeed >= 10 && s.BorderSpeed <= 100
+}
+
 type BarStyle struct {
 	Surface    string `json:"surface"`
 	Density    string `json:"density"`
@@ -63,7 +112,7 @@ func (s BarStyle) Valid() bool {
 }
 
 func DefaultDesktopStyle() DesktopStyle {
-	return DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36, Shape: "native", Spacing: "native", Depth: "native", Inactive: "native"}
+	return DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36, Shape: "native", Spacing: "native", Depth: "native", Active: "native", Inactive: "native"}
 }
 
 // NormalizeDesktopStyle keeps sessions written before border-size modes and
@@ -98,6 +147,15 @@ func NormalizeDesktopStyle(s DesktopStyle) DesktopStyle {
 	if s.Inactive == "" {
 		s.Inactive = "native"
 	}
+	if s.Active == "" {
+		s.Active = "native"
+	}
+	if s.Active == "blur" {
+		s.Active = "frosted_balanced"
+	}
+	if s.Inactive == "blur" {
+		s.Inactive = "frosted_balanced"
+	}
 	return s
 }
 
@@ -112,7 +170,8 @@ func (s DesktopStyle) Valid() bool {
 		validChoice(s.Shape, "native", "subtle", "soft", "rounded", "pill") &&
 		validChoice(s.Spacing, "native", "compact", "airy") &&
 		validChoice(s.Depth, "native", "flat", "shadow") &&
-		validChoice(s.Inactive, "native", "shadow", "blur")
+		validChoice(s.Active, "native", "frosted_light", "frosted_balanced", "frosted_rich") &&
+		validChoice(s.Inactive, "native", "shadow", "blur", "frosted_light", "frosted_balanced", "frosted_rich")
 }
 
 func DefaultShellStyle() ShellStyle {
@@ -167,32 +226,34 @@ type BackgroundRef struct {
 }
 
 type Record struct {
-	SessionID          string        `json:"session_id"`
-	OriginalTheme      string        `json:"original_theme"`
-	OriginalBackground BackgroundRef `json:"original_background"`
-	CreatedAt          time.Time     `json:"created_at"`
-	SourceImage        string        `json:"source_image,omitempty"`
-	ExtraConfigs       bool          `json:"extra_configs,omitempty"`
-	ShellStyle         ShellStyle    `json:"shell_style,omitempty"`
-	DesktopStyle       DesktopStyle  `json:"desktop_style,omitempty"`
-	BarStyle           BarStyle      `json:"bar_style,omitempty"`
-	GenerationID       string        `json:"generation_id,omitempty"`
-	PreviewVariant     string        `json:"preview_variant,omitempty"`
-	ApplyPhase         ApplyPhase    `json:"apply_phase,omitempty"`
-	AppliedTheme       string        `json:"applied_theme,omitempty"`
-	AppliedGeneration  string        `json:"applied_generation,omitempty"`
-	AppliedVariant     string        `json:"applied_variant,omitempty"`
-	AppliedDisplayName string        `json:"applied_display_name,omitempty"`
+	SessionID          string          `json:"session_id"`
+	OriginalTheme      string          `json:"original_theme"`
+	OriginalBackground BackgroundRef   `json:"original_background"`
+	CreatedAt          time.Time       `json:"created_at"`
+	SourceImage        string          `json:"source_image,omitempty"`
+	ExtraConfigs       bool            `json:"extra_configs,omitempty"`
+	ShellStyle         ShellStyle      `json:"shell_style,omitempty"`
+	DesktopStyle       DesktopStyle    `json:"desktop_style,omitempty"`
+	BarStyle           BarStyle        `json:"bar_style,omitempty"`
+	AnimationsStyle    AnimationsStyle `json:"animations_style,omitempty"`
+	GenerationID       string          `json:"generation_id,omitempty"`
+	PreviewVariant     string          `json:"preview_variant,omitempty"`
+	ApplyPhase         ApplyPhase      `json:"apply_phase,omitempty"`
+	AppliedTheme       string          `json:"applied_theme,omitempty"`
+	AppliedGeneration  string          `json:"applied_generation,omitempty"`
+	AppliedVariant     string          `json:"applied_variant,omitempty"`
+	AppliedDisplayName string          `json:"applied_display_name,omitempty"`
 }
 
 type BeginResult struct {
-	SessionID          string        `json:"session_id"`
-	OriginalTheme      string        `json:"original_theme"`
-	OriginalBackground BackgroundRef `json:"original_background"`
-	ShellStyle         ShellStyle    `json:"shell_style"`
-	DesktopStyle       DesktopStyle  `json:"desktop_style"`
-	BarStyle           BarStyle      `json:"bar_style"`
-	ExtraConfigs       bool          `json:"extra_configs"`
+	SessionID          string          `json:"session_id"`
+	OriginalTheme      string          `json:"original_theme"`
+	OriginalBackground BackgroundRef   `json:"original_background"`
+	ShellStyle         ShellStyle      `json:"shell_style"`
+	DesktopStyle       DesktopStyle    `json:"desktop_style"`
+	BarStyle           BarStyle        `json:"bar_style"`
+	AnimationsStyle    AnimationsStyle `json:"animations_style"`
+	ExtraConfigs       bool            `json:"extra_configs"`
 }
 
 type ActiveRecord struct {

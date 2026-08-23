@@ -49,6 +49,7 @@ type resumeResponse struct {
 	ShellStyle             session.ShellStyle            `json:"shell_style,omitempty"`
 	DesktopStyle           session.DesktopStyle          `json:"desktop_style,omitempty"`
 	BarStyle               session.BarStyle              `json:"bar_style,omitempty"`
+	AnimationsStyle        session.AnimationsStyle       `json:"animations_style,omitempty"`
 	ExtraConfigs           bool                          `json:"extra_configs,omitempty"`
 	OriginalTheme          string                        `json:"original_theme,omitempty"`
 	OriginalBackgroundKind string                        `json:"original_background_kind,omitempty"`
@@ -470,7 +471,7 @@ func runSessionWithDependencies(
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
-		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, AnimationsStyle: session.NormalizeAnimationsStyle(record.AnimationsStyle), ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
 		if demoService != nil {
 			canvas, statusErr := demoService.Status(record.SessionID)
 			if statusErr == nil {
@@ -487,7 +488,7 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) != 1 && len(args) != 13 && len(args) != 14 && len(args) != 15 && len(args) != 16 && len(args) != 17 && len(args) != 18 && len(args) != 19 && len(args) != 20 {
+		if len(args) != 1 && len(args) < 13 {
 			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> [<default|none|fixed>] <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 		}
 		if cleanupService != nil {
@@ -502,6 +503,7 @@ func runSessionWithDependencies(
 		var shellStyle session.ShellStyle
 		var desktopStyle session.DesktopStyle
 		var barStyle session.BarStyle
+		var animationsStyle session.AnimationsStyle
 		if len(args) >= 13 {
 			shellStyleEnd := 4
 			newShellStyle := len(args) >= 17
@@ -544,11 +546,35 @@ func runSessionWithDependencies(
 			desktopStyle = session.DesktopStyle{BorderStyle: args[desktopStart], BorderSize: borderSize, BorderSizeMode: borderSizeMode, Shape: args[shapeStart], Spacing: args[shapeStart+1], Depth: args[shapeStart+2], Inactive: args[shapeStart+3]}
 			barStyle = session.BarStyle{Surface: args[barStyleStart+1], Density: args[barStyleStart+2], Attention: args[barStyleStart+3], Form: "continuous", Visibility: "native"}
 			barArgCount := len(args) - (barStyleStart + 1)
-			if barArgCount >= 4 {
+			if barArgCount >= 4 && !strings.HasPrefix(args[barStyleStart+4], "--") {
 				barStyle.Form = args[barStyleStart+4]
 			}
-			if barArgCount >= 5 {
+			if barArgCount >= 5 && !strings.HasPrefix(args[barStyleStart+5], "--") {
 				barStyle.Visibility = args[barStyleStart+5]
+			}
+			for index := barStyleStart + 1; index < len(args); index++ {
+				switch args[index] {
+				case "--window-active-style":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --window-active-style requires a value")
+					}
+					desktopStyle.Active = args[index+1]
+					index++
+				case "--animations-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --animations-json requires a JSON object")
+					}
+					if err := json.Unmarshal([]byte(args[index+1]), &animationsStyle); err != nil {
+						return fail(stderr, 2, "decode --animations-json: %v", err)
+					}
+					index++
+				case "--bar-style":
+					// The marker was already consumed above.
+				default:
+					if strings.HasPrefix(args[index], "--") && index != barStyleStart+4 && index != barStyleStart+5 {
+						return fail(stderr, 2, "unknown session begin option: %s", args[index])
+					}
+				}
 			}
 		}
 		var result session.BeginResult
@@ -556,7 +582,7 @@ func runSessionWithDependencies(
 		if len(args) == 1 {
 			result, err = service.Begin()
 		} else {
-			result, err = service.Begin(shellStyle, desktopStyle, barStyle)
+			result, err = service.Begin(shellStyle, desktopStyle, barStyle, animationsStyle)
 		}
 		if err != nil {
 			return fail(
@@ -916,9 +942,12 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	shellStyleSeen := false
 	desktopStyleSeen := false
 	barStyleSeen := false
+	activeStyleSeen := false
 	var shellStyle session.ShellStyle
 	var desktopStyle session.DesktopStyle
 	var barStyle session.BarStyle
+	var animationsStyle session.AnimationsStyle
+	animationsStyleSeen := false
 
 	for i := 2; i < len(args); i++ {
 		arg := args[i]
@@ -989,6 +1018,28 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			barStyle = session.BarStyle{Surface: args[i+1], Density: args[i+2], Attention: args[i+3], Form: args[i+4], Visibility: args[i+5]}
 			barStyleSeen = true
 			i += 5
+		case arg == "--window-active-style":
+			if activeStyleSeen {
+				return generation.Request{}, fmt.Errorf("--window-active-style specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--window-active-style requires a value")
+			}
+			desktopStyle.Active = args[i+1]
+			activeStyleSeen = true
+			i++
+		case arg == "--animations-json":
+			if animationsStyleSeen {
+				return generation.Request{}, fmt.Errorf("--animations-json specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--animations-json requires a JSON object")
+			}
+			if err := json.Unmarshal([]byte(args[i+1]), &animationsStyle); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --animations-json: %w", err)
+			}
+			animationsStyleSeen = true
+			i++
 		default:
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
 		}
@@ -997,7 +1048,7 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 		if !shellStyleSeen || !desktopStyleSeen || !barStyleSeen {
 			return generation.Request{}, fmt.Errorf("generation configuration requires --shell-style, --desktop-style, and --bar-style together")
 		}
-		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle}
+		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle}
 	}
 
 	return request, nil
