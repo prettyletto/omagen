@@ -266,10 +266,12 @@ func runProtocol(args []string, store *session.Store, previewService *preview.Se
 }
 
 type checkpointState struct {
-	ThemeName    string `json:"theme_name"`
-	GenerationID string `json:"generation_id"`
-	Variant      string `json:"variant"`
-	Mode         string `json:"mode"`
+	ThemeName      string                  `json:"theme_name"`
+	GenerationID   string                  `json:"generation_id"`
+	Variant        string                  `json:"variant"`
+	Mode           string                  `json:"mode"`
+	ColorOverrides map[string]string       `json:"color_overrides,omitempty"`
+	StyleOverrides *preview.StyleOverrides `json:"style_overrides,omitempty"`
 }
 
 func executeProtocolNavigation(journal *protocol.Journal, previewService *preview.Service, sessionID, direction, checkpointID string) (protocol.NavigationResult, error) {
@@ -315,7 +317,7 @@ func executeProtocolNavigation(journal *protocol.Journal, previewService *previe
 		return protocol.NavigationResult{}, completeFailed(err)
 	}
 	if _, err := previewService.ApplyCheckpoint(preview.Request{
-		SessionID: sessionID, GenerationID: state.GenerationID, Variant: variant,
+		SessionID: sessionID, GenerationID: state.GenerationID, Variant: variant, ColorOverrides: state.ColorOverrides, Styles: state.StyleOverrides,
 	}); err != nil {
 		_, _ = journal.CompleteOperation(driverOperation.ID, protocol.StatusFailed, err.Error(), "native checkpoint driver failed")
 		return protocol.NavigationResult{}, completeFailed(err)
@@ -485,8 +487,8 @@ func runSessionWithDependencies(
 		}
 		return writeJSON(stdout, stderr, result)
 	case "begin":
-		if len(args) != 1 && len(args) != 13 && len(args) != 14 && len(args) != 15 && len(args) != 16 && len(args) != 17 && len(args) != 18 && len(args) != 19 {
-			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
+		if len(args) != 1 && len(args) != 13 && len(args) != 14 && len(args) != 15 && len(args) != 16 && len(args) != 17 && len(args) != 18 && len(args) != 19 && len(args) != 20 {
+			return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> [<default|none|fixed>] <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 		}
 		if cleanupService != nil {
 			if result, cleanupErr := cleanupService.Run(); cleanupErr != nil {
@@ -503,19 +505,21 @@ func runSessionWithDependencies(
 		if len(args) >= 13 {
 			shellStyleEnd := 4
 			newShellStyle := len(args) >= 17
-			extendedDesktopStyle := len(args) >= 15
 			if newShellStyle {
 				shellStyleEnd = 6
 			}
-			barStyleStart := 9
-			if extendedDesktopStyle {
-				barStyleStart = 11
+			if args[1] != "--shell-style" || args[shellStyleEnd] != "--desktop-style" {
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> [<default|none|fixed>] <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 			}
-			if newShellStyle {
-				barStyleStart = 13
+			barStyleStart := -1
+			for index := shellStyleEnd + 1; index < len(args); index++ {
+				if args[index] == "--bar-style" {
+					barStyleStart = index
+					break
+				}
 			}
-			if args[1] != "--shell-style" || args[shellStyleEnd] != "--desktop-style" || args[barStyleStart] != "--bar-style" {
-				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
+			if barStyleStart < 0 {
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> [<default|none|fixed>] <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 			}
 			shellStyle = session.ShellStyle{Surface: args[2], Detail: args[3], Tooltip: "native", Notifications: "native"}
 			desktopStart := shellStyleEnd + 1
@@ -523,18 +527,21 @@ func runSessionWithDependencies(
 				shellStyle.Tooltip = args[4]
 				shellStyle.Notifications = args[5]
 			}
-			desktopStyle = session.DesktopStyle{BorderStyle: args[desktopStart], BorderSize: 0, Shape: args[desktopStart+1], Spacing: args[desktopStart+2], Depth: args[desktopStart+3], Inactive: "native"}
-			if extendedDesktopStyle {
-				borderSize, parseErr := strconv.Atoi(args[desktopStart+1])
-				if parseErr != nil {
-					return fail(stderr, 2, "invalid border size")
-				}
-				desktopStyle.BorderSize = borderSize
-				desktopStyle.Shape = args[desktopStart+2]
-				desktopStyle.Spacing = args[desktopStart+3]
-				desktopStyle.Depth = args[desktopStart+4]
-				desktopStyle.Inactive = args[desktopStart+5]
+			desktopValueCount := barStyleStart - desktopStart
+			if desktopValueCount != 6 && desktopValueCount != 7 {
+				return fail(stderr, 2, "usage: omagen session begin [--shell-style <surface> <detail> [<tooltip> <notifications>] --desktop-style <border> <border-size> [<default|none|fixed>] <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> [<form> [<visibility>]]]")
 			}
+			borderSize, parseErr := strconv.Atoi(args[desktopStart+1])
+			if parseErr != nil {
+				return fail(stderr, 2, "invalid border size")
+			}
+			shapeStart := desktopStart + 2
+			borderSizeMode := ""
+			if desktopValueCount == 7 {
+				borderSizeMode = args[desktopStart+2]
+				shapeStart++
+			}
+			desktopStyle = session.DesktopStyle{BorderStyle: args[desktopStart], BorderSize: borderSize, BorderSizeMode: borderSizeMode, Shape: args[shapeStart], Spacing: args[shapeStart+1], Depth: args[shapeStart+2], Inactive: args[shapeStart+3]}
 			barStyle = session.BarStyle{Surface: args[barStyleStart+1], Density: args[barStyleStart+2], Attention: args[barStyleStart+3], Form: "continuous", Visibility: "native"}
 			barArgCount := len(args) - (barStyleStart + 1)
 			if barArgCount >= 4 {
@@ -692,7 +699,7 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 	switch args[0] {
 	case "apply":
 		if len(args) < 4 {
-			return fail(stderr, 2, "usage: omagen preview apply <session_id> <generation_id> <variant> [--run <adapters>] [--skip <adapters>]")
+			return fail(stderr, 2, "usage: omagen preview apply <session_id> <generation_id> <variant> [--colors-json <json>] [--styles-json <json>] [--run <adapters>] [--skip <adapters>]")
 		}
 		variant, err := generation.ParseVariant(args[3])
 		if err != nil {
@@ -702,7 +709,7 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 		if err != nil {
 			return fail(stderr, 2, "%v", err)
 		}
-		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant, RetintRun: options.RetintRun, RetintSkip: options.RetintSkip, Scope: options.Scope, WaitMode: options.WaitMode, AllowTrustedHooks: options.AllowTrustedHooks})
+		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant, RetintRun: options.RetintRun, RetintSkip: options.RetintSkip, Scope: options.Scope, WaitMode: options.WaitMode, AllowTrustedHooks: options.AllowTrustedHooks, ColorOverrides: options.ColorOverrides, Styles: options.Styles})
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
@@ -748,6 +755,8 @@ type studioOptions struct {
 	Scope             string
 	WaitMode          string
 	AllowTrustedHooks bool
+	ColorOverrides    map[string]string
+	Styles            *preview.StyleOverrides
 }
 
 func parseStudioOptions(args []string) (studioOptions, error) {
@@ -780,6 +789,30 @@ func parseStudioOptions(args []string) (studioOptions, error) {
 			i++
 		case "--allow-trusted-hooks":
 			options.AllowTrustedHooks = true
+		case "--colors-json":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return studioOptions{}, fmt.Errorf("--colors-json requires a JSON object")
+			}
+			if err := json.Unmarshal([]byte(args[i+1]), &options.ColorOverrides); err != nil {
+				return studioOptions{}, fmt.Errorf("decode --colors-json: %w", err)
+			}
+			if options.ColorOverrides == nil {
+				options.ColorOverrides = map[string]string{}
+			}
+			i++
+		case "--styles-json":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return studioOptions{}, fmt.Errorf("--styles-json requires a JSON object")
+			}
+			var styles preview.StyleOverrides
+			if err := json.Unmarshal([]byte(args[i+1]), &styles); err != nil {
+				return studioOptions{}, fmt.Errorf("decode --styles-json: %w", err)
+			}
+			if !styles.Valid() {
+				return studioOptions{}, fmt.Errorf("--styles-json contains invalid shell, desktop, or bar styles")
+			}
+			options.Styles = &styles
+			i++
 		default:
 			return studioOptions{}, fmt.Errorf("unknown studio option: %s", args[i])
 		}
@@ -935,9 +968,17 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			if parseErr != nil {
 				return generation.Request{}, fmt.Errorf("invalid border size")
 			}
-			desktopStyle = session.DesktopStyle{BorderStyle: args[i+1], BorderSize: borderSize, Shape: args[i+3], Spacing: args[i+4], Depth: args[i+5], Inactive: args[i+6]}
+			shapeStart := i + 3
+			borderSizeMode := ""
+			consumed := 6
+			if i+7 < len(args) && isBorderSizeMode(args[i+3]) {
+				borderSizeMode = args[i+3]
+				shapeStart++
+				consumed = 7
+			}
+			desktopStyle = session.DesktopStyle{BorderStyle: args[i+1], BorderSize: borderSize, BorderSizeMode: borderSizeMode, Shape: args[shapeStart], Spacing: args[shapeStart+1], Depth: args[shapeStart+2], Inactive: args[shapeStart+3]}
 			desktopStyleSeen = true
-			i += 6
+			i += consumed
 		case arg == "--bar-style":
 			if barStyleSeen {
 				return generation.Request{}, fmt.Errorf("--bar-style specified more than once")
@@ -960,6 +1001,10 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	}
 
 	return request, nil
+}
+
+func isBorderSizeMode(value string) bool {
+	return value == "default" || value == "none" || value == "fixed"
 }
 
 func runSettings(args []string, store *settingspkg.Store, stdout, stderr io.Writer) int {

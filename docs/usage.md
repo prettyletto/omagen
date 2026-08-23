@@ -46,30 +46,30 @@ After choosing an image, choose a workflow:
 - **Fast** follows the normal path: choose a direction, enter Live Canvas, and
   apply the theme. Start Demo is optional when you want the four-window
   workspace.
-- **In-depth** opens Studio extras for window, shell, and bar composition
-  before palette generation; see [Styling and palette settings](styling.md).
+- **In-depth** enables Studio extras for window, shell, and bar composition in
+  Live Canvas after palette generation; see [Styling and palette settings](styling.md).
 
 <p align="center">
   <img src="../assets/screenshots/onboarding.webp" alt="Omagen setup" width="420">
 </p>
 
-## Configure extra desktop previews
+## Configure extra desktop styling
 
-When **In-depth** is selected, Omagen opens a composition step before
-generating the six palette directions. Move between the three sections
-with the section tabs or <code>h/j/k/l</code> navigation:
+When **In-depth** is selected, the Live Canvas sidebar exposes composition
+controls after the six palette directions are generated. Open **Advanced
+settings** and move between the three sections:
 
-- **Window** controls the active border, border thickness, corner shape, pane
-  spacing, depth, and how inactive windows recede (native, shadowed, or
-  blurred).
+- **Window** controls the active border, a Default/None/1–24 px border slider, five fixed
+  corner-shape presets, pane spacing, depth, and how inactive windows recede
+  (native, shadowed, or backdrop blur).
 - **Shell** controls surface composition, focus/detail language, and tooltip or
   notification feedback surfaces.
 - **Bar** controls the form, surface, density, attention color, and Docked
   visibility policy while preserving native Quattro layout behavior.
 
-Every choice updates the source card immediately. Choose **Continue to
-preview** when the composition looks right; these settings become part of the
-generated preview and applied theme.
+Every choice is staged in the current session. Use **Test Live composition**
+to apply the selected values to the native runtime owners; these settings then
+become part of the generated preview and applied theme.
 
 ![Window styling extras](../assets/screenshots/extras-window.webp)
 

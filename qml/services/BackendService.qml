@@ -53,6 +53,7 @@ Item {
             return;
         args.push("--shell-style", shellStyle.surface, shellStyle.detail, shellStyle.tooltip, shellStyle.notifications,
                   "--desktop-style", desktopStyle.borderStyle, desktopStyle.borderSize,
+                  desktopStyle.borderSizeMode || desktopStyle.border_size_mode || "default",
                   desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
                   "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility);
     }
@@ -89,7 +90,48 @@ Item {
         generationDiscardProcess.sessionId = sessionId;
         generationDiscardProcess.exec([root.executable, "generation", "discard", sessionId, generationId]);
     }
-    function applyPreview(sessionId, generationId, variant) { previewProcess.exec([root.executable, "preview", "apply", sessionId, generationId, variant]); }
+    function styleOverridesPayload(styles) {
+        if (!styles)
+            return null;
+        const shell = styles.shell || ({});
+        const desktop = styles.desktop || ({});
+        const bar = styles.bar || ({});
+        return {
+            shell: {
+                surface: shell.surface || "flat",
+                detail: shell.detail || "native",
+                tooltip: shell.tooltip || "native",
+                notifications: shell.notifications || "native"
+            },
+            desktop: {
+                border_style: desktop.borderStyle || desktop.border_style || "solid",
+                border_size: Number(desktop.borderSize !== undefined ? desktop.borderSize : desktop.border_size !== undefined ? desktop.border_size : -1),
+                border_size_mode: desktop.borderSizeMode || desktop.border_size_mode || "default",
+                border_speed: Number(desktop.borderSpeed !== undefined ? desktop.borderSpeed : desktop.border_speed || 36),
+                shape: desktop.shape || "native",
+                spacing: desktop.spacing || "native",
+                depth: desktop.depth || "native",
+                inactive_style: desktop.inactiveStyle || desktop.inactive_style || "native"
+            },
+            bar: {
+                surface: bar.surface || "native",
+                density: bar.density || "native",
+                attention: bar.attention || "semantic",
+                form: bar.form || "continuous",
+                visibility: bar.visibility || "native"
+            }
+        };
+    }
+
+    function applyPreview(sessionId, generationId, variant, colorOverrides, styles) {
+        const args = [root.executable, "preview", "apply", sessionId, generationId, variant];
+        if (colorOverrides && Object.keys(colorOverrides).length > 0)
+            args.push("--colors-json", JSON.stringify(colorOverrides));
+        const payload = root.styleOverridesPayload(styles);
+        if (payload)
+            args.push("--styles-json", JSON.stringify(payload));
+        previewProcess.exec(args);
+    }
     function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview) {
         const args = [root.executable, "apply", sessionId, generationId, variant, name];
         if (generateUnlock) args.push("--unlock");
@@ -206,7 +248,7 @@ Item {
                     backgroundPath,
                     result.shell_style || ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" }),
                     result.extra_configs === true,
-                    result.desktop_style || ({ border_style: "solid", border_size: 0, shape: "native", spacing: "native", depth: "native", inactive_style: "native" }),
+                    result.desktop_style || ({ border_style: "solid", border_size: -1, border_size_mode: "default", border_speed: 36, shape: "native", spacing: "native", depth: "native", inactive_style: "native" }),
                     result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
                 );
             } catch (error) {

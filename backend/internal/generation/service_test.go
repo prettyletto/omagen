@@ -141,7 +141,7 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 	}
 	configuration := &Configuration{
 		ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-		DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+		DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
 		BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
 	}
 
@@ -203,7 +203,7 @@ func TestFailedRegenerationPreservesPreviousConfiguration(t *testing.T) {
 		SourceImage: filepath.Join(t.TempDir(), "missing.png"),
 		Configuration: &Configuration{
 			ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-			DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+			DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
 			BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
 		},
 	})

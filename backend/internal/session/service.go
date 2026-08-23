@@ -46,6 +46,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 		}
 	}
 	shellStyle = NormalizeShellStyle(shellStyle)
+	desktopStyle = NormalizeDesktopStyle(desktopStyle)
 	barStyle = NormalizeBarStyle(barStyle)
 	if extraConfigs {
 		if !shellStyle.Valid() {

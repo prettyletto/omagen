@@ -68,6 +68,21 @@ func TestParseGenerateArgsWithConfiguration(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgsWithBorderSizeMode(t *testing.T) {
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "0", "none", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.DesktopStyle.BorderSize != 0 || request.Configuration.DesktopStyle.BorderSizeMode != "none" {
+		t.Fatalf("explicit none border mode was not parsed: %#v", request.Configuration)
+	}
+}
+
 func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 	for _, args := range [][]string{
 		{"session", "image", "--harmony"},

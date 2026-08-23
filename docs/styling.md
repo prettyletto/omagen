@@ -70,16 +70,26 @@ Window controls are:
   or Spinning Accent. Neon Blend adds a soft compositor glow/halo and a
   continuously moving gradient around the focused window. Spinning Accent
   keeps the gradient moving without the neon halo.
-- **Border thickness:** Native, 1 px, 2 px, 4 px.
-- **Corner shape:** Native, Soft, Rounded.
+- **Border thickness:** A slider starting at **Default** (inherit the active
+  theme), followed by **None** and fixed 1–24 px values.
+- **Corner shape:** Five fixed presets — Native, Subtle, Soft, Rounded, and Pill.
 - **Pane spacing:** Native, Compact, Airy.
 - **Depth:** Native, Flat, Shadow.
-- **Inactive windows:** Native, Shadowed, Blurred.
+- **Inactive windows:** Native, Shadowed, Backdrop blur.
 
 Shadowed dims unfocused windows and gives them a stronger receding shadow.
-Blurred dims and lowers inactive opacity while enabling Hyprland's background
-blur treatment; opaque applications may only show the dimming because native
-Hyprland blur affects translucent surfaces.
+Backdrop blur dims and lowers inactive opacity while enabling Hyprland's
+background blur treatment; opaque applications may only show the dimming
+because native Hyprland blur affects translucent surfaces.
+
+The Live Canvas is a Quickshell layer surface rather than a managed window.
+When Backdrop blur is selected, Omagen therefore emits a scoped Hyprland
+`hl.layer_rule` for the `omagen-live-canvas` namespace, enables popup blur for
+that surface, and lowers the panel background opacity so the compositor can
+sample the wallpaper and windows behind it. The rule is intentionally scoped
+to the Studio panel; it does not turn every Omarchy layer surface into a blur
+target. Opaque application pixels remain sharp by design because Hyprland can
+only blur the backdrop visible through a translucent surface.
 
 These choices describe the generated theme's window presentation. They do not
 change Hyprland's layout while you are making the selection.

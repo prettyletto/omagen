@@ -21,6 +21,7 @@ Item {
     property bool regenerationPending: false
     property bool backBusy: false
     property bool previewBusy: false
+    property bool pendingColorPreview: false
     property bool applyBusy: false
     property bool applyRecoveryRequired: false
     property bool demoBusy: false
@@ -31,6 +32,8 @@ Item {
     property bool pendingDemo: false
     property bool pendingApplyAfterDemo: false
     property bool pendingApplyCapture: false
+    property bool pendingApplyPreview: false
+    property bool pendingApplyCloseDemo: false
     property bool pendingApplyAbortAfterDemo: false
     property bool pendingApplyUnlock: false
     property bool recoveryBusy: false
@@ -46,9 +49,18 @@ Item {
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
     property string errorMessage: ""
+
+    readonly property var variants: [
+        { variant: "source", label: "Source" },
+        { variant: "calm", label: "Calm" },
+        { variant: "mute", label: "Mute" },
+        { variant: "deep", label: "Deep" },
+        { variant: "vibrant", label: "Vibrant" },
+        { variant: "balanced", label: "Balanced" }
+    ]
 
     readonly property string backendPath: decodeURIComponent(
         Qt.resolvedUrl("bin/omagen")
@@ -74,8 +86,19 @@ Item {
         var border = value.borderStyle || value.border_style || "solid"
         if (border === "split") border = "split_top"
         var borderSize = Number(value.borderSize !== undefined ? value.borderSize : value.border_size)
-        if (!isFinite(borderSize) || borderSize < 0 || borderSize > 10) borderSize = 0
-        return { borderStyle: border, borderSize: borderSize, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
+        var borderSizeMode = value.borderSizeMode || value.border_size_mode || ""
+        if (!isFinite(borderSize)) borderSize = -1
+        if (borderSizeMode === "") {
+            borderSizeMode = borderSize === 0 ? "default" : borderSize < 0 ? "default" : "fixed"
+        }
+        if (borderSizeMode === "default") borderSize = -1
+        else if (borderSizeMode === "none") borderSize = 0
+        else if (borderSizeMode === "fixed") {
+            if (borderSize < 1 || borderSize > 24) { borderSize = -1; borderSizeMode = "default" }
+        } else { borderSize = -1; borderSizeMode = "default" }
+        var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
+        if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
+        return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
     }
     function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native" } }
 
@@ -108,9 +131,13 @@ Item {
             // Reopening a hidden overlay must preserve navigation within the
             // active session. In particular, Back may have intentionally
             // invalidated the old generation and returned to configuration.
-            if (route !== "setup" && route !== "preview-config" && route !== "workspace")
+            if (route !== "setup" && route !== "workspace")
                 route = "workspace";
             if (liveCanvasActive) {
+                livePanelOpen = true;
+                opened = false;
+            } else if (session.workspaceReady) {
+                liveCanvasActive = true;
                 livePanelOpen = true;
                 opened = false;
             }
@@ -165,17 +192,15 @@ Item {
         liveCanvasMonitor = resumableSession.canvas_monitor || "";
         resumableSession = null;
         route = "workspace";
-        if (canvasActive) {
-            // A shell reload destroys this QML object, not the session-owned
-            // Demo windows. Rebind to the durable canvas state in place;
-            // calling demo open here would classify transiently reloading
-            // windows as missing and launch duplicate applications.
-            demoActive = true;
-            liveCanvasActive = true;
-            demoBusy = false;
-            livePanelOpen = false;
-            opened = false;
-        }
+        // A shell reload destroys this QML object, not the session-owned
+        // Demo windows. Rebind to the durable canvas state in place; calling
+        // demo open here would classify transiently reloading windows as
+        // missing and launch duplicate applications.
+        demoActive = canvasActive;
+        liveCanvasActive = true;
+        demoBusy = false;
+        livePanelOpen = true;
+        opened = false;
     }
 
     function restorePreviousSession() {
@@ -291,11 +316,6 @@ Item {
 
     function continueFromSetup() {
         extraConfigsEnabled = workflowMode === "in-depth";
-        if (extraConfigsEnabled) {
-            route = "preview-config";
-            errorMessage = "";
-            return;
-        }
         beginSession();
     }
 
@@ -315,8 +335,10 @@ Item {
         // candidate through the existing preview/rollback transaction. It does
         // not create or discard the optional Demo workspace.
         if (demoActive) {
+            const overrides = liveCanvasPanel.overridesForVariant(variant);
+            pendingColorPreview = Object.keys(overrides).length > 0;
             previewBusy = true;
-            backend.applyPreview(session.sessionId, session.generationId, variant);
+            backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
             return;
         }
 
@@ -325,11 +347,14 @@ Item {
     function testLive(variant) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
         errorMessage = "";
+        pendingColorPreview = false;
         liveCanvasActive = true;
         livePanelOpen = true;
         opened = false;
+        const overrides = liveCanvasPanel.overridesForVariant(variant);
+        pendingColorPreview = Object.keys(overrides).length > 0;
         previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant);
+        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
     }
     function refreshProtocol() {
         if (!session.active || session.sessionId === "" || protocolBusy)
@@ -365,6 +390,46 @@ Item {
         if (!state || !state.variant || !session.hasPalette(state.variant))
             return;
         session.selectVariant(state.variant);
+        if (state.style_overrides) {
+            root.shellStyle = root.normalizeShellStyle(state.style_overrides.shell || ({}));
+            root.desktopStyle = root.normalizeDesktopStyle(state.style_overrides.desktop || ({}));
+            root.barStyle = root.normalizeBarStyle(state.style_overrides.bar || ({}));
+        }
+        liveCanvasPanel.setStagedColors(state.color_overrides || {}, state.variant);
+    }
+
+    function previewStyles() {
+        if (!root.extraConfigsEnabled)
+            return null;
+        return { shell: root.shellStyle, desktop: root.desktopStyle, bar: root.barStyle };
+    }
+
+    function previewCurrentState(variant) {
+        const overrides = liveCanvasPanel.overridesForVariant(variant);
+        root.pendingColorPreview = Object.keys(overrides).length > 0;
+        root.previewBusy = true;
+        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
+    }
+
+    function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle) {
+        if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy)
+            return;
+        if (nextShellStyle)
+            root.shellStyle = root.normalizeShellStyle(nextShellStyle);
+        if (nextDesktopStyle)
+            root.desktopStyle = root.normalizeDesktopStyle(nextDesktopStyle);
+        if (nextBarStyle)
+            root.barStyle = root.normalizeBarStyle(nextBarStyle);
+        liveCanvasPanel.setStagedColors(overrides || ({}), variant);
+        session.selectVariant(variant);
+        errorMessage = "";
+        const effectiveOverrides = liveCanvasPanel.overridesForVariant(variant);
+        pendingColorPreview = Object.keys(effectiveOverrides).length > 0;
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        opened = false;
+        previewBusy = true;
+        backend.applyPreview(session.sessionId, session.generationId, variant, effectiveOverrides, root.previewStyles());
     }
     function suggestedThemeName() {
         let filename = root.sourceImage || ""
@@ -377,18 +442,22 @@ Item {
         if (!session.workspaceReady || applyBusy || previewBusy || cancelBusy || demoBusy) return
         errorMessage = ""; applyBusy = true; applyRecoveryRequired = false
 
+        // Apply must commit the exact state visible in Live Canvas. Always
+        // materialize one final preview first so staged colours and advanced
+        // Window/Shell/Bar settings cannot be lost when Test Live was skipped.
         pendingApplyVariant = variant
         pendingApplyName = name
         pendingApplyUnlock = generateUnlock === true
         pendingApplyCapture = capturePreview === true
+        pendingApplyPreview = true
+        pendingApplyCloseDemo = false
 
         if (pendingApplyCapture) {
             pendingApplyAfterDemo = true
             demoBusy = true
             opened = false
             if (demoActive) {
-                previewBusy = true
-                backend.applyPreview(session.sessionId, session.generationId, variant)
+                root.previewCurrentState(variant)
             } else {
                 backend.openDemo(session.sessionId)
             }
@@ -397,17 +466,20 @@ Item {
 
         if (demoActive) {
             pendingApplyAfterDemo = true
+            pendingApplyCloseDemo = true
             demoBusy = true
-            backend.closeDemo(session.sessionId)
+            root.previewCurrentState(variant)
             return
         }
         pendingApplyAfterDemo = false
-        backend.applyTheme(session.sessionId, session.generationId, variant, name, pendingApplyUnlock, false)
+        root.previewCurrentState(variant)
     }
 
     function resetPendingApply() {
         pendingApplyAfterDemo = false
         pendingApplyCapture = false
+        pendingApplyPreview = false
+        pendingApplyCloseDemo = false
         pendingApplyAbortAfterDemo = false
         pendingApplyUnlock = false
         pendingApplyVariant = ""
@@ -467,6 +539,8 @@ Item {
         pendingDemo = false;
         pendingApplyAfterDemo = false;
         pendingApplyCapture = false;
+        pendingApplyPreview = false;
+        pendingApplyCloseDemo = false;
         pendingApplyAbortAfterDemo = false;
         pendingApplyUnlock = false;
         livePanelOpen = false;
@@ -494,7 +568,8 @@ Item {
 
     function clearSession(closeWhenDone) {
         const shouldClose = closeWhenDone === true || closeAfterCancel;
-        workspaceWindow.resetApplyDialog();
+        liveCanvasPanel.resetApplyDialog();
+        liveCanvasPanel.clearColorSession();
         session.clear();
         sessionBusy = false;
         cancelBusy = false;
@@ -503,7 +578,7 @@ Item {
         workflowMode = "fast";
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" });
-        desktopStyle = ({ borderStyle: "solid", borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" });
+        desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" });
         barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" });
         errorMessage = "";
         opened = !shouldClose;
@@ -512,6 +587,7 @@ Item {
         regenerationPending = false;
         backBusy = false;
         previewBusy = false;
+        pendingColorPreview = false;
         demoBusy = false;
         demoActive = false;
         liveCanvasActive = false;
@@ -589,6 +665,9 @@ Item {
                 return;
             }
             root.route = "workspace";
+            root.liveCanvasActive = true;
+            root.livePanelOpen = true;
+            root.opened = false;
             root.generationBusy = true;
             backend.generateTheme(sessionId, root.sourceImage, null, null, null);
         }
@@ -693,8 +772,10 @@ Item {
             root.sessionBusy=false;
             if (root.regenerationPending) {
                 root.regenerationPending=false;
-                root.opened=true;
-                root.route="preview-config";
+                root.liveCanvasActive = true;
+                root.livePanelOpen = true;
+                root.opened = false;
+                root.route="workspace";
             }
             root.errorMessage=message;
         }
@@ -705,6 +786,15 @@ Item {
             root.sessionBusy=false;
             root.regenerationPending=false;
             session.setGeneration(generationId, variants);
+            root.liveCanvasActive = true;
+            root.livePanelOpen = true;
+            root.opened = false;
+            root.route = "workspace";
+            // Continue is the first user action in the session. Make that
+            // action land in the real desktop with Source already applied;
+            // the user should not need a second click just to enter the
+            // default direction.
+            root.enterLiveCanvas("source");
             root.refreshProtocol();
         }
         onGenerationDescribeFailed: function(sessionId, message) {
@@ -714,8 +804,10 @@ Item {
             root.sessionBusy=false;
             if (root.regenerationPending) {
                 root.regenerationPending=false;
-                root.opened=true;
-                root.route="preview-config";
+                root.liveCanvasActive = true;
+                root.livePanelOpen = true;
+                root.opened = false;
+                root.route="workspace";
             }
             root.errorMessage=message;
         }
@@ -727,9 +819,12 @@ Item {
             root.liveCanvasActive = false;
             root.demoActive = false;
             root.livePanelOpen = false;
+            liveCanvasPanel.clearColorSession();
             session.clearGeneration();
-            root.opened = true;
-            root.route = "preview-config";
+            root.liveCanvasActive = true;
+            root.livePanelOpen = true;
+            root.opened = false;
+            root.route = "workspace";
         }
         onGenerationDiscardFailed: function(sessionId, message) {
             if (!session.active || sessionId !== session.sessionId)
@@ -744,8 +839,37 @@ Item {
                 return;
             root.previewBusy = false;
             if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
+            if (root.pendingColorPreview) {
+                root.pendingColorPreview = false;
+                liveCanvasPanel.markColorsLive();
+            }
             session.markPreviewed(variant);
             root.refreshProtocol();
+
+            if (root.pendingApplyPreview) {
+                root.pendingApplyPreview = false;
+                if (root.pendingApplyCapture) {
+                    root.demoBusy = true;
+                    backend.captureDemoPreview(session.sessionId);
+                    return;
+                }
+                if (root.pendingApplyCloseDemo) {
+                    root.pendingApplyCloseDemo = false;
+                    root.demoBusy = true;
+                    backend.closeDemo(session.sessionId);
+                    return;
+                }
+                root.opened = true;
+                backend.applyTheme(
+                    session.sessionId,
+                    session.generationId,
+                    root.pendingApplyVariant,
+                    root.pendingApplyName,
+                    root.pendingApplyUnlock,
+                    false
+                );
+                return;
+            }
 
             if (root.pendingApplyCapture) {
                 root.demoBusy = true;
@@ -782,7 +906,8 @@ Item {
             if (root.closeAfterCancel)
                 return;
             root.previewBusy = false;
-            if (root.pendingApplyCapture) {
+            root.pendingColorPreview = false;
+            if (root.pendingApplyPreview || root.pendingApplyCapture || root.pendingApplyCloseDemo) {
                 root.failPendingApply(message)
                 return
             }
@@ -804,13 +929,11 @@ Item {
             root.demoActive = true;
             root.liveCanvasMonitor = monitor;
             if (root.pendingApplyCapture) {
-                root.previewBusy = true;
-                backend.applyPreview(session.sessionId, session.generationId, root.pendingApplyVariant);
+                root.previewCurrentState(root.pendingApplyVariant);
                 return;
             }
             if (root.pendingDemo) {
-                root.previewBusy = true;
-                backend.applyPreview(session.sessionId, session.generationId, session.selectedVariant);
+                root.previewCurrentState(session.selectedVariant);
                 return;
             }
             root.demoBusy = false;
@@ -1043,21 +1166,6 @@ Item {
         onHideRequested: root.close()
     }
 
-    Views.PreviewConfigWindow {
-        active: root.opened && root.route === "preview-config"
-        busy: root.sessionBusy
-        sourceImage: root.sourceImage
-        shellStyle: root.shellStyle
-        desktopStyle: root.desktopStyle
-        onShellStyleSelected: function(style) { root.shellStyle = style }
-        onDesktopStyleSelected: function(style) { root.desktopStyle = style }
-        barStyle: root.barStyle
-        onBarStyleSelected: function(style) { root.barStyle = style }
-        onContinueRequested: root.beginSession()
-        onBackRequested: root.quitSession()
-        onHideRequested: root.close()
-    }
-
         Views.RecoveryWindow {
             active: root.opened && root.route === "recovery"
             busy: root.recoveryBusy
@@ -1069,60 +1177,20 @@ Item {
         onCloseRequested: { root.recoveryBusy = false; root.opened = false }
     }
 
-    Views.WorkspaceWindow {
-        id: workspaceWindow
-        active: root.opened && root.route === "workspace" && session.active && !root.demoActive
-        cancelBusy: root.cancelBusy
-        backBusy: root.backBusy
-        sourceImage: root.sourceImage
-        shellStyle: root.shellStyle
-        barStyle: root.barStyle
-        sessionId: session.sessionId
-        generationBusy: root.generationBusy || root.describeBusy
-        previewBusy: root.previewBusy
-        applyBusy: root.applyBusy
-        applyRecoveryRequired: root.applyRecoveryRequired
-        extraConfigsEnabled: root.extraConfigsEnabled
-        suggestedThemeName: root.suggestedThemeName()
-        demoBusy: root.demoBusy
-        demoActive: root.demoActive
-        workspaceReady: session.workspaceReady
-        generationId: session.generationId
-        selectedVariant: session.selectedVariant
-        previewVariant: session.previewVariant
-        palettes: session.palettes
-        errorMessage: root.errorMessage
-        protocolCanBack: root.protocolCanBack
-        protocolCanForward: root.protocolCanForward
-        protocolBusy: root.protocolBusy
-        protocolMessage: root.protocolMessage
-
-        onVariantFocused: function(variant) { root.selectVariant(variant) }
-        onVariantSelected: function(variant) { root.enterLiveCanvas(variant) }
-        onTestLiveRequested: function(variant) { root.testLive(variant) }
-        onDemoRequested: function(variant) {
-            if (root.demoActive)
-                root.dispatchDemo();
-            else
-                root.startDemo(variant);
-        }
-        onHideRequested: root.close()
-        onCancelRequested: root.cancelSession()
-        onBackToConfigurationRequested: root.returnToConfiguration()
-        onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
-            root.applyTheme(variant, name, generateUnlock, capturePreview)
-        }
-        onProtocolBackRequested: root.navigateProtocol("back")
-        onProtocolForwardRequested: root.navigateProtocol("forward")
-    }
-
     Views.LiveCanvasPanel {
+        id: liveCanvasPanel
         active: root.route === "workspace" && session.active && root.liveCanvasActive && root.livePanelOpen
         previewBusy: root.previewBusy
         demoBusy: root.demoBusy
         demoActive: root.demoActive
         cancelBusy: root.cancelBusy
         applyBusy: root.applyBusy
+        generationBusy: root.generationBusy || root.describeBusy
+        workspaceReady: session.workspaceReady
+        extraConfigsEnabled: root.extraConfigsEnabled
+        shellStyle: root.shellStyle
+        desktopStyle: root.desktopStyle
+        barStyle: root.barStyle
         protocolCanBack: root.protocolCanBack
         protocolCanForward: root.protocolCanForward
         protocolBusy: root.protocolBusy
@@ -1131,13 +1199,20 @@ Item {
         selectedVariant: session.selectedVariant
         monitorName: root.liveCanvasMonitor
         suggestedThemeName: root.suggestedThemeName()
-        variants: workspaceWindow.variants
+        variants: root.variants
+        palettes: session.palettes
 
         onHideRequested: root.hideLiveCanvasPanel()
         onCloseCanvasRequested: root.dispatchDemo()
         onStartDemoRequested: root.startDemo(session.selectedVariant)
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
+        onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle) }
+        onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle) {
+            root.shellStyle = root.normalizeShellStyle(shellStyle)
+            root.desktopStyle = root.normalizeDesktopStyle(desktopStyle)
+            root.barStyle = root.normalizeBarStyle(barStyle)
+        }
         onProtocolBackRequested: root.navigateProtocol("back")
         onProtocolForwardRequested: root.navigateProtocol("forward")
         onApplyRequested: function(variant, name, generateUnlock, capturePreview) {

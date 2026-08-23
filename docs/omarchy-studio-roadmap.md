@@ -1,6 +1,7 @@
 # Omarchy Studio nightly roadmap
 
-Status: N3 Live Canvas v1 implementation complete; live desktop proof pending
+Status: N3 Live Canvas v1, N3.1 color studio, and N3.2 window composition
+foundation implemented; live desktop proof pending
 
 Branch: `nightly`
 
@@ -214,10 +215,12 @@ The current repository already contains useful pieces:
   placement, capture, close, and workspace restoration.
 - `backend/internal/omarchy/`: current theme/background inspection and the
   process bridge to `omarchy theme set`.
-- `qml/views/WorkspaceWindow.qml`: current preview, Demo, Apply, and recovery
-  control surface.
-- `qml/views/PreviewConfigWindow.qml`: current Window/Shell/Bar configuration
-  page.
+- `qml/views/LiveCanvasPanel.qml`: monitor-bound preview, Demo, Apply, color
+  editing, Window/Shell/Bar configuration, reversible history, and the fixed
+  live-session footer.
+- `qml/components/AdvancedStyleEditor.qml`: progressive Window/Shell/Bar
+  controls for border, shape, spacing, depth, inactive-window treatment, and
+  animation speed.
 - `qml/components/ThemePreviewCard.qml`: current synthetic composition preview.
 - `/usr/bin/omarchy-theme-set`: installed Omarchy theme compiler/apply script
   whose behavior must be versioned and adapted, not edited in place.
@@ -452,17 +455,17 @@ Implementation sequence:
       variants to presets without breaking durable session compatibility.
 - [ ] Define the semantic color-role schema and map each role to generated
       theme outputs and native runtime readers.
-- [ ] Add staged color overrides to the Studio document and protocol/checkpoint
+- [x] Add staged color overrides to the Studio document and protocol/checkpoint
       model.
 - [ ] Build collapsible color groups with five suggestion controls and a
       validated custom hex input for each role.
 - [ ] Generate suggestions from the source image, the selected preset, and
       contrast/harmony rules with explicit provenance.
 - [ ] Add per-role, per-group, and reset-all behavior.
-- [ ] Connect staged color edits to reversible Test Live / Apply live preview.
+- [x] Connect staged color edits to reversible Test Live / Apply live preview.
 - [ ] Add contrast, ANSI distinction, and runtime-reader evidence to the live
       result.
-- [ ] Keep Fast concise while exposing the same controls progressively for
+- [x] Keep Fast concise while exposing the same controls progressively for
       In-depth users.
 
 Done when:
@@ -475,6 +478,43 @@ Done when:
   generated artifact and runtime reader.
 - The six presets remain useful starting points rather than being discarded by
   the color editor.
+
+### N3.2 — Window composition foundation
+
+Goal: make Hyprland window appearance tunable from Live Canvas without
+pretending that a QML preview is the compositor.
+
+Completed in this slice:
+
+- [x] Add border treatments: Solid, Split top/bottom, Accent blend, Neon, and
+      Spinning.
+- [x] Add border thickness states: Default, None, 2–24 px presets, and custom
+      input up to 24 px.
+- [x] Add shape presets: Default, Subtle, Soft, Rounded, and Pill.
+- [x] Add spacing presets: Default, Compact, and Airy.
+- [x] Add depth presets: Default, Flat, and Shadow.
+- [x] Add inactive-window modes: Native, Shadowed, and Backdrop blur.
+- [x] Add an editable spinning-border speed control.
+- [x] Keep the spinning border loop alive for already-mapped windows through a
+      generated compositor-owned timer.
+- [x] Persist style values through live preview, session, and regeneration,
+      including migration of legacy border-size defaults.
+- [x] Keep Test Live, Apply, History, Restore, and Hide in the fixed Live
+      Canvas footer.
+
+Validation evidence: the full `scripts/v1-check.sh` gate passes; the
+development plugin was rebuilt and reinstalled; installed QML/source equality
+was verified during the footer slice; and QML syntax validation passes.
+Runtime visual interaction with every compositor option remains manual
+follow-up.
+
+Known limitations: Shell and Bar controls exist in the editor but need their
+own runtime-reader and visual validation. The QML socket live-event consumer,
+full color suggestion/provenance/contrast work, and complete Window runtime
+proof remain unfinished.
+
+Next slice: N3.2 runtime validation and polish for Window, followed by Shell
+and Bar labs.
 
 ### N4 — Define the Studio document and live profiles
 
@@ -825,4 +865,33 @@ Runtime contract: palette activation enters the real canvas; the side panel
 can reapply directions, navigate reversible history, apply, close, or restore;
 the hidden panel leaves only a non-focus-stealing monitor-bound handle
 Next slice: N3.1 editable palette presets and live color studio
+```
+
+```text
+Date: 2026-08-23
+Slice: N3.1 color studio and N3.2 Window composition foundation
+Branch: nightly
+Changed owners: live color overrides, Advanced Studio window controls,
+Hyprland decoration generation, fixed Live Canvas footer, and session
+normalization/migration
+Validation evidence: the complete
+GOCACHE=/tmp/omagen-gocache XDG_RUNTIME_DIR=/tmp/omagen-runtime
+./scripts/v1-check.sh gate passes with Go tests, race tests, vet, deterministic
+bundled-backend verification, CLI smoke tests, package/plugin validation,
+required-file checks, Demo asset checks, and QML syntax validation
+Installed evidence: the development plugin was rebuilt and reinstalled as
+pretty.omagen; the installed workspace includes the live color editor,
+Advanced Studio controls, fixed Test Live/Apply footer, history actions, and
+Hide action
+Runtime contract: color edits remain staged until Test Live or Apply; preset
+switching preserves session overrides; reset returns a role/variant to its
+baseline; Window controls generate native Hyprland decoration, spacing, depth,
+inactive-window, blur, and looping border-animation settings; Default border
+size inherits the theme while None is explicit zero and fixed values support
+2–24 px presets plus custom input
+Known limitations: this is installed and automated-test verified, but not yet
+manual live proof for every compositor option. Shell and Bar runtime readers,
+complete color suggestion provenance/contrast evidence, and the socket-backed
+QML live-event consumer remain future work.
+Next slice: N3.2 Window runtime validation and polish, then Shell and Bar labs
 ```
