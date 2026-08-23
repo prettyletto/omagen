@@ -40,7 +40,7 @@ Item {
         { key: "native", title: "Default" }, { key: "flat", title: "Flat" }, { key: "shadow", title: "Shadow" }
     ]
     readonly property var inactiveOptions: [
-        { key: "native", title: "Native" }, { key: "shadow", title: "Soft dim" },
+        { key: "native", title: "Native" }, { key: "shadow", title: "Soft dim" }, { key: "shadow_only", title: "Shadow · Preserve transparency" },
         { key: "frosted_light", title: "Frosted · Light" }, { key: "frosted_balanced", title: "Frosted · Balanced" },
         { key: "frosted_rich", title: "Frosted · Rich" }
     ]
@@ -201,6 +201,7 @@ Item {
             if (group === "depth") return "Compositor shadow treatment around windows."
             if (key === "blur" || key.indexOf("frosted_") === 0) return "Frosted backdrop blurs what is behind a translucent inactive surface. It does not blur opaque application text or controls."
             if (key === "shadow") return "Soft dim keeps inactive windows readable while making the focused window clearer."
+            if (key === "shadow_only") return "Adds a transparent inactive compositor shadow while preserving Omarchy and application opacity."
             return "Native inactive-window treatment from the active Hyprland configuration."
         }
         if (section === "shell") {
@@ -247,6 +248,7 @@ Item {
                 inactiveStyle: {
                     native: "Keep inactive windows using the active Hyprland treatment.",
                     shadow: "Dim inactive windows without adding background blur.",
+                    shadow_only: "Add a transparent compositor shadow without overriding inactive opacity or dimming content.",
                     blur: "Legacy Backdrop blur setting; it becomes the Balanced frosted backdrop profile.",
                     frosted_light: "A light glass treatment: subtle dimming and low-cost background blur.",
                     frosted_balanced: "Recommended glass treatment: visible background blur without a shadow-heavy dim.",

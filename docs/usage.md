@@ -61,7 +61,8 @@ settings** and move between the four engines:
 
 - **Window** controls the active border, a Default/None/1–24 px border slider, five fixed
   corner-shape presets, pane spacing, shadow depth, and independent active/inactive
-  Frosted backdrop profiles (with Soft dim for inactive windows).
+  Frosted backdrop profiles (with Soft dim or Shadow · Preserve transparency
+  for inactive windows).
 - **Shell** controls surface composition, focus/detail language, and tooltip or
   notification feedback surfaces.
 - **Bar** controls the form, surface, density, attention color, and Docked

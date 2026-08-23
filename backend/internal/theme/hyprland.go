@@ -26,7 +26,10 @@ func WriteHyprlandWithAnimations(themeDir string, p Palette, borderStyle string,
 	} else if animations.BorderSpeed != 0 {
 		spinSpeed = animations.BorderSpeed
 	}
-	if !validChoice(borderStyle, "solid", "split", "split_top", "split_bottom", "blend", "neon", "spin") || borderSize < -1 || borderSize > 24 || spinSpeed < 10 || spinSpeed > 100 || !validChoice(shape, "native", "subtle", "soft", "rounded", "pill") || !validChoice(spacing, "native", "compact", "airy") || !validChoice(depth, "native", "flat", "shadow") || !validChoice(active, "native", "frosted_light", "frosted_balanced", "frosted_rich", "blur") || !validChoice(inactive, "native", "shadow", "blur", "frosted_light", "frosted_balanced", "frosted_rich") {
+	if inactive == "shadow_full" {
+		inactive = "shadow_only"
+	}
+	if !validChoice(borderStyle, "solid", "split", "split_top", "split_bottom", "blend", "neon", "spin") || borderSize < -1 || borderSize > 24 || spinSpeed < 10 || spinSpeed > 100 || !validChoice(shape, "native", "subtle", "soft", "rounded", "pill") || !validChoice(spacing, "native", "compact", "airy") || !validChoice(depth, "native", "flat", "shadow") || !validChoice(active, "native", "frosted_light", "frosted_balanced", "frosted_rich", "blur") || !validChoice(inactive, "native", "shadow", "shadow_only", "blur", "frosted_light", "frosted_balanced", "frosted_rich") {
 		return fmt.Errorf("invalid desktop style")
 	}
 	if active == "blur" {
@@ -83,7 +86,7 @@ func WriteHyprlandWithAnimations(themeDir string, p Palette, borderStyle string,
 		case "pill":
 			b.WriteString("    rounding = 16, rounding_power = 3,\n")
 		}
-		shadowEnabled := depth == "shadow" || borderStyle == "neon" || inactive == "shadow"
+		shadowEnabled := depth == "shadow" || borderStyle == "neon" || inactive == "shadow" || inactive == "shadow_only"
 		if depth == "flat" && !shadowEnabled {
 			b.WriteString("    shadow = { enabled = false },\n")
 		}
@@ -96,6 +99,11 @@ func WriteHyprlandWithAnimations(themeDir string, p Palette, borderStyle string,
 			}
 			if inactive == "shadow" && borderStyle != "neon" {
 				inactiveShadow = fmt.Sprintf("%q", hyprRGBA(p.DarkerBackground, "d0"))
+			}
+			if inactive == "shadow_only" && borderStyle != "neon" {
+				// Keep this shadow visibly transparent so the active Omarchy and
+				// application opacity policy remains visible underneath it.
+				inactiveShadow = fmt.Sprintf("%q", hyprRGBA(p.DarkerBackground, "88"))
 			}
 			rangePx := 18
 			if borderStyle == "neon" {
@@ -112,11 +120,10 @@ func WriteHyprlandWithAnimations(themeDir string, p Palette, borderStyle string,
 		if activeFrosted || inactiveFrosted {
 			// This is compositor background blur through the translucent inactive
 			// surface. It cannot blur opaque client pixels such as application text.
-			if activeFrosted {
-				fmt.Fprintf(&b, "    active_opacity = %.2f,\n", activeProfile.opacity)
-			}
 			if inactiveFrosted {
-				fmt.Fprintf(&b, "    inactive_opacity = %.2f, dim_inactive = true, dim_strength = %.2f,\n", inactiveProfile.opacity, inactiveProfile.dim)
+				// Blur profiles inherit the user's existing opacity policy. The
+				// profile only contributes optional dim strength and blur quality.
+				fmt.Fprintf(&b, "    dim_inactive = true, dim_strength = %.2f,\n", inactiveProfile.dim)
 			}
 			profile := activeProfile
 			if !activeFrosted || (inactiveFrosted && inactiveProfile.size > profile.size) {
@@ -182,21 +189,20 @@ func writeAnimationSettings(b *strings.Builder, animations session.AnimationsSty
 }
 
 type frostedProfile struct {
-	opacity float64
-	dim     float64
-	size    int
-	passes  int
+	dim    float64
+	size   int
+	passes int
 }
 
 func frostedBackdropProfile(inactive string) (bool, frostedProfile) {
 	switch inactive {
 	case "blur", "frosted_balanced":
 		// Balanced favours a visible backdrop over the old shadow-heavy dim.
-		return true, frostedProfile{opacity: 0.68, dim: 0.26, size: 18, passes: 3}
+		return true, frostedProfile{dim: 0.26, size: 18, passes: 3}
 	case "frosted_light":
-		return true, frostedProfile{opacity: 0.80, dim: 0.12, size: 10, passes: 2}
+		return true, frostedProfile{dim: 0.12, size: 10, passes: 2}
 	case "frosted_rich":
-		return true, frostedProfile{opacity: 0.62, dim: 0.34, size: 24, passes: 4}
+		return true, frostedProfile{dim: 0.34, size: 24, passes: 4}
 	default:
 		return false, frostedProfile{}
 	}
