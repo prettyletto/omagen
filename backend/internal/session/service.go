@@ -32,6 +32,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 	shellStyle := DefaultShellStyle()
 	desktopStyle := DefaultDesktopStyle()
 	barStyle := DefaultBarStyle()
+	animationsStyle := DefaultAnimationsStyle()
 	extraConfigs := len(styles) > 0
 	for _, style := range styles {
 		switch value := style.(type) {
@@ -41,6 +42,8 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			desktopStyle = value
 		case BarStyle:
 			barStyle = value
+		case AnimationsStyle:
+			animationsStyle = value
 		default:
 			return BeginResult{}, fmt.Errorf("invalid style configuration")
 		}
@@ -48,6 +51,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 	shellStyle = NormalizeShellStyle(shellStyle)
 	desktopStyle = NormalizeDesktopStyle(desktopStyle)
 	barStyle = NormalizeBarStyle(barStyle)
+	animationsStyle = NormalizeAnimationsStyle(animationsStyle)
 	if extraConfigs {
 		if !shellStyle.Valid() {
 			return BeginResult{}, fmt.Errorf("invalid shell style")
@@ -57,6 +61,9 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 		}
 		if !barStyle.Valid() {
 			return BeginResult{}, fmt.Errorf("invalid bar style")
+		}
+		if !animationsStyle.Valid() {
+			return BeginResult{}, fmt.Errorf("invalid animations style")
 		}
 	}
 	return withMutationLock(s.store, func() (BeginResult, error) {
@@ -88,7 +95,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			return BeginResult{}, fmt.Errorf("create session id: %w", err)
 		}
 		now := time.Now().UTC()
-		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, CreatedAt: now}
+		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, CreatedAt: now}
 		if err := s.store.Save(record); err != nil {
 			return BeginResult{}, fmt.Errorf("persist session: %w", err)
 		}
@@ -96,7 +103,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			_ = s.store.Delete(sessionID)
 			return BeginResult{}, fmt.Errorf("persist active session: %w", err)
 		}
-		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, ExtraConfigs: extraConfigs}, nil
+		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, ExtraConfigs: extraConfigs}, nil
 	})
 }
 

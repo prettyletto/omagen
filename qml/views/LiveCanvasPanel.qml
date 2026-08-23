@@ -19,8 +19,9 @@ PanelWindow {
     property bool applyBusy: false
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
     property bool applyRecoveryRequired: false
     property bool protocolCanBack: false
     property bool protocolCanForward: false
@@ -40,6 +41,11 @@ PanelWindow {
     property bool moreColorsOpen: false
     property string expandedColorGroup: "surfaces"
     property bool advancedEditorOpen: false
+    readonly property string inactiveStyle: desktopStyle.inactiveStyle || desktopStyle.inactive_style || "native"
+    readonly property bool frostedBackdropEnabled: inactiveStyle === "blur" || inactiveStyle.indexOf("frosted_") === 0
+    readonly property real frostedBackdropOpacity: inactiveStyle === "frosted_rich" ? 0.46
+        : inactiveStyle === "frosted_balanced" || inactiveStyle === "blur" ? 0.56
+        : inactiveStyle === "frosted_light" ? 0.68 : 0.97
 
     readonly property var editableColorRoles: [
         { key: "accent", label: "Accent" },
@@ -101,8 +107,8 @@ PanelWindow {
     signal startDemoRequested()
     signal cancelRequested()
     signal variantRequested(string variant)
-    signal colorTestLiveRequested(string variant, var overrides, var shellStyle, var desktopStyle, var barStyle)
-    signal advancedStylesChanged(var shellStyle, var desktopStyle, var barStyle)
+    signal colorTestLiveRequested(string variant, var overrides, var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
+    signal advancedStylesChanged(var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
     signal protocolBackRequested()
     signal protocolForwardRequested()
     signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
@@ -357,6 +363,10 @@ PanelWindow {
     visible: root.active
     screen: root.resolveScreen()
     color: "transparent"
+    // The frosted profile needs an alpha-capable Wayland surface. Without this
+    // declaration, the compositor may treat this PanelWindow as opaque even
+    // though its content Rectangle has an alpha value.
+    surfaceFormat.opaque: false
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "omagen-live-canvas"
     WlrLayershell.layer: WlrLayer.Overlay
@@ -383,11 +393,11 @@ PanelWindow {
     Rectangle {
         anchors.fill: parent
         // Hyprland's layer blur samples the pixels behind this surface. Keep
-        // the panel translucent when Backdrop blur is selected; an almost
+        // the panel translucent when a Frosted backdrop profile is selected; an almost
         // opaque panel would hide the compositor effect even with the rule.
         color: Util.alpha(
             Color.popups.background,
-            root.desktopStyle.inactiveStyle === "blur" ? 0.72 : 0.97
+            root.frostedBackdropOpacity
         )
         border.width: 1
         border.color: Color.popups.border
@@ -666,9 +676,31 @@ PanelWindow {
                 shellStyle: root.shellStyle
                 desktopStyle: root.desktopStyle
                 barStyle: root.barStyle
+                animationsStyle: root.animationsStyle
                 enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                onStylesChanged: function(shellStyle, desktopStyle, barStyle) {
-                    root.advancedStylesChanged(shellStyle, desktopStyle, barStyle)
+                onStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
+                    root.advancedStylesChanged(shellStyle, desktopStyle, barStyle, animationsStyle)
+                }
+            }
+
+            Rectangle {
+                // This is deliberately translucent, not a Qt item blur. With a
+                // frosted profile selected, Hyprland's scoped layer rule blurs
+                // the real wallpaper/window pixels behind the Live Canvas.
+                visible: root.extraConfigsEnabled && root.advancedEditorOpen && root.frostedBackdropEnabled
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(64)
+                radius: Style.space(8)
+                color: Util.alpha(Color.background, 0.12)
+                border.width: 1
+                border.color: Util.alpha(Color.popups.border, 0.72)
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Style.space(10)
+                    spacing: Style.space(2)
+                    Text { text: "LIVE BACKDROP PROBE"; color: Color.foreground; opacity: 0.72; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.7 }
+                    Text { Layout.fillWidth: true; text: "After Test Live, the wallpaper or windows behind this canvas should soften here. Application content itself remains sharp."; color: Color.foreground; opacity: 0.7; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
                 }
             }
 
@@ -683,7 +715,7 @@ PanelWindow {
                 enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && Object.keys(root.stagedColors).length > 0
                 onClicked: {
                     root.resetVariantColors()
-                    root.colorTestLiveRequested(root.selectedVariant, ({}))
+                    root.colorTestLiveRequested(root.selectedVariant, ({}), root.shellStyle, root.desktopStyle, root.barStyle, root.animationsStyle)
                 }
             }
 
@@ -695,7 +727,7 @@ PanelWindow {
                 accent: Color.accent
                 background: Color.accent
                 enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyle, root.desktopStyle, root.barStyle)
+                onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyle, root.desktopStyle, root.barStyle, root.animationsStyle)
             }
 
             ColumnLayout {
@@ -800,7 +832,7 @@ PanelWindow {
                         accent: Color.accent
                         background: Color.accent
                         enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyle, root.desktopStyle, root.barStyle)
+                        onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyle, root.desktopStyle, root.barStyle, root.animationsStyle)
                     }
 
                     Button {

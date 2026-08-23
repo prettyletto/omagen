@@ -66,11 +66,13 @@ func (s *Service) Generate(
 	shellStyle := session.NormalizeShellStyle(record.ShellStyle)
 	desktopStyle := session.NormalizeDesktopStyle(record.DesktopStyle)
 	barStyle := session.NormalizeBarStyle(record.BarStyle)
+	animationsStyle := session.NormalizeAnimationsStyle(record.AnimationsStyle)
 	if request.Configuration != nil {
 		configuration := *request.Configuration
 		configuration.ShellStyle = session.NormalizeShellStyle(configuration.ShellStyle)
 		configuration.DesktopStyle = session.NormalizeDesktopStyle(configuration.DesktopStyle)
 		configuration.BarStyle = session.NormalizeBarStyle(configuration.BarStyle)
+		configuration.AnimationsStyle = session.NormalizeAnimationsStyle(configuration.AnimationsStyle)
 		if !configuration.ShellStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid shell style configuration")
 		}
@@ -80,14 +82,19 @@ func (s *Service) Generate(
 		if !configuration.BarStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid bar style configuration")
 		}
+		if !configuration.AnimationsStyle.Valid() {
+			return Result{}, fmt.Errorf("invalid animations style configuration")
+		}
 		request.Configuration = &configuration
 		shellStyle = configuration.ShellStyle
 		desktopStyle = configuration.DesktopStyle
 		barStyle = configuration.BarStyle
+		animationsStyle = configuration.AnimationsStyle
 	} else if !record.ExtraConfigs {
 		shellStyle = session.ShellStyle{}
 		desktopStyle = session.DesktopStyle{}
 		barStyle = session.BarStyle{}
+		animationsStyle = session.AnimationsStyle{}
 	} else if !shellStyle.Valid() {
 		shellStyle = session.DefaultShellStyle()
 	}
@@ -183,6 +190,7 @@ func (s *Service) Generate(
 		shellStyle,
 		desktopStyle,
 		barStyle,
+		animationsStyle,
 	); err != nil {
 		return Result{}, err
 	}
@@ -264,6 +272,7 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 		record.ShellStyle = request.Configuration.ShellStyle
 		record.DesktopStyle = request.Configuration.DesktopStyle
 		record.BarStyle = request.Configuration.BarStyle
+		record.AnimationsStyle = request.Configuration.AnimationsStyle
 	}
 	if err := s.sessions.Save(record); err != nil {
 		_ = fsutil.RemoveAllAndSync(finalRoot)
@@ -286,6 +295,7 @@ func runJobs(
 	shellStyle session.ShellStyle,
 	desktopStyle session.DesktopStyle,
 	barStyle session.BarStyle,
+	animationsStyle session.AnimationsStyle,
 ) error {
 	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
@@ -307,13 +317,14 @@ func runJobs(
 			defer wg.Done()
 
 			err := (job{
-				variant:      variant,
-				sourceImage:  sourceImage,
-				analysis:     analysis,
-				settings:     effectiveSettings,
-				shellStyle:   shellStyle,
-				desktopStyle: desktopStyle,
-				barStyle:     barStyle,
+				variant:         variant,
+				sourceImage:     sourceImage,
+				analysis:        analysis,
+				settings:        effectiveSettings,
+				shellStyle:      shellStyle,
+				desktopStyle:    desktopStyle,
+				barStyle:        barStyle,
+				animationsStyle: animationsStyle,
 			}).run(
 				ctx,
 				generationRoot,

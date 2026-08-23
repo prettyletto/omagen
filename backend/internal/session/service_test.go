@@ -78,6 +78,19 @@ func TestServiceBeginNormalizesDesktopStyleDefaultsBeforeValidation(t *testing.T
 	}
 }
 
+func TestNormalizeDesktopStyleMigratesLegacyBackdropBlur(t *testing.T) {
+	style := NormalizeDesktopStyle(DesktopStyle{
+		BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36,
+		Shape: "native", Spacing: "native", Depth: "native", Inactive: "blur",
+	})
+	if style.Inactive != "frosted_balanced" {
+		t.Fatalf("legacy blur was not migrated to the balanced frosted profile: %#v", style)
+	}
+	if !style.Valid() {
+		t.Fatalf("migrated frosted profile is not valid: %#v", style)
+	}
+}
+
 func TestCancelAfterRegenerationRestoresInitialBaseline(t *testing.T) {
 	s := testStore(t)
 	record := testRecord("regenerated")

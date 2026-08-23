@@ -5,21 +5,23 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
-// StyleOverrides carries the three native composition documents that can be
+// StyleOverrides carries the four native composition documents that can be
 // staged by Live Canvas.  A palette preview remains independent when this is
 // nil; when present, the candidate is regenerated through the real Hyprland
 // and Quickshell theme writers before the native theme driver runs.
 type StyleOverrides struct {
-	Shell   session.ShellStyle   `json:"shell"`
-	Desktop session.DesktopStyle `json:"desktop"`
-	Bar     session.BarStyle     `json:"bar"`
+	Shell      session.ShellStyle      `json:"shell"`
+	Desktop    session.DesktopStyle    `json:"desktop"`
+	Bar        session.BarStyle        `json:"bar"`
+	Animations session.AnimationsStyle `json:"animations"`
 }
 
 func (s StyleOverrides) Valid() bool {
 	shell := session.NormalizeShellStyle(s.Shell)
 	desktop := session.NormalizeDesktopStyle(s.Desktop)
 	bar := session.NormalizeBarStyle(s.Bar)
-	return shell.Valid() && desktop.Valid() && bar.Valid()
+	animations := session.NormalizeAnimationsStyle(s.Animations)
+	return shell.Valid() && desktop.Valid() && bar.Valid() && animations.Valid()
 }
 
 type Request struct {

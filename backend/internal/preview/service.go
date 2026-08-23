@@ -444,7 +444,8 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		styles.Shell = session.NormalizeShellStyle(styles.Shell)
 		styles.Desktop = session.NormalizeDesktopStyle(styles.Desktop)
 		styles.Bar = session.NormalizeBarStyle(styles.Bar)
-		if err := theme.WriteHyprland(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Inactive, styles.Desktop.BorderSpeed); err != nil {
+		styles.Animations = session.NormalizeAnimationsStyle(styles.Animations)
+		if err := theme.WriteHyprlandWithAnimations(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations); err != nil {
 			return fmt.Errorf("rewrite overridden hyprland style: %w", err)
 		}
 		if err := theme.WriteShell(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility); err != nil {
@@ -618,6 +619,7 @@ func applyStyleOverrides(record *session.Record, styles *StyleOverrides) {
 	record.ShellStyle = session.NormalizeShellStyle(styles.Shell)
 	record.DesktopStyle = session.NormalizeDesktopStyle(styles.Desktop)
 	record.BarStyle = session.NormalizeBarStyle(styles.Bar)
+	record.AnimationsStyle = session.NormalizeAnimationsStyle(styles.Animations)
 	record.ExtraConfigs = true
 }
 

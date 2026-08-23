@@ -14,7 +14,8 @@ Item {
         var shellStyle,
         bool extraConfigs,
         var desktopStyle,
-        var barStyle
+        var barStyle,
+        var animationsStyle
     )
     signal sessionBeginFailed(string message)
     signal sessionCancelled(string sessionId)
@@ -48,19 +49,22 @@ Item {
     signal protocolNavigationCompleted(string sessionId, var navigation)
     signal protocolNavigationFailed(string sessionId, string message)
 
-    function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle) {
+    function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle) {
         if (!shellStyle)
             return;
         args.push("--shell-style", shellStyle.surface, shellStyle.detail, shellStyle.tooltip, shellStyle.notifications,
                   "--desktop-style", desktopStyle.borderStyle, desktopStyle.borderSize,
                   desktopStyle.borderSizeMode || desktopStyle.border_size_mode || "default",
                   desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
-                  "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility);
+                  "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility,
+                  "--window-active-style", desktopStyle.activeStyle || desktopStyle.active_style || "native");
+        if (animationsStyle)
+            args.push("--animations-json", JSON.stringify(animationsStyle));
     }
 
-    function beginSession(shellStyle, desktopStyle, barStyle) {
+    function beginSession(shellStyle, desktopStyle, barStyle, animationsStyle) {
         const args = [root.executable, "session", "begin"];
-        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle);
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle);
         sessionBeginProcess.exec(args);
     }
 
@@ -76,10 +80,10 @@ Item {
     function checkBackend() { pingProcess.exec([root.executable, "ping"]); }
     function recoverSession() { recoverProcess.exec([root.executable, "session", "recover"]); }
 
-    function generateTheme(sessionId, imagePath, shellStyle, desktopStyle, barStyle) {
+    function generateTheme(sessionId, imagePath, shellStyle, desktopStyle, barStyle, animationsStyle) {
         generationProcess.sessionId = sessionId;
         const args = [root.executable, "generate", sessionId, imagePath];
-        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle);
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle);
         generationProcess.exec(args);
     }
     function describeGeneration(sessionId, generationId) {
@@ -96,6 +100,7 @@ Item {
         const shell = styles.shell || ({});
         const desktop = styles.desktop || ({});
         const bar = styles.bar || ({});
+        const animations = styles.animations || ({});
         return {
             shell: {
                 surface: shell.surface || "flat",
@@ -111,6 +116,7 @@ Item {
                 shape: desktop.shape || "native",
                 spacing: desktop.spacing || "native",
                 depth: desktop.depth || "native",
+                active_style: desktop.activeStyle || desktop.active_style || "native",
                 inactive_style: desktop.inactiveStyle || desktop.inactive_style || "native"
             },
             bar: {
@@ -119,6 +125,13 @@ Item {
                 attention: bar.attention || "semantic",
                 form: bar.form || "continuous",
                 visibility: bar.visibility || "native"
+            },
+            animations: {
+                window: animations.window || "native",
+                workspace: animations.workspace || "native",
+                border: animations.border || "native",
+                border_speed: Number(animations.borderSpeed !== undefined ? animations.borderSpeed : animations.border_speed || 36),
+                reduced_motion: animations.reducedMotion === true || animations.reduced_motion === true
             }
         };
     }

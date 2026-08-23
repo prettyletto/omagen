@@ -45,6 +45,7 @@ Item {
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
     readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
     readonly property string inactiveWindowStyle: root.configurationPreview ? (root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native") : "native"
+    readonly property bool frostedInactivePreview: inactiveWindowStyle === "blur" || inactiveWindowStyle.indexOf("frosted_") === 0
     readonly property real previewBorderWidth: !root.configurationPreview || Number(root.desktopStyle.borderSize) < 0
         ? 2 : Number(root.desktopStyle.borderSize)
     readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
@@ -415,8 +416,13 @@ Item {
                     Item {
                         id: inactivePaneSource
                         anchors.fill: parent
+                        // This card deliberately represents transparency only.
+                        // Hyprland blurs the backdrop behind a real surface; Qt
+                        // must not pretend it can blur the application's pixels.
                         opacity: root.inactiveWindowStyle === "shadow" ? 0.52
-                            : root.inactiveWindowStyle === "blur" ? 0.42 : 0.68
+                            : root.inactiveWindowStyle === "frosted_light" ? 0.80
+                            : root.inactiveWindowStyle === "frosted_rich" ? 0.62
+                            : 0.68
 
                         Rectangle {
                             anchors.fill: parent
@@ -427,7 +433,7 @@ Item {
                         }
                         Text {
                             anchors.centerIn: parent
-                            text: root.inactiveWindowStyle === "blur" ? "inactive · softened" : "inactive · shadowed"
+                            text: root.frostedInactivePreview ? "inactive · frosted backdrop" : "inactive · soft dim"
                             color: root.darkFg
                             font.family: Style.font.family
                             font.pixelSize: Math.max(7, 8 * root.uiScale)
@@ -435,16 +441,6 @@ Item {
                         }
                     }
 
-                    MultiEffect {
-                        visible: root.inactiveWindowStyle === "blur"
-                        anchors.fill: inactivePaneSource
-                        source: inactivePaneSource
-                        blurEnabled: true
-                        blur: 1.0
-                        blurMax: 40
-                        blurMultiplier: 2.0
-                        opacity: 0.88
-                    }
                 }
 
                 Rectangle {

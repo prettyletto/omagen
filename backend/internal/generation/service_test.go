@@ -140,9 +140,10 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 		t.Fatal(err)
 	}
 	configuration := &Configuration{
-		ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-		DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
-		BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+		ShellStyle:      session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+		DesktopStyle:    session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Active: "native", Inactive: "frosted_balanced"},
+		BarStyle:        session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+		AnimationsStyle: session.DefaultAnimationsStyle(),
 	}
 
 	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
@@ -202,9 +203,10 @@ func TestFailedRegenerationPreservesPreviousConfiguration(t *testing.T) {
 		SessionID:   record.SessionID,
 		SourceImage: filepath.Join(t.TempDir(), "missing.png"),
 		Configuration: &Configuration{
-			ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-			DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
-			BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+			ShellStyle:      session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+			DesktopStyle:    session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+			BarStyle:        session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+			AnimationsStyle: session.DefaultAnimationsStyle(),
 		},
 	})
 	if err == nil {
@@ -528,7 +530,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		Format:          "png",
 		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
 		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
-	}, settings.Defaults(), session.ShellStyle{}, session.DesktopStyle{}, session.BarStyle{}); err == nil {
+	}, settings.Defaults(), session.ShellStyle{}, session.DesktopStyle{}, session.BarStyle{}, session.AnimationsStyle{}); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
 	if err := (job{

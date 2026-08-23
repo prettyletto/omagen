@@ -49,8 +49,9 @@ Item {
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
     property string errorMessage: ""
 
     readonly property var variants: [
@@ -98,8 +99,9 @@ Item {
         } else { borderSize = -1; borderSizeMode = "default" }
         var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
         if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
-        return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
+        return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
     }
+    function normalizeAnimationsStyle(value) { value = value || ({}); var speed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed); if (!isFinite(speed) || speed < 10 || speed > 100) speed = 36; return { window: value.window || "native", workspace: value.workspace || "native", border: value.border || "native", borderSpeed: speed, reducedMotion: value.reducedMotion === true || value.reduced_motion === true } }
     function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native" } }
 
     function open(payload) {
@@ -187,6 +189,7 @@ Item {
         shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
         desktopStyle = normalizeDesktopStyle(resumableSession.desktop_style);
         barStyle = normalizeBarStyle(resumableSession.bar_style);
+        animationsStyle = normalizeAnimationsStyle(resumableSession.animations_style);
         extraConfigsEnabled = resumableSession.extra_configs === true;
         workflowMode = extraConfigsEnabled ? "in-depth" : "fast";
         liveCanvasMonitor = resumableSession.canvas_monitor || "";
@@ -305,13 +308,13 @@ Item {
             regenerationPending = true;
             opened = true;
             route = "workspace";
-            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null);
+            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null, extraConfigsEnabled ? animationsStyle : null);
             return;
         }
 
         errorMessage = "";
         sessionBusy = true;
-        backend.beginSession(extraConfigsEnabled ? shellStyle : null, desktopStyle, barStyle);
+        backend.beginSession(extraConfigsEnabled ? shellStyle : null, desktopStyle, barStyle, animationsStyle);
     }
 
     function continueFromSetup() {
@@ -394,6 +397,7 @@ Item {
             root.shellStyle = root.normalizeShellStyle(state.style_overrides.shell || ({}));
             root.desktopStyle = root.normalizeDesktopStyle(state.style_overrides.desktop || ({}));
             root.barStyle = root.normalizeBarStyle(state.style_overrides.bar || ({}));
+            root.animationsStyle = root.normalizeAnimationsStyle(state.style_overrides.animations || ({}));
         }
         liveCanvasPanel.setStagedColors(state.color_overrides || {}, state.variant);
     }
@@ -401,7 +405,7 @@ Item {
     function previewStyles() {
         if (!root.extraConfigsEnabled)
             return null;
-        return { shell: root.shellStyle, desktop: root.desktopStyle, bar: root.barStyle };
+        return { shell: root.shellStyle, desktop: root.desktopStyle, bar: root.barStyle, animations: root.animationsStyle };
     }
 
     function previewCurrentState(variant) {
@@ -411,7 +415,7 @@ Item {
         backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
     }
 
-    function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle) {
+    function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle, nextAnimationsStyle) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy)
             return;
         if (nextShellStyle)
@@ -420,6 +424,8 @@ Item {
             root.desktopStyle = root.normalizeDesktopStyle(nextDesktopStyle);
         if (nextBarStyle)
             root.barStyle = root.normalizeBarStyle(nextBarStyle);
+        if (nextAnimationsStyle)
+            root.animationsStyle = root.normalizeAnimationsStyle(nextAnimationsStyle);
         liveCanvasPanel.setStagedColors(overrides || ({}), variant);
         session.selectVariant(variant);
         errorMessage = "";
@@ -578,8 +584,9 @@ Item {
         workflowMode = "fast";
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" });
-        desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" });
+        desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" });
         barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" });
+        animationsStyle = ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false });
         errorMessage = "";
         opened = !shouldClose;
         generationBusy = false;
@@ -649,7 +656,8 @@ Item {
             backendShellStyle,
             backendExtraConfigs,
             backendDesktopStyle,
-            backendBarStyle
+            backendBarStyle,
+            backendAnimationsStyle
         ) {
             root.sessionBusy = false;
             session.activate(
@@ -658,6 +666,7 @@ Item {
             root.shellStyle = root.normalizeShellStyle(backendShellStyle);
             root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
             root.barStyle = root.normalizeBarStyle(backendBarStyle);
+            root.animationsStyle = root.normalizeAnimationsStyle(backendAnimationsStyle);
             root.extraConfigsEnabled = backendExtraConfigs;
             root.workflowMode = backendExtraConfigs ? "in-depth" : "fast";
             if (root.closeAfterCancel) {
@@ -669,7 +678,7 @@ Item {
             root.livePanelOpen = true;
             root.opened = false;
             root.generationBusy = true;
-            backend.generateTheme(sessionId, root.sourceImage, null, null, null);
+            backend.generateTheme(sessionId, root.sourceImage, null, null, null, null);
         }
 
         onSessionBeginFailed: function(message) {
@@ -1191,6 +1200,7 @@ Item {
         shellStyle: root.shellStyle
         desktopStyle: root.desktopStyle
         barStyle: root.barStyle
+        animationsStyle: root.animationsStyle
         protocolCanBack: root.protocolCanBack
         protocolCanForward: root.protocolCanForward
         protocolBusy: root.protocolBusy
@@ -1207,11 +1217,12 @@ Item {
         onStartDemoRequested: root.startDemo(session.selectedVariant)
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
-        onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle) }
-        onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle) {
+        onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
+        onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
             root.shellStyle = root.normalizeShellStyle(shellStyle)
             root.desktopStyle = root.normalizeDesktopStyle(desktopStyle)
             root.barStyle = root.normalizeBarStyle(barStyle)
+            root.animationsStyle = root.normalizeAnimationsStyle(animationsStyle)
         }
         onProtocolBackRequested: root.navigateProtocol("back")
         onProtocolForwardRequested: root.navigateProtocol("forward")

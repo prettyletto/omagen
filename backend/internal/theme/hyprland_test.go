@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
 func TestWriteHyprlandMapsWindowControlsToHyprland(t *testing.T) {
@@ -202,7 +204,10 @@ func TestWriteHyprlandInactiveModes(t *testing.T) {
 		want []string
 	}{
 		{name: "shadow", want: []string{"dim_inactive = true, dim_strength = 0.32", "color_inactive = \"rgba(050607d0)\""}},
-		{name: "blur", want: []string{"inactive_opacity = 0.58, dim_inactive = true, dim_strength = 0.62", "blur = { enabled = true, size = 16, passes = 3, ignore_opacity = false, new_optimizations = true }", "hl.layer_rule({ name = \"omagen-live-canvas-backdrop-blur\", match = { namespace = \"^omagen-live-canvas$\" }, blur = true, blur_popups = true })"}},
+		{name: "frosted_light", want: []string{"inactive_opacity = 0.80, dim_inactive = true, dim_strength = 0.12", "blur = { enabled = true, size = 10, passes = 2, ignore_opacity = true, new_optimizations = true }", "hl.layer_rule({ name = \"omagen-live-canvas-backdrop-blur\", match = { namespace = \"^omagen-live-canvas$\" }, blur = true, blur_popups = true, ignore_alpha = 0.20 })"}},
+		{name: "frosted_balanced", want: []string{"inactive_opacity = 0.68, dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
+		{name: "frosted_rich", want: []string{"inactive_opacity = 0.62, dim_inactive = true, dim_strength = 0.34", "blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }"}},
+		{name: "blur", want: []string{"inactive_opacity = 0.68, dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
 	} {
 		t.Run(style.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -232,5 +237,30 @@ func TestWriteHyprlandInactiveModes(t *testing.T) {
 	}
 	if strings.Contains(string(data), "omagen-live-canvas-backdrop-blur") {
 		t.Fatal("native inactive style must not install the Live Canvas blur layer rule")
+	}
+}
+
+func TestWriteHyprlandSeparatesActiveInactiveBlurAndAnimations(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc", Blue: "#4488dd", Magenta: "#cc55ee"}
+	animations := session.AnimationsStyle{Window: "snappy", Workspace: "smooth", Border: "static", BorderSpeed: 48}
+	if err := WriteHyprlandWithAnimations(dir, p, "solid", 2, "native", "native", "native", "frosted_light", "frosted_rich", 48, animations); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"active_opacity = 0.80",
+		"inactive_opacity = 0.62, dim_inactive = true, dim_strength = 0.34",
+		"blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }",
+		`hl.animation({ leaf = "windows", enabled = true, speed = 5.5, bezier = "quick" })`,
+		`hl.animation({ leaf = "workspaces", enabled = true, speed = 3, bezier = "easeOutQuint", style = "slide" })`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("generated split window/animation config missing %q:\n%s", want, text)
+		}
 	}
 }

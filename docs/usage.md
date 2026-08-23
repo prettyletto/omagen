@@ -46,7 +46,7 @@ After choosing an image, choose a workflow:
 - **Fast** follows the normal path: choose a direction, enter Live Canvas, and
   apply the theme. Start Demo is optional when you want the four-window
   workspace.
-- **In-depth** enables Studio extras for window, shell, and bar composition in
+- **In-depth** enables Studio extras for window, shell, bar, and animation composition in
   Live Canvas after palette generation; see [Styling and palette settings](styling.md).
 
 <p align="center">
@@ -57,15 +57,16 @@ After choosing an image, choose a workflow:
 
 When **In-depth** is selected, the Live Canvas sidebar exposes composition
 controls after the six palette directions are generated. Open **Advanced
-settings** and move between the three sections:
+settings** and move between the four engines:
 
 - **Window** controls the active border, a Default/None/1–24 px border slider, five fixed
-  corner-shape presets, pane spacing, depth, and how inactive windows recede
-  (native, shadowed, or backdrop blur).
+  corner-shape presets, pane spacing, shadow depth, and independent active/inactive
+  Frosted backdrop profiles (with Soft dim for inactive windows).
 - **Shell** controls surface composition, focus/detail language, and tooltip or
   notification feedback surfaces.
 - **Bar** controls the form, surface, density, attention color, and Docked
   visibility policy while preserving native Quattro layout behavior.
+- **Animations** controls window, workspace, and border motion plus reduced motion.
 
 Every choice is staged in the current session. Use **Test Live composition**
 to apply the selected values to the native runtime owners; these settings then
