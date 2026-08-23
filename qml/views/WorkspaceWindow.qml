@@ -30,6 +30,10 @@ PanelWindow {
     property string previewVariant: ""
     property var palettes: ({})
     property string errorMessage: ""
+    property bool protocolCanBack: false
+    property bool protocolCanForward: false
+    property bool protocolBusy: false
+    property string protocolMessage: ""
     property int cursorIndex: 0
 
     readonly property var variants: [
@@ -48,6 +52,8 @@ PanelWindow {
     signal testLiveRequested(string variant)
     signal demoRequested(string variant)
     signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
+    signal protocolBackRequested()
+    signal protocolForwardRequested()
 
     function resetApplyDialog() {
         themeNameDialog.reset()
@@ -255,9 +261,9 @@ PanelWindow {
                         visible: root.errorMessage === ""
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        text: "↑ ↓ ← →  navigate     Enter  select     Esc  close"
+                        text: root.protocolMessage !== "" ? root.protocolMessage : "↑ ↓ ← →  navigate     Enter  select     Esc  close"
                         color: Color.foreground
-                        opacity: 0.42
+                        opacity: root.protocolMessage !== "" ? 0.62 : 0.42
                         font.family: Style.font.family
                         font.pixelSize: Style.font.caption
                     }
@@ -266,6 +272,16 @@ PanelWindow {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: Style.space(8)
+
+                        Components.ProtocolNavigationControls {
+                            anchors.verticalCenter: parent.verticalCenter
+                            canBack: root.protocolCanBack
+                            canForward: root.protocolCanForward
+                            busy: root.protocolBusy
+                            enabled: root.workspaceReady && !root.previewBusy && !root.cancelBusy && !root.applyBusy
+                            onBackRequested: root.protocolBackRequested()
+                            onForwardRequested: root.protocolForwardRequested()
+                        }
 
                         Button {
                             text: root.backBusy ? "Returning…" : (root.cancelBusy ? "Restoring…" : (root.applyRecoveryRequired ? "Cancel & restore" : (root.extraConfigsEnabled ? "Back to configuration" : "Cancel")))

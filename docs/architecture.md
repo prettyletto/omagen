@@ -9,6 +9,11 @@ The stable backend ownership and Studio attachment rules are recorded in the
 Studio capabilities; it does not replace the existing session or recovery
 engine.
 
+The live operation seam is recorded in the
+[Studio protocol](studio-protocol.md). It persists operation events and
+checkpoints and streams them to observers without taking ownership of native
+desktop rollback.
+
 ## Omarchy plugin contract
 
 The root [manifest.json](../manifest.json) is the package contract:

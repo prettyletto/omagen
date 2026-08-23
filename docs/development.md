@@ -115,6 +115,12 @@ bin/omagen apply <session> <generation> <variant> <theme-name> \
   --run terminal,browser --skip hyprland
 ~~~
 
+Studio driver requests also accept `--allow-trusted-hooks` as an explicit
+opt-in. Hooks remain disabled by default. The source-derived driver supports
+`preview`, `apply`, `restore`, and read-only `inspect` modes; `--scope` limits
+theme, shell, Hyprland, application, and background work, while `--wait`
+selects critical, full, or fire-and-forget post-commit completion.
+
 Theme promotion and shell/background updates remain serialized. Selected
 retint adapters run in parallel after that critical section. Missing optional
 commands are reported as skipped, command failures are reported per adapter,

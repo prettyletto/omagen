@@ -26,17 +26,16 @@ func NewStore() (*Store, error) {
 }
 
 func (s *Store) Load() (Settings, error) {
-	file, err := os.Open(s.path)
+	data, err := fsutil.ReadFileLimited(s.path, fsutil.MaxStateFileBytes)
 	if errors.Is(err, os.ErrNotExist) {
 		return Defaults(), nil
 	}
 	if err != nil {
 		return Settings{}, fmt.Errorf("open settings: %w", err)
 	}
-	defer file.Close()
 
 	settings := Defaults()
-	if err := decodeStrict(file, &settings); err != nil {
+	if err := decodeStrict(bytes.NewReader(data), &settings); err != nil {
 		return Settings{}, fmt.Errorf("decode settings: %w", err)
 	}
 	if err := settings.Validate(); err != nil {

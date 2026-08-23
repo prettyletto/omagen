@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Studio-owned, source-derived preview driver.
+# Studio-owned, source-derived Studio driver.
 #
 # This intentionally follows the installed omarchy-theme-set transaction up to
 # the point where the active theme and shell have been promoted. Preview mode
@@ -10,8 +10,10 @@ set -Eeuo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: studio-theme-set {preview|apply} <theme-name> [--no-hooks]
-       [--run <policy>] [--skip <adapters>]
+Usage: studio-theme-set {preview|apply|restore} <theme-name> [--no-hooks]
+       [--scope <scopes>] [--wait <critical|full|none>]
+       [--run <policy>] [--skip <adapters>] [--allow-trusted-hooks]
+       studio-theme-set inspect [--json]
 
 Apply a Studio candidate to the live desktop without running arbitrary theme
 hooks. Preview mode is always no-hook; --no-hooks is accepted explicitly for
@@ -23,19 +25,37 @@ reviewed adapters. --apps remains an alias for --run. --skip removes reviewed
 adapters from that selection. Adapter names are:
 hyprland,btop,opencode,helix,foot,tmux,gnome,pi,claude,browser,vscode,
 obsidian,keyboard.
+
+Scopes are comma-separated: theme,shell,hyprland,apps,background. The theme
+scope is required for mutating modes. User hooks remain disabled unless
+--allow-trusted-hooks is explicitly provided.
 EOF
 }
 
-if [[ ${1:-} != "preview" && ${1:-} != "apply" || $# -lt 2 ]]; then
+if [[ ${1:-} != "preview" && ${1:-} != "apply" && ${1:-} != "restore" && ${1:-} != "inspect" ]]; then
   usage
   exit 2
 fi
 
 MODE="$1"
-THEME_INPUT="$2"
-shift 2
+THEME_INPUT="${2:-}"
+if [[ "$MODE" == "inspect" ]]; then
+  shift
+else
+  if (($# < 2)); then
+    usage
+    exit 2
+  fi
+  shift 2
+fi
 RUN_POLICY="${OMAGEN_STUDIO_PREVIEW_APPS:-all}"
 SKIP_POLICY="${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-keyboard}"
+SCOPE_POLICY="${OMAGEN_STUDIO_SCOPE:-theme,shell,hyprland,apps,background}"
+WAIT_MODE="${OMAGEN_STUDIO_WAIT:-critical}"
+ALLOW_TRUSTED_HOOKS=0
+if [[ "${OMAGEN_STUDIO_ALLOW_TRUSTED_HOOKS:-0}" == "1" ]]; then
+  ALLOW_TRUSTED_HOOKS=1
+fi
 DEFAULT_KEYBOARD_SKIP=0
 if [[ -z "${OMAGEN_STUDIO_PREVIEW_APPS:-}" && -z "${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-}" ]]; then
   DEFAULT_KEYBOARD_SKIP=1
@@ -65,6 +85,30 @@ while (($# > 0)); do
       DEFAULT_KEYBOARD_SKIP=0
       shift
       ;;
+    --scope)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: --scope requires scope names\n' >&2
+        usage
+        exit 2
+      fi
+      SCOPE_POLICY="$2"
+      shift
+      ;;
+    --wait)
+      if (($# < 2)) || [[ "$2" != "critical" && "$2" != "full" && "$2" != "none" ]]; then
+        printf 'studio-theme-set: --wait must be critical, full, or none\n' >&2
+        usage
+        exit 2
+      fi
+      WAIT_MODE="$2"
+      shift
+      ;;
+    --allow-trusted-hooks)
+      ALLOW_TRUSTED_HOOKS=1
+      ;;
+    --json)
+      [[ "$MODE" == "inspect" ]] || { printf 'studio-theme-set: --json is only valid for inspect\n' >&2; exit 2; }
+      ;;
     *)
       printf 'studio-theme-set: unsupported preview option: %s\n' "$arg" >&2
       usage
@@ -73,6 +117,29 @@ while (($# > 0)); do
   esac
   shift
 done
+
+scope_enabled() {
+  local wanted="$1" scope
+  IFS=',' read -r -a scopes <<< "$SCOPE_POLICY"
+  for scope in "${scopes[@]}"; do
+    scope="${scope//[[:space:]]/}"
+    [[ "$scope" == "$wanted" ]] && return 0
+  done
+  return 1
+}
+
+validate_scopes() {
+  local scope
+  IFS=',' read -r -a scopes <<< "$SCOPE_POLICY"
+  for scope in "${scopes[@]}"; do
+    scope="${scope//[[:space:]]/}"
+    case "$scope" in
+      theme|shell|hyprland|apps|background) ;;
+      *) printf 'studio-theme-set: unknown scope: %s\n' "$scope" >&2; return 2 ;;
+    esac
+  done
+  scope_enabled theme || { printf 'studio-theme-set: mutating modes require the theme scope\n' >&2; return 2; }
+}
 
 if (( DEFAULT_KEYBOARD_SKIP )); then
   SKIP_POLICY="keyboard"
@@ -99,6 +166,20 @@ BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
 THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
 USER_THEMES_PATH="$HOME/.config/omarchy/themes"
 OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
+
+if [[ "$MODE" == "inspect" ]]; then
+  current_theme=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  background=$(readlink -f "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  colors=false; shell=false; hyprland=false
+  [[ -s "$CURRENT_THEME_PATH/colors.toml" ]] && colors=true
+  [[ -s "$CURRENT_THEME_PATH/shell.toml" ]] && shell=true
+  [[ -s "$CURRENT_THEME_PATH/hyprland.conf" ]] && hyprland=true
+  printf '{"mode":"inspect","theme":"%s","theme_root":"%s","background":"%s","readers":{"colors":%s,"shell":%s,"hyprland":%s}}\n' \
+    "$current_theme" "$CURRENT_THEME_PATH" "$background" "$colors" "$shell" "$hyprland"
+  exit 0
+fi
+
+validate_scopes || exit $?
 
 run_parallel() {
   local pid
@@ -241,6 +322,29 @@ run_selected_retints() {
   return 0
 }
 
+run_trusted_hooks() {
+  if (( ! ALLOW_TRUSTED_HOOKS )); then
+    return 0
+  fi
+  if ! command -v omarchy-hook >/dev/null 2>&1; then
+    printf '%s trusted-hooks status=skipped reason=command-missing\n' "$MODE"
+    return 0
+  fi
+  printf '%s trusted-hooks status=started timeout=30s\n' "$MODE"
+  if timeout 30 omarchy-hook theme-set "$THEME_NAME"; then
+    printf '%s trusted-hooks status=success\n' "$MODE"
+  else
+    printf '%s trusted-hooks status=failed\n' "$MODE" >&2
+  fi
+}
+
+run_post_commit() {
+  if scope_enabled apps || scope_enabled hyprland; then
+    run_selected_retints
+  fi
+  run_trusted_hooks
+}
+
 warm_apply_caches() {
   # Applying a new user theme changes the theme directory signature used by
   # the native image-based theme picker. Warm it after the permanent theme is
@@ -326,6 +430,11 @@ set_theme_background() {
   new_background="$CHOSEN_THEME_BACKGROUND"
   new_background_snapshot=$(snapshot_background_path "$new_background" "next")
 
+  if ! scope_enabled shell && ! scope_enabled hyprland; then
+    ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+    return 0
+  fi
+
   if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
     shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
@@ -359,6 +468,22 @@ fi
 if ! selected_retint_adapters; then
   exit 2
 fi
+if ! scope_enabled apps; then
+	filtered_selection=()
+	for adapter in "${RETINT_SELECTION[@]}"; do
+		if [[ "$adapter" == "hyprland" ]] && scope_enabled hyprland; then
+			filtered_selection+=("$adapter")
+		fi
+	done
+	RETINT_SELECTION=("${filtered_selection[@]}")
+fi
+if ! scope_enabled hyprland; then
+  filtered_selection=()
+  for adapter in "${RETINT_SELECTION[@]}"; do
+    [[ "$adapter" == "hyprland" ]] || filtered_selection+=("$adapter")
+  done
+  RETINT_SELECTION=("${filtered_selection[@]}")
+fi
 
 # Serialize with the native theme-set operation. The Studio driver owns the
 # command boundary, but the shared staging/current paths remain Omarchy-owned.
@@ -379,7 +504,7 @@ fi
 omarchy-theme-set-templates
 
 OLD_BACKGROUND_SNAPSHOT=""
-if [[ "$THEME_HEADLESS" != "1" && ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]]; then
+if [[ "$THEME_HEADLESS" != "1" && ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]] && scope_enabled background; then
   OLD_BACKGROUND_SNAPSHOT=$(snapshot_current_background)
 fi
 
@@ -390,9 +515,13 @@ echo "$THEME_NAME" >"$HOME/.local/state/omarchy/current/theme.name"
 colors_payload=$([[ -f "$CURRENT_THEME_PATH/colors.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/colors.toml")
 shell_payload=$([[ -f "$CURRENT_THEME_PATH/shell.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/shell.toml")
 if [[ "$THEME_HEADLESS" == "1" ]]; then
-  [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]] || set_theme_background_link || true
-elif [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]]; then
-  shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+  if scope_enabled background && [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]]; then
+    set_theme_background_link || true
+  fi
+elif ! scope_enabled background || [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]]; then
+  if scope_enabled shell || scope_enabled hyprland; then
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+  fi
 else
   set_theme_background
 fi
@@ -408,6 +537,10 @@ if [[ "$THEME_HEADLESS" != "1" ]]; then
   # hooks and only runs the adapters selected by the explicit policy. Missing
   # optional commands are reported as skipped; selected command failures are
   # reported individually after all parallel adapters finish.
-  printf '%s retint run=%s skip=%s selected=%s\n' "$MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}"
-  run_selected_retints
+  printf '%s scope=%s wait=%s retint-run=%s skip=%s selected=%s trusted-hooks=%s\n' "$MODE" "$SCOPE_POLICY" "$WAIT_MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}" "$ALLOW_TRUSTED_HOOKS"
+  if [[ "$WAIT_MODE" == "full" ]]; then
+    run_post_commit
+  else
+    run_post_commit &
+  fi
 fi

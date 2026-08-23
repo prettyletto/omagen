@@ -93,6 +93,16 @@ func (s *Service) Generate(
 		return Result{}, err
 	}
 
+	analysis, err := imageanalysis.DecodeFile(
+		request.SourceImage,
+	)
+	if err != nil {
+		return Result{}, fmt.Errorf(
+			"analyze source image: %w",
+			err,
+		)
+	}
+
 	generationID, err := newGenerationID()
 	if err != nil {
 		return Result{}, fmt.Errorf(
@@ -147,16 +157,6 @@ func (s *Service) Generate(
 	)
 	if err != nil {
 		return Result{}, err
-	}
-
-	analysis, err := imageanalysis.DecodeFile(
-		cachedSource,
-	)
-	if err != nil {
-		return Result{}, fmt.Errorf(
-			"analyze source image: %w",
-			err,
-		)
 	}
 
 	if err := runJobs(
@@ -360,6 +360,13 @@ func validateSourceImage(
 	if !info.Mode().IsRegular() {
 		return fmt.Errorf(
 			"source image is not a regular file",
+		)
+	}
+	if info.Size() > fsutil.MaxFileBytes {
+		return fmt.Errorf(
+			"source image exceeds %d bytes: %w",
+			fsutil.MaxFileBytes,
+			fsutil.ErrFileTooLarge,
 		)
 	}
 

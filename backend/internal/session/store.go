@@ -42,7 +42,7 @@ func (s *Store) Load(sessionID string) (Record, error) {
 		return Record{}, fmt.Errorf("invalid session id")
 	}
 
-	data, err := os.ReadFile(filepath.Join(s.SessionDir(sessionID), "session.json"))
+	data, err := fsutil.ReadFileLimited(filepath.Join(s.SessionDir(sessionID), "session.json"), fsutil.MaxStateFileBytes)
 	if err != nil {
 		return Record{}, fmt.Errorf("read session record: %w", err)
 	}

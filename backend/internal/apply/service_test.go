@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/protocol"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/testenv"
 )
@@ -88,6 +89,32 @@ func TestApplyUsesStudioPolicyByDefaultWhenAvailable(t *testing.T) {
 	}
 	if !applier.policyCalled || applier.applyCalled {
 		t.Fatalf("policy_called=%t native_apply_called=%t", applier.policyCalled, applier.applyCalled)
+	}
+}
+
+func TestApplyPublishesProtocolOperationAndCheckpoint(t *testing.T) {
+	service, _, sessionID := setupApplyTest(t, &testApplier{})
+	variant, _ := generation.ParseVariant("source")
+	result, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Protocol Theme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ProtocolOperation == "" || result.ProtocolCheckpoint == "" || result.ProtocolSocket == "" {
+		t.Fatalf("protocol metadata = %#v", result)
+	}
+	journal, err := protocol.Open(result.ProtocolEvents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := journal.Snapshot()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snapshot.Operations) != 3 || snapshot.Operations[0].Name != "apply" || snapshot.Operations[0].Status != protocol.StatusSucceeded || len(snapshot.Operations[0].Children) != 2 {
+		t.Fatalf("protocol operations = %#v", snapshot.Operations)
+	}
+	if snapshot.CurrentCheckpointID != result.ProtocolCheckpoint || len(snapshot.Checkpoints) != 1 {
+		t.Fatalf("protocol checkpoints = %#v", snapshot)
 	}
 }
 

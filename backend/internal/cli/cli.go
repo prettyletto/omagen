@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
 	"github.com/prettyletto/omagen/backend/internal/cleanup"
@@ -17,6 +20,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/preview"
+	"github.com/prettyletto/omagen/backend/internal/protocol"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 )
@@ -102,7 +106,7 @@ func Run(
 	switch args[0] {
 	case "--help", "-h", "help":
 		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
-		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, ping")
+		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, protocol, ping")
 		return 0
 	case "ping":
 		return writeJSON(
@@ -160,6 +164,8 @@ func Run(
 
 	case "settings":
 		return runSettings(args[1:], settingsStore, stdout, stderr)
+	case "protocol":
+		return runProtocol(args[1:], store, previewService, stdout, stderr)
 
 	default:
 		return fail(
@@ -169,6 +175,163 @@ func Run(
 			args[0],
 		)
 	}
+}
+
+type protocolInspectResponse struct {
+	SessionID string                `json:"session_id"`
+	Paths     protocol.SessionPaths `json:"paths"`
+	Snapshot  protocol.Snapshot     `json:"snapshot"`
+}
+
+type protocolReadyResponse struct {
+	OK        bool                  `json:"ok"`
+	SessionID string                `json:"session_id"`
+	Paths     protocol.SessionPaths `json:"paths"`
+}
+
+func runProtocol(args []string, store *session.Store, previewService *preview.Service, stdout, stderr io.Writer) int {
+	if len(args) < 2 {
+		return fail(stderr, 2, "usage: omagen protocol {inspect|events|back|forward|serve} <session_id> [checkpoint_id]")
+	}
+	command := args[0]
+	sessionID := args[1]
+	journal, paths, err := protocol.OpenForSession(store.StateRoot(), sessionID)
+	if err != nil {
+		return fail(stderr, 1, "open protocol: %v", err)
+	}
+	switch command {
+	case "inspect":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen protocol inspect <session_id>")
+		}
+		snapshot, err := journal.Snapshot()
+		if err != nil {
+			return fail(stderr, 1, "inspect protocol: %v", err)
+		}
+		return writeJSON(stdout, stderr, protocolInspectResponse{SessionID: sessionID, Paths: paths, Snapshot: snapshot})
+	case "events":
+		if len(args) > 3 {
+			return fail(stderr, 2, "usage: omagen protocol events <session_id> [after_sequence]")
+		}
+		var after uint64
+		if len(args) == 3 {
+			after, err = strconv.ParseUint(args[2], 10, 64)
+			if err != nil {
+				return fail(stderr, 2, "invalid event sequence: %v", err)
+			}
+		}
+		events, err := journal.Events(after)
+		if err != nil {
+			return fail(stderr, 1, "read protocol events: %v", err)
+		}
+		return writeJSON(stdout, stderr, events)
+	case "back":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen protocol back <session_id>")
+		}
+		navigation, err := executeProtocolNavigation(journal, previewService, sessionID, "back", "")
+		if err != nil {
+			return fail(stderr, 1, "protocol back: %v", err)
+		}
+		return writeJSON(stdout, stderr, navigation)
+	case "forward":
+		if len(args) > 3 {
+			return fail(stderr, 2, "usage: omagen protocol forward <session_id> [checkpoint_id]")
+		}
+		checkpointID := ""
+		if len(args) == 3 {
+			checkpointID = args[2]
+		}
+		navigation, err := executeProtocolNavigation(journal, previewService, sessionID, "forward", checkpointID)
+		if err != nil {
+			return fail(stderr, 1, "protocol forward: %v", err)
+		}
+		return writeJSON(stdout, stderr, navigation)
+	case "serve":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen protocol serve <session_id>")
+		}
+		server := protocol.NewServer(journal, paths.Socket, 100*time.Millisecond)
+		if status := writeJSON(stdout, stderr, protocolReadyResponse{OK: true, SessionID: sessionID, Paths: paths}); status != 0 {
+			return status
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		if err := server.Serve(ctx); err != nil {
+			return fail(stderr, 1, "serve protocol: %v", err)
+		}
+		return 0
+	default:
+		return fail(stderr, 2, "unknown protocol command: %s", command)
+	}
+}
+
+type checkpointState struct {
+	ThemeName    string `json:"theme_name"`
+	GenerationID string `json:"generation_id"`
+	Variant      string `json:"variant"`
+	Mode         string `json:"mode"`
+}
+
+func executeProtocolNavigation(journal *protocol.Journal, previewService *preview.Service, sessionID, direction, checkpointID string) (protocol.NavigationResult, error) {
+	if previewService == nil {
+		return protocol.NavigationResult{}, fmt.Errorf("protocol navigation executor is unavailable")
+	}
+	target, err := journal.NavigationTarget(direction, checkpointID)
+	if err != nil {
+		return protocol.NavigationResult{}, err
+	}
+	var state checkpointState
+	if err := json.Unmarshal(target.State, &state); err != nil {
+		return protocol.NavigationResult{}, fmt.Errorf("decode protocol checkpoint state: %w", err)
+	}
+	if state.Mode != "preview" {
+		return protocol.NavigationResult{}, fmt.Errorf("protocol checkpoint mode %q cannot be reapplied in the active session", state.Mode)
+	}
+	variant, err := generation.ParseVariant(state.Variant)
+	if err != nil {
+		return protocol.NavigationResult{}, fmt.Errorf("decode protocol checkpoint variant: %w", err)
+	}
+	operation, err := journal.StartOperation(protocol.OperationInput{
+		Name:         "navigate " + direction,
+		SessionID:    sessionID,
+		GenerationID: state.GenerationID,
+		Variant:      state.Variant,
+	})
+	if err != nil {
+		return protocol.NavigationResult{}, fmt.Errorf("start navigation protocol: %w", err)
+	}
+	completeFailed := func(cause error) error {
+		_, _ = journal.CompleteOperation(operation.ID, protocol.StatusFailed, cause.Error(), "native checkpoint reapply failed")
+		return cause
+	}
+	if _, err := journal.Progress(operation.ID, "reapplying checkpoint", "scope=theme,shell,hyprland,background,apps wait=critical", nil); err != nil {
+		return protocol.NavigationResult{}, completeFailed(err)
+	}
+	driverOperation, err := journal.StartOperation(protocol.OperationInput{
+		ParentID: operation.ID, Name: "native checkpoint driver", SessionID: sessionID,
+		GenerationID: state.GenerationID, Variant: state.Variant,
+	})
+	if err != nil {
+		return protocol.NavigationResult{}, completeFailed(err)
+	}
+	if _, err := previewService.ApplyCheckpoint(preview.Request{
+		SessionID: sessionID, GenerationID: state.GenerationID, Variant: variant,
+	}); err != nil {
+		_, _ = journal.CompleteOperation(driverOperation.ID, protocol.StatusFailed, err.Error(), "native checkpoint driver failed")
+		return protocol.NavigationResult{}, completeFailed(err)
+	}
+	if _, err := journal.CompleteOperation(driverOperation.ID, protocol.StatusSucceeded, "native checkpoint driver reached critical state", "native preview state verified"); err != nil {
+		return protocol.NavigationResult{}, completeFailed(err)
+	}
+	moved, err := journal.MoveCursor(target.ToCheckpointID)
+	if err != nil {
+		return protocol.NavigationResult{}, completeFailed(fmt.Errorf("commit protocol cursor: %w", err))
+	}
+	if _, err := journal.CompleteOperation(operation.ID, protocol.StatusSucceeded, "checkpoint reapplied", "native preview state verified"); err != nil {
+		return protocol.NavigationResult{}, err
+	}
+	return moved, nil
 }
 
 func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
@@ -199,6 +362,20 @@ func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) i
 			}
 			request.RetintSkip = args[i+1]
 			i++
+		case "--scope":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return fail(stderr, 2, "usage: --scope requires scope names")
+			}
+			request.Scope = args[i+1]
+			i++
+		case "--wait":
+			if i+1 >= len(args) || (args[i+1] != "critical" && args[i+1] != "full" && args[i+1] != "none") {
+				return fail(stderr, 2, "usage: --wait must be critical, full, or none")
+			}
+			request.WaitMode = args[i+1]
+			i++
+		case "--allow-trusted-hooks":
+			request.AllowTrustedHooks = true
 		default:
 			return fail(stderr, 2, "unknown apply option: %s", arg)
 		}
@@ -515,11 +692,11 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 		if err != nil {
 			return fail(stderr, 2, "%v", err)
 		}
-		retintRun, retintSkip, err := parseRetintOptions(args[4:])
+		options, err := parseStudioOptions(args[4:])
 		if err != nil {
 			return fail(stderr, 2, "%v", err)
 		}
-		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant, RetintRun: retintRun, RetintSkip: retintSkip})
+		result, err := service.Apply(preview.Request{SessionID: args[1], GenerationID: args[2], Variant: variant, RetintRun: options.RetintRun, RetintSkip: options.RetintSkip, Scope: options.Scope, WaitMode: options.WaitMode, AllowTrustedHooks: options.AllowTrustedHooks})
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
@@ -557,6 +734,51 @@ func parseRetintOptions(args []string) (run, skip string, err error) {
 		}
 	}
 	return run, skip, nil
+}
+
+type studioOptions struct {
+	RetintRun         string
+	RetintSkip        string
+	Scope             string
+	WaitMode          string
+	AllowTrustedHooks bool
+}
+
+func parseStudioOptions(args []string) (studioOptions, error) {
+	options := studioOptions{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--run", "--apps":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return studioOptions{}, fmt.Errorf("%s requires adapter names", args[i])
+			}
+			options.RetintRun = args[i+1]
+			i++
+		case "--skip":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return studioOptions{}, fmt.Errorf("--skip requires adapter names")
+			}
+			options.RetintSkip = args[i+1]
+			i++
+		case "--scope":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return studioOptions{}, fmt.Errorf("--scope requires scope names")
+			}
+			options.Scope = args[i+1]
+			i++
+		case "--wait":
+			if i+1 >= len(args) || (args[i+1] != "critical" && args[i+1] != "full" && args[i+1] != "none") {
+				return studioOptions{}, fmt.Errorf("--wait must be critical, full, or none")
+			}
+			options.WaitMode = args[i+1]
+			i++
+		case "--allow-trusted-hooks":
+			options.AllowTrustedHooks = true
+		default:
+			return studioOptions{}, fmt.Errorf("unknown studio option: %s", args[i])
+		}
+	}
+	return options, nil
 }
 
 func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int {
