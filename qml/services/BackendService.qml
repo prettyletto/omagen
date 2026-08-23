@@ -35,8 +35,10 @@ Item {
     signal previewApplyFailed(string message)
     signal themeApplied(string sessionId, string generationId, string variant, string themeName)
     signal themeApplyFailed(string message)
-    signal demoOpened(string sessionId, string workspace, bool reused)
+    signal demoOpened(string sessionId, string workspace, string monitor, bool reused)
     signal demoOpenFailed(string message)
+    signal demoReflowed(string sessionId)
+    signal demoReflowFailed(string message)
     signal demoClosed(string sessionId, bool closed)
     signal demoCloseFailed(string message)
     signal demoCaptured(string sessionId, string previewPath)
@@ -95,6 +97,7 @@ Item {
         applyProcess.exec(args);
     }
     function openDemo(sessionId) { demoOpenProcess.exec([root.executable, "demo", "open", sessionId]); }
+    function reflowDemo(sessionId) { demoReflowProcess.exec([root.executable, "demo", "reflow", sessionId]); }
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
     function captureDemoPreview(sessionId) { demoCaptureProcess.exec([root.executable, "demo", "capture", sessionId]); }
     function inspectProtocol(sessionId) {
@@ -333,8 +336,8 @@ Item {
             if (exitCode !== 0) { root.demoOpenFailed(demoOpenStderr.text.trim() || "Failed to open demo workspace"); return }
             try {
                 const result = JSON.parse(demoOpenStdout.text)
-                if (result.ok !== true || !result.session_id || !result.workspace) { root.demoOpenFailed("Backend returned incomplete demo data"); return }
-                root.demoOpened(result.session_id, result.workspace, result.reused === true)
+                if (result.ok !== true || !result.session_id || !result.workspace || !result.monitor) { root.demoOpenFailed("Backend returned incomplete live canvas data"); return }
+                root.demoOpened(result.session_id, result.workspace, result.monitor, result.reused === true)
             } catch (error) { root.demoOpenFailed("Backend returned invalid demo JSON") }
         }
     }
@@ -351,6 +354,21 @@ Item {
                 if (result.ok !== true || !result.session_id) { root.demoCloseFailed("Backend returned incomplete demo cleanup data"); return }
                 root.demoClosed(result.session_id, result.closed === true)
             } catch (error) { root.demoCloseFailed("Backend returned invalid demo cleanup JSON") }
+        }
+    }
+
+    Process {
+        id: demoReflowProcess
+        stdout: BoundedOutputParser { id: demoReflowStdout }
+        stderr: BoundedOutputParser { id: demoReflowStderr }
+        onStarted: root.resetOutputs(demoReflowStdout, demoReflowStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) { root.demoReflowFailed(demoReflowStderr.text.trim() || "Failed to reflow live canvas"); return }
+            try {
+                const result = JSON.parse(demoReflowStdout.text)
+                if (result.ok !== true || !result.session_id) { root.demoReflowFailed("Backend returned incomplete live canvas reflow data"); return }
+                root.demoReflowed(result.session_id)
+            } catch (error) { root.demoReflowFailed("Backend returned invalid live canvas reflow JSON") }
         }
     }
 

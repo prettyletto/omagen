@@ -41,9 +41,13 @@ formats supported by its image decoder, including PNG, JPEG, GIF, BMP, TIFF,
 and WebP. The selected image is used for palette extraction and remains the
 source shown in the preview cards.
 
-After choosing an image, you can change it or enable **extra configs on
-preview**. Extra configs open a styling step before palette generation; see
-[Styling and palette settings](styling.md).
+After choosing an image, choose a workflow:
+
+- **Fast** follows the normal path: choose a direction, enter Live Canvas, and
+  apply the theme. Start Demo is optional when you want the four-window
+  workspace.
+- **In-depth** opens Studio extras for window, shell, and bar composition
+  before palette generation; see [Styling and palette settings](styling.md).
 
 <p align="center">
   <img src="../assets/screenshots/onboarding.webp" alt="Omagen setup" width="420">
@@ -51,8 +55,8 @@ preview**. Extra configs open a styling step before palette generation; see
 
 ## Configure extra desktop previews
 
-When **extra configs on preview** is enabled, Omagen opens a composition step
-before generating the six palette directions. Move between the three sections
+When **In-depth** is selected, Omagen opens a composition step before
+generating the six palette directions. Move between the three sections
 with the section tabs or <code>h/j/k/l</code> navigation:
 
 - **Window** controls the active border, border thickness, corner shape, pane
@@ -96,25 +100,42 @@ used by the generated theme rather than an earlier intermediate result.
   <img src="../assets/screenshots/palette-gallery.webp" alt="Omagen palette gallery" width="960">
 </p>
 
-## Test a direction live
+## Enter Live Mode
 
-**Test live** applies the selected direction temporarily through Omarchy's
-theme system. It does not create the permanent user theme yet. The temporary
-theme and the original theme/background are tracked by an active Omagen
-session.
+Activate a palette card with a click or with **Enter** to enter Live Mode.
+Omagen applies the selected direction temporarily through the Studio theme
+driver and opens the Live Canvas control surface while keeping the real desktop
+available. The temporary theme and the original theme/background are tracked by
+the active Omagen session.
+
+Arrow-key navigation only changes the focused direction. It does not mutate the
+desktop until the direction is activated. Reopen Omagen from the bar to choose
+another direction while the canvas is active; the new candidate is applied in
+place without recreating the workspace.
+
+The **Live Canvas** action applies a direction and opens the control surface;
+it does not start the optional Demo workspace.
 
 Use **Cancel** when you are finished testing. Omagen restores the original
 theme and background before clearing the session.
 
-## Open the Demo workspace
+## Use the Live Canvas
 
-**Demo** opens a temporary workspace containing the applications that Omagen
-can resolve on the current machine. It is useful when a palette looks good in
-a card but needs to be judged across real desktop surfaces.
+**Live Canvas** applies a direction to the real desktop and keeps the
+monitor-bound control panel available. It is the normal place to compare
+directions, use history, apply the theme, or restore the original desktop.
 
-When Demo is open, the button becomes **Dispatch**. Dispatch closes the
-tracked Demo windows and returns to the normal desktop workspace. See the
-[Demo workspace guide](demo.md) for details.
+Use **Start demo** when you specifically want the temporary four-window
+workspace containing the applications Omagen can resolve on the current
+machine. Starting Demo does not replace the Live Canvas controls; the panel
+stays available while the workspace is open.
+
+When the canvas is open, Studio provides a monitor-bound side panel. Hide the
+panel to keep interacting with the desktop; a small handle on the canvas
+monitor reopens it without capturing application input while hidden. The panel
+can reapply directions, move through reversible history, apply the theme, close
+the canvas, or **Restore & close** the complete temporary session. See the
+[Live Canvas workspace guide](demo.md) for ownership and cleanup details.
 
 ## Apply a theme
 

@@ -43,6 +43,8 @@ type resumeResponse struct {
 	SourceImage            string                        `json:"source_image,omitempty"`
 	GenerationID           string                        `json:"generation_id,omitempty"`
 	WorkspaceResumable     bool                          `json:"workspace_resumable"`
+	CanvasActive           bool                          `json:"canvas_active"`
+	CanvasMonitor          string                        `json:"canvas_monitor,omitempty"`
 	PreviewVariant         string                        `json:"preview_variant,omitempty"`
 	ShellStyle             session.ShellStyle            `json:"shell_style,omitempty"`
 	DesktopStyle           session.DesktopStyle          `json:"desktop_style,omitempty"`
@@ -97,10 +99,7 @@ func Run(
 	}
 	cleanupService := cleanup.NewService(store, filepath.Join(home, ".config", "omarchy", "themes"))
 
-	generationService := generation.NewService(
-		store,
-		settingsStore,
-	)
+	generationService := generation.NewServiceWithBaselineRestorer(store, settingsStore, omarchyClient)
 	demoService := demo.NewService(store)
 
 	switch args[0] {
@@ -470,6 +469,13 @@ func runSessionWithDependencies(
 			return fail(stderr, 1, "%v", err)
 		}
 		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		if demoService != nil {
+			canvas, statusErr := demoService.Status(record.SessionID)
+			if statusErr == nil {
+				result.CanvasActive = canvas.Active
+				result.CanvasMonitor = canvas.Monitor
+			}
+		}
 		if record.GenerationID != "" && generationService != nil {
 			described, err := generationService.Describe(record.SessionID, record.GenerationID)
 			if err == nil {
@@ -809,6 +815,14 @@ func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int
 			return fail(stderr, 1, "%v", err)
 		}
 		return writeJSON(stdout, stderr, result)
+	case "reflow":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen demo reflow <session_id>")
+		}
+		if err := service.Reflow(args[1]); err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, map[string]any{"ok": true, "session_id": args[1]})
 	case "capture":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen demo capture <session_id>")

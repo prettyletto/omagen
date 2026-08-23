@@ -94,6 +94,17 @@ func TestLoadStateRejectsOversizedStateFile(t *testing.T) {
 	}
 }
 
+func TestSessionTokensRemainUniqueWithinSameMinute(t *testing.T) {
+	first := shortID("20260823T025800Z-aaaa1111")
+	second := shortID("20260823T025901Z-bbbb2222")
+	if first == second {
+		t.Fatalf("session tokens collided: %q", first)
+	}
+	if got := workspacePrefix + first; got == workspacePrefix+second {
+		t.Fatalf("Demo workspaces collided: %q", got)
+	}
+}
+
 func TestReopenDemoCleansWindowsCreatedBeforeCancellation(t *testing.T) {
 	testenv.Isolate(t)
 	bin := t.TempDir()
@@ -141,7 +152,9 @@ exit 2
 	t.Setenv("FAKE_NEW_WINDOW", newWindow)
 	t.Setenv("FAKE_CLOSED_WINDOW", closedWindow)
 	t.Setenv("FAKE_COUNTER", counterPath)
-	t.Setenv("FAKE_CANCEL_AFTER", "8")
+	// Dwindle ownership repair now emits one move per missing-workspace window;
+	// geometry is deliberately no longer forced through float/resize/move.
+	t.Setenv("FAKE_CANCEL_AFTER", "4")
 	store, err := session.NewStore()
 	if err != nil {
 		t.Fatal(err)

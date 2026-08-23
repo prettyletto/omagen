@@ -20,6 +20,7 @@ import (
 type Service struct {
 	sessions *session.Store
 	settings *settingspkg.Store
+	omarchy  session.Omarchy
 }
 
 func NewService(
@@ -29,6 +30,22 @@ func NewService(
 	return &Service{
 		sessions: sessions,
 		settings: settings,
+	}
+}
+
+// NewServiceWithBaselineRestorer wires the native rollback owner into the
+// generation service. The plain constructor remains useful for isolated
+// generation work, while the CLI's discard command must restore the original
+// theme and background before returning to configuration.
+func NewServiceWithBaselineRestorer(
+	sessions *session.Store,
+	settings *settingspkg.Store,
+	omarchy session.Omarchy,
+) *Service {
+	return &Service{
+		sessions: sessions,
+		settings: settings,
+		omarchy:  omarchy,
 	}
 }
 
@@ -93,9 +110,7 @@ func (s *Service) Generate(
 		return Result{}, err
 	}
 
-	analysis, err := imageanalysis.DecodeFile(
-		request.SourceImage,
-	)
+	analysis, err := imageanalysis.DecodeFile(request.SourceImage)
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"analyze source image: %w",

@@ -161,13 +161,32 @@ func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cm
 		if capabilities.FileManager.Command == "xdg-open" {
 			cmd := exec.Command(capabilities.FileManager.Command, dir)
 			cmd.Dir = dir
-			return cmd
+			return detachGUICommand(cmd)
+		}
+		// Omarchy launches GUI applications through uwsm so they remain in the
+		// user graphical scope and inherit the compositor/session startup
+		// context. A direct Nautilus process can map briefly and then disappear
+		// or be handed back to another workspace when its GApplication instance
+		// is not launched through that native boundary.
+		if uwsm, err := exec.LookPath("uwsm-app"); err == nil {
+			cmd := exec.Command(uwsm, "--", capabilities.FileManager.Command, "--new-window", dir)
+			cmd.Dir = dir
+			return detachGUICommand(cmd)
 		}
 		cmd := exec.Command(capabilities.FileManager.Command, "--new-window", dir)
 		cmd.Dir = dir
-		return cmd
+		return detachGUICommand(cmd)
 	}
 	return terminalCommand(capabilities.Terminal, demoAppID(token, SlotFiles), dir, "/bin/bash", "-lc", fileListingScript())
+}
+
+func detachGUICommand(cmd *exec.Cmd) *exec.Cmd {
+	// The CLI may be invoked from a short-lived shell (for example from the
+	// panel's backend call). GUI launchers such as uwsm-app otherwise inherit
+	// that process group and can receive its terminal hangup when `demo open`
+	// returns, taking the Nautilus client with them.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd
 }
 
 func terminalCommand(capability ApplicationCapability, appID, dir string, command string, args ...string) *exec.Cmd {

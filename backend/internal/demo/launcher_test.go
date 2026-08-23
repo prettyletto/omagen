@@ -26,8 +26,11 @@ func TestBuildDemoLaunchesUsesResolvedPreferredApplications(t *testing.T) {
 	if !strings.Contains(strings.Join(launches[1].Cmd.Args, " "), "btop") {
 		t.Fatalf("monitor args = %q", launches[1].Cmd.Args)
 	}
-	if filepath.Base(launches[3].Cmd.Path) != "nautilus" {
+	if filepath.Base(launches[3].Cmd.Path) != "uwsm-app" && filepath.Base(launches[3].Cmd.Path) != "nautilus" {
 		t.Fatalf("file manager path = %q", launches[3].Cmd.Path)
+	}
+	if filepath.Base(launches[3].Cmd.Path) == "uwsm-app" && strings.Join(launches[3].Cmd.Args, " ") != launches[3].Cmd.Path+" -- nautilus --new-window /tmp/demo-scene" {
+		t.Fatalf("uwsm file manager args = %q", launches[3].Cmd.Args)
 	}
 	if !strings.Contains(strings.Join(launches[2].Cmd.Args, " "), "lsd -la") || !strings.Contains(strings.Join(launches[2].Cmd.Args, " "), "ls -la") {
 		t.Fatalf("shell args do not prefer lsd with ls fallback: %q", launches[2].Cmd.Args)
