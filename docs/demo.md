@@ -1,9 +1,8 @@
 # Demo workspace
 
-Demo is a temporary, session-owned workspace for judging a generated theme in
-context. It complements the palette gallery and Test live: the gallery shows
-the direction, Test live changes the current desktop, and Demo shows the
-direction across several desktop surfaces at once.
+Demo is the optional, temporary, session-owned four-window workspace used to
+judge a generated theme in context. Live Canvas is the persistent control
+surface for the real desktop test; it can remain open without Demo running.
 
 ## What Demo opens
 
@@ -36,13 +35,21 @@ session remains active. If a shell reload or application restart removes some
 of the windows, reopening Demo recreates only the missing slots it can
 classify.
 
-## Demo controls
+## Demo and Live Canvas controls
 
 From the palette gallery:
 
-- **Demo** opens the workspace for the selected direction.
-- **Dispatch** closes the tracked Demo windows and restores the original
-  workspace.
+- Activating a palette card with a click or **Enter** applies the direction and
+  opens Live Canvas controls without starting Demo.
+- **Start demo** opens the tracked four-window workspace for the selected
+  direction.
+- **Stop demo** closes the tracked windows and restores the original workspace;
+  Live Canvas controls remain available.
+- **Hide Studio panel** leaves the canvas and temporary theme active while
+  returning all other pointer input to the desktop. The monitor-bound handle
+  reopens the panel.
+- The panel's history controls reapply the previous or next protocol
+  checkpoint before moving the cursor, so Undo remains reversible.
 - **Apply theme** can close Demo before applying, or capture it as the theme
   preview when requested.
 
@@ -64,4 +71,4 @@ captures the result, and then closes Demo before continuing the Apply flow.
 If a preferred application is missing, check that its fallback appears rather
 than treating that as a failed theme generation. If a Demo window does not
 close, Apply is aborted so Omagen does not leave an untracked window behind;
-use Dispatch or the recovery flow before trying again.
+use **Stop demo** or the recovery flow before trying again.

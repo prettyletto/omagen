@@ -1,6 +1,6 @@
 # Omarchy Studio nightly roadmap
 
-Status: N2 preview protocol/driver scope complete; native-reader proof deferred
+Status: N3 Live Canvas v1 implementation complete; live desktop proof pending
 
 Branch: `nightly`
 
@@ -51,15 +51,17 @@ The first flow is deliberately simple:
 
 1. Open **Omarchy Studio** from the bar widget.
 2. Choose or confirm a wallpaper/theme source.
-3. Choose the analysis depth:
-   - **Fast:** quick palette extraction and the shortest path to a live canvas.
-   - **In-depth:** richer image analysis and additional palette/profile metadata.
-4. Generate approximately six palette variants.
-5. Show the variants with a clear instruction: **Choose a palette to start**.
-6. Select one palette.
+3. Choose a workflow:
+   - **Fast:** pick an image, choose a direction, enter Live Canvas, and apply
+     the theme.
+   - **In-depth:** open Studio extras for window, shell, and bar composition
+     before generating and applying a direction.
+4. Generate approximately six palette presets.
+5. Show the presets with a clear instruction: **Choose a preset to start**.
+6. Select one preset.
 7. Enter Live Mode immediately.
 
-The six variants are starting directions, not final static previews. The user
+The six presets are starting directions, not final static previews. The user
 should reach the real desktop quickly.
 
 ### Live Mode
@@ -323,30 +325,31 @@ laboratory.
 
 Tasks:
 
-- [ ] Keep the current workspace/app ownership model and generalize it into a
+- [x] Keep the current workspace/app ownership model and generalize it into a
       Studio canvas service.
-- [ ] Start from the bar-widget entry point and keep future `desktop.ini` as an
+- [x] Start from the bar-widget entry point and keep future `desktop.ini` as an
       additive entry path.
-- [ ] Open a centered wallpaper-first Studio start surface.
-- [ ] Implement Fast and In-depth analysis modes.
-- [ ] Move from the six starting palette variants into Live Mode immediately
+- [x] Open a centered wallpaper-first Studio start surface.
+- [x] Implement Fast and In-depth workflow modes.
+- [x] Move from the six starting palette presets into Live Mode immediately
       after selection.
-- [ ] Allocate a dedicated workspace or special workspace deliberately.
-- [ ] Launch a representative application corpus with stable owner markers.
-- [ ] Include real shell/bar/popup surfaces where the selected profile affects
+- [x] Allocate a dedicated workspace or special workspace deliberately.
+- [x] Launch a representative application corpus with stable owner markers.
+- [x] Include real shell/bar/popup surfaces where the selected profile affects
       them.
-- [ ] Apply candidate themes through the Studio driver.
-- [ ] Reflow the canvas after changes to gaps, rounding, scale, or layout.
-- [ ] Let the user interact with windows, focus, workspaces, panels, popups, and
+- [x] Apply candidate themes through the Studio driver.
+- [x] Reassert Demo workspace ownership after changes to gaps, rounding, scale,
+      or layout while leaving sizing to Hyprland's native dwindle tree.
+- [x] Let the user interact with windows, focus, workspaces, panels, popups, and
       bar modules while the candidate is active.
-- [ ] Reapply changes without losing the session baseline.
-- [ ] Keep Studio available as a collapsible, hideable live side panel.
-- [ ] Provide a floating reopen handle without trapping hidden-surface input.
-- [ ] Record every Test Live operation as a reversible checkpoint.
-- [ ] Provide live Undo and final Restore actions.
-- [ ] Close the canvas and restore workspace, theme, wallpaper, shell, and owned
+- [x] Reapply changes without losing the session baseline.
+- [x] Keep Studio available as a collapsible, hideable live side panel.
+- [x] Provide a floating reopen handle without trapping hidden-surface input.
+- [x] Record every Test Live operation as a reversible checkpoint.
+- [x] Provide live Undo and final Restore actions.
+- [x] Close the canvas and restore workspace, theme, wallpaper, shell, and owned
       applications.
-- [ ] Recover the canvas after shell or Hyprland reload failure.
+- [x] Recover the canvas after shell or Hyprland reload failure.
 
 Important boundary:
 
@@ -359,6 +362,119 @@ Done when:
 - A user can see and interact with the actual theme on the real desktop.
 - No HTML card is required to decide whether a live capability works.
 - Cancel, Quit, Back, crash recovery, and external theme changes remain safe.
+
+### N3.1 — Turn generated directions into editable palette presets
+
+Goal: keep the six generated directions as useful starting points while giving
+the user direct control over the colors that make up the theme.
+
+The current six directions become **presets**. A preset is a generated,
+image-derived starting configuration, not a final immutable palette. Selecting
+one still provides the fast path into Live Canvas; the user can then either
+keep it, choose another preset, or tune its semantic colors.
+
+The color editor must support two intentional levels of use:
+
+- **Fast:** choose an image, choose a preset, enter Live Canvas, and use ready-
+  made color suggestions when a color needs a quick adjustment. The user
+  should not need to understand color theory, semantic token names, or theme
+  file structure.
+- **In-depth:** expand the relevant color groups, inspect each semantic role,
+  choose or compare suggestions, enter exact hex values, and iterate against
+  the real desktop as an artist composing a complete theme.
+
+Color editor shape:
+
+- Keep the preset cards as the first decision surface; label them as presets
+  rather than implying that they are the only possible results.
+- Provide collapsible color groups for every generated preset. The initial
+  groups should cover at least background/surfaces, text, accent, selection,
+  muted text, and terminal/ANSI colors.
+- Within each group, show the semantic role and its current value. For
+  example: **Text** followed by five suggestion buttons and a custom hex input.
+- Suggestions should be actionable swatches/buttons, not merely labels. They
+  may combine image-derived colors, contrast-safe alternatives, harmony-based
+  alternatives, and preset-relative variations.
+- Accept user-entered hex colors with validation, clear invalid-state feedback,
+  and a visible indication when a value is overridden from the preset.
+- Show the effect of a change in the compact preview, but treat the real Live
+  Canvas as the authority for deciding whether the result works across the
+  shell, bar, windows, applications, and terminal.
+- Make the editor usable with keyboard navigation and preserve the existing
+  collapsed-panel and floating-handle behavior.
+
+Live editing contract:
+
+```text
+Choose preset
+    ↓
+Open Live Canvas
+    ↓
+Expand a semantic color group
+    ↓
+Choose a suggestion or enter a hex value
+    ↓
+Stage the color override
+    ↓
+Test Live / Apply live
+    ↓
+Apply the candidate through the existing reversible session checkpoint
+    ↓
+Inspect the real desktop, Undo, continue editing, Restore, or Commit
+```
+
+The editor must distinguish a staged color edit from a tested live edit. A
+swatch click or hex entry changes the Studio document only; **Test Live** (or
+the clearly equivalent **Apply live** action) performs the reversible runtime
+mutation. A failed color application must use the existing session recovery
+path and must not leave a partially published palette behind.
+
+Color ownership and safety requirements:
+
+- Define a stable semantic color vocabulary before exposing arbitrary token
+  editing. Each role must map to the actual generated artifact and runtime
+  reader that consume it.
+- Re-run contrast and readability checks after every override, including text
+  against each surface and terminal ANSI distinguishability.
+- Warn when a custom value creates a likely readability or accessibility issue,
+  but allow an informed artist to continue when the runtime can safely accept
+  it.
+- Preserve the preset as a reset point. The user must be able to reset one
+  role, one group, or all overrides without losing the generated preset.
+- Record color provenance: preset-derived, image-derived suggestion,
+  contrast-adjusted suggestion, or user-entered value.
+- Keep all edits inside the existing session/generation transaction so Cancel,
+  Quit, Back, crash recovery, and Restore return to the original desktop.
+
+Implementation sequence:
+
+- [ ] Rename the six generated directions in the product model and UI from
+      variants to presets without breaking durable session compatibility.
+- [ ] Define the semantic color-role schema and map each role to generated
+      theme outputs and native runtime readers.
+- [ ] Add staged color overrides to the Studio document and protocol/checkpoint
+      model.
+- [ ] Build collapsible color groups with five suggestion controls and a
+      validated custom hex input for each role.
+- [ ] Generate suggestions from the source image, the selected preset, and
+      contrast/harmony rules with explicit provenance.
+- [ ] Add per-role, per-group, and reset-all behavior.
+- [ ] Connect staged color edits to reversible Test Live / Apply live preview.
+- [ ] Add contrast, ANSI distinction, and runtime-reader evidence to the live
+      result.
+- [ ] Keep Fast concise while exposing the same controls progressively for
+      In-depth users.
+
+Done when:
+
+- A fast user can select a preset, choose a suggested color, and see it live
+  without understanding the underlying theme files.
+- An in-depth user can edit every supported semantic color with exact hex
+  values, reset any override, and understand its effect and provenance.
+- Every live color change is reversible, contrast-checked, and tied to a named
+  generated artifact and runtime reader.
+- The six presets remain useful starting points rather than being discarded by
+  the color editor.
 
 ### N4 — Define the Studio document and live profiles
 
@@ -676,4 +792,37 @@ colors, shell, and background evidence without claiming that a generated
 hyprland.lua is live. The Unix socket subscription still needs a first-class
 QML live-event consumer.
 Next slice: N2 native-reader verification and socket-backed live event consumer
+```
+
+```text
+Date: 2026-08-22
+Slice: N3 Live Canvas entry handoff
+Branch: nightly
+Changed owners: Studio workspace surface and existing session/demo orchestration
+Validation evidence: QML lint and the focused Go test suite pass; arrow-key
+navigation remains selection-only while card click/Enter activates the live
+canvas path
+Runtime contract: activation applies the selected candidate through the
+existing Studio preview driver, opens the session-owned workspace, hides the
+control surface after success, and reapplies later selections in place
+Known limitations: the canvas still uses the existing Demo service and full
+screen workspace surface; the collapsible side panel and richer workflow modes,
+and first-class socket event consumer remain future N3 slices
+Next slice: N3 canvas service generalization and live side-panel foundation
+```
+
+```text
+Date: 2026-08-22
+Slice: N3 Live Canvas v1 implementation
+Branch: nightly
+Changed owners: canvas controls, monitor-bound shell surfaces, Demo workspace
+reflow/status, workflow-mode selection, and resumable canvas state
+Validation evidence: focused Go tests and QML lint pass; full canonical gate
+GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh passes; the development
+plugin was reinstalled and the disposable desktop session was restored and
+closed with no active Omagen session remaining
+Runtime contract: palette activation enters the real canvas; the side panel
+can reapply directions, navigate reversible history, apply, close, or restore;
+the hidden panel leaves only a non-focus-stealing monitor-bound handle
+Next slice: N3.1 editable palette presets and live color studio
 ```

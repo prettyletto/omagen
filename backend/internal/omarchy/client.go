@@ -128,9 +128,15 @@ func (c *Client) VerifyNativeState(expectedTheme string) (string, error) {
 }
 
 func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
+	// Rollback is the fast path: the session has already closed its owned Demo
+	// windows before this call, so it only needs to wait until Omarchy has
+	// promoted the original theme and released its transaction lock. Native
+	// terminal, Hyprland, and other post-commit adapters may continue after that
+	// point; waiting for all of them here makes Restore & close unnecessarily
+	// block the UI and is not part of the rollback transaction.
 	_, _, err := c.runThemeSetUntilCritical(theme, filepath.Join(sessionDir, "theme-set.log"), []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=1",
-	}, 10*time.Second)
+	}, 30*time.Second)
 	return err
 }
 
@@ -375,7 +381,7 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 		}
 	}
 	cmd := exec.Command(command, arguments...)
-	cmd.Env = replaceEnvironment(os.Environ(), environment...)
+	cmd.Env = replaceEnvironment(appendOmarchyEnvironment(os.Environ()), environment...)
 	cmd.Stdout = logWriter
 	cmd.Stderr = logWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -500,26 +506,64 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 		return err
 	}
 	cmd := exec.Command("omarchy", "theme", "bg", "set", path)
+	cmd.Env = appendOmarchyEnvironment(os.Environ())
 	cmd.Stdout = c.stderr
 	cmd.Stderr = c.stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("omarchy theme bg set %q: %w", path, err)
 	}
 	// Theme restoration can put the current/background symlink back at the
-	// same path that the preview used. Quattro's set/setInstant IPC compares
-	// the path string before loading, so it can ignore a changed symlink that
-	// points at a different image. Refresh makes the shell reread and resolve
-	// the symlink before updating the live wallpaper.
+	// same path that the preview used. Quattro's normal `set` and `refresh`
+	// paths compare the path string, so they can ignore a changed symlink that
+	// points at a different image. setInstant is the native reader's explicit
+	// force path and makes the live wallpaper reread the restored target.
 	if _, err := exec.LookPath("omarchy-shell"); err != nil {
 		return nil
 	}
-	refresh := exec.Command("omarchy-shell", "-q", "background", "refresh")
-	refresh.Stdout = c.stderr
-	refresh.Stderr = c.stderr
-	if err := refresh.Run(); err != nil {
-		return fmt.Errorf("refresh restored background: %w", err)
+	var lastErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		force := exec.Command("omarchy-shell", "background", "setInstant", path)
+		force.Env = appendOmarchyEnvironment(os.Environ())
+		force.Stdout = c.stderr
+		force.Stderr = c.stderr
+		if err := force.Run(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if attempt < 5 {
+			time.Sleep(500 * time.Millisecond)
+		}
 	}
-	return nil
+	return fmt.Errorf("force restored background through shell IPC: %w", lastErr)
+}
+
+// appendOmarchyEnvironment targets the user-installed Omarchy checkout when
+// one exists. The desktop process may carry OMARCHY_PATH=/usr/share/omarchy
+// even though the running Quickshell instance was launched from the user
+// checkout; using that stale path makes shell IPC report success/failure for
+// the wrong qs instance.
+func appendOmarchyEnvironment(environment []string) []string {
+	path := ""
+	if home, err := os.UserHomeDir(); err == nil {
+		candidate := filepath.Join(home, ".local", "share", "omarchy")
+		if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+			path = candidate
+		}
+	}
+	if path == "" {
+		path = strings.TrimSpace(os.Getenv("OMARCHY_PATH"))
+	}
+	if path == "" {
+		candidate := "/usr/share/omarchy"
+		if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+			path = candidate
+		}
+	}
+	if path == "" {
+		return environment
+	}
+	return replaceEnvironment(environment, "OMARCHY_PATH="+path)
 }
 
 func (c *Client) resolveBackground(background session.BackgroundRef) (string, error) {

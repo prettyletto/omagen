@@ -50,6 +50,28 @@ func saveGenerationRecord(t *testing.T, store *session.Store, record session.Rec
 	}
 }
 
+type discardBaselineOmarchy struct {
+	theme              string
+	background         session.BackgroundRef
+	restoredTheme      string
+	restoredBackground session.BackgroundRef
+}
+
+func (f *discardBaselineOmarchy) CurrentTheme() (string, error) { return f.theme, nil }
+func (f *discardBaselineOmarchy) CurrentBackground() (session.BackgroundRef, error) {
+	return f.background, nil
+}
+func (f *discardBaselineOmarchy) RestoreThemeFast(theme, _ string) error {
+	f.restoredTheme = theme
+	f.theme = theme
+	return nil
+}
+func (f *discardBaselineOmarchy) RestoreBackground(background session.BackgroundRef) error {
+	f.restoredBackground = background
+	f.background = background
+	return nil
+}
+
 func TestGenerate(t *testing.T) {
 	store := generationStore(t)
 	record := session.Record{SessionID: "session", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
@@ -235,6 +257,43 @@ func TestDiscardClearsWorkspaceButPreservesActiveSessionAndBaseline(t *testing.T
 	active, exists, err := store.LoadActive()
 	if err != nil || !exists || active.SessionID != record.SessionID {
 		t.Fatalf("discard ended active session: active=%#v exists=%t err=%v", active, exists, err)
+	}
+}
+
+func TestDiscardRestoresBaselineThemeAndBackgroundBeforeReturningToConfiguration(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "discard-restores-baseline",
+		OriginalTheme:      "original-theme",
+		OriginalBackground: session.BackgroundRef{Kind: "theme", Path: "backgrounds/wallpaper.jpg"},
+		GenerationID:       "generation-current",
+		PreviewVariant:     "vibrant",
+	}
+	saveGenerationRecord(t, store, record)
+	fake := &discardBaselineOmarchy{
+		theme:      "omagen-preview-discard-restores-baseline-vibrant",
+		background: session.BackgroundRef{Kind: "theme", Path: "backgrounds/wallpaper.png"},
+	}
+
+	result, err := NewServiceWithBaselineRestorer(store, generationSettingsStore(t), fake).Discard(record.SessionID, record.GenerationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK {
+		t.Fatalf("discard result was not successful: %#v", result)
+	}
+	if fake.restoredTheme != record.OriginalTheme || fake.restoredBackground != record.OriginalBackground {
+		t.Fatalf("discard did not restore the original baseline: %#v", fake)
+	}
+	updated, err := store.Load(record.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.GenerationID != "" || updated.PreviewVariant != "" {
+		t.Fatalf("discard left generated workspace current: %#v", updated)
+	}
+	if _, exists, err := store.LoadActive(); err != nil || !exists {
+		t.Fatalf("discard ended the active session: exists=%t err=%v", exists, err)
 	}
 }
 

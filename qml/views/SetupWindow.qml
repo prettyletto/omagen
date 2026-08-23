@@ -13,15 +13,15 @@ PanelWindow {
     property bool sessionActive: false
     property bool cancelBusy: false
     property string sourceImage: ""
-    property bool extraConfigsEnabled: false
+    property string workflowMode: "fast"
     property string errorMessage: ""
     property int cursorIndex: 0
     readonly property int actionCount: sourceImage === ""
         ? (sessionActive ? 2 : 1)
-        : (sessionActive ? 4 : 3)
+        : (sessionActive ? 5 : 4)
 
     signal chooseImageRequested()
-    signal extraConfigsToggled(bool enabled)
+    signal workflowModeSelected(string mode)
     signal continueRequested()
     signal cancelRequested()
     signal hideRequested()
@@ -44,8 +44,10 @@ PanelWindow {
         if (cursorIndex === 0)
             chooseImageRequested();
         else if (sourceImage !== "" && cursorIndex === 1)
-            extraConfigsToggled(!extraConfigsEnabled);
+            workflowModeSelected("fast");
         else if (sourceImage !== "" && cursorIndex === 2)
+            workflowModeSelected("in-depth");
+        else if (sourceImage !== "" && cursorIndex === 3)
             continueRequested();
         else if (sessionActive && cursorIndex === actionCount - 1)
             cancelRequested();
@@ -69,7 +71,7 @@ PanelWindow {
         // The image-selected state needs room for the preview, path, Change
         // image, Continue, and footer controls.  Keep the empty state compact
         // while letting the full state keep every action inside the card.
-        height: Math.min(root.sourceImage === "" ? 270 : 680, parent.height - 48)
+        height: Math.min(root.sourceImage === "" ? 270 : 610, parent.height - 48)
         radius: Style.cornerRadius
         color: Color.popups.background
         border.width: Math.max(1, Style.space(1))
@@ -171,16 +173,55 @@ PanelWindow {
                     horizontalAlignment: Text.AlignHCenter
                 }
 
-                Toggle {
+                Text {
                     Layout.fillWidth: true
                     visible: root.sourceImage !== ""
-                    label: "Enable extra configs on preview"
-                    description: "Choose window, shell, and bar styling before generating."
-                    checked: root.extraConfigsEnabled
-                    hasCursor: root.sourceImage !== "" && root.cursorIndex === 1
-                    foreground: Color.popups.text
-                    accent: Color.accent
-                    onClicked: root.extraConfigsToggled(!root.extraConfigsEnabled)
+                    text: "Choose your workflow"
+                    color: Color.popups.text
+                    opacity: 0.72
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.bodySmall
+                    font.bold: true
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    visible: root.sourceImage !== ""
+                    spacing: Style.space(6)
+
+                    Button {
+                        Layout.fillWidth: true
+                        text: "Fast\nPick → choose → apply"
+                        foreground: Color.popups.text
+                        accent: Color.accent
+                        background: root.workflowMode === "fast" ? Util.alpha(Color.accent, 0.16) : Util.alpha(Color.popups.text, 0.04)
+                        bordered: true
+                        hasCursor: root.cursorIndex === 1
+                        onClicked: root.workflowModeSelected("fast")
+                    }
+                    Button {
+                        Layout.fillWidth: true
+                        text: "In-depth\nOpen Studio extras"
+                        foreground: Color.popups.text
+                        accent: Color.accent
+                        background: root.workflowMode === "in-depth" ? Util.alpha(Color.accent, 0.16) : Util.alpha(Color.popups.text, 0.04)
+                        bordered: true
+                        hasCursor: root.cursorIndex === 2
+                        onClicked: root.workflowModeSelected("in-depth")
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    visible: root.sourceImage !== ""
+                    text: root.workflowMode === "fast"
+                        ? "Fast keeps the normal Omagen path: choose a direction, enter Live Canvas, then apply the theme."
+                        : "In-depth opens Studio controls for window, shell, and bar composition before generation."
+                    color: Color.popups.text
+                    opacity: 0.58
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.Wrap
                 }
 
                 ColumnLayout {
@@ -204,7 +245,7 @@ PanelWindow {
                         leftAlign: true
                         foreground: Color.popups.text
                         accent: Color.accent
-                        hasCursor: root.sourceImage !== "" && root.cursorIndex === 2
+                        hasCursor: root.sourceImage !== "" && root.cursorIndex === 3
                         enabled: !root.busy
                         onClicked: root.continueRequested()
                     }

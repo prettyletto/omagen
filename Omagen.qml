@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 
 import "qml/services" as Services
 import "qml/state" as State
@@ -24,6 +25,9 @@ Item {
     property bool applyRecoveryRequired: false
     property bool demoBusy: false
     property bool demoActive: false
+    property bool liveCanvasActive: false
+    property bool livePanelOpen: false
+    property string liveCanvasMonitor: ""
     property bool pendingDemo: false
     property bool pendingApplyAfterDemo: false
     property bool pendingApplyCapture: false
@@ -39,6 +43,7 @@ Item {
     property string pendingApplyVariant: ""
     property string pendingApplyName: ""
     property string sourceImage: ""
+    property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
@@ -105,6 +110,10 @@ Item {
             // invalidated the old generation and returned to configuration.
             if (route !== "setup" && route !== "preview-config" && route !== "workspace")
                 route = "workspace";
+            if (liveCanvasActive) {
+                livePanelOpen = true;
+                opened = false;
+            }
             return;
         }
         route = "loading";
@@ -114,6 +123,21 @@ Item {
     function close() {
         opened = false;
         settingsOpen = false;
+        livePanelOpen = false;
+    }
+
+    function reopenLiveCanvasPanel() {
+        if (!session.active || !liveCanvasActive)
+            return;
+        errorMessage = "";
+        route = "workspace";
+        livePanelOpen = true;
+        opened = false;
+    }
+
+    function hideLiveCanvasPanel() {
+        livePanelOpen = false;
+        opened = false;
     }
 
     function closeSettings() {
@@ -130,14 +154,28 @@ Item {
                 errorMessage = "The generated workspace is unavailable; restore and close to start again."
             return;
         }
+        const canvasActive = resumableSession.canvas_active === true;
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
         shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
         desktopStyle = normalizeDesktopStyle(resumableSession.desktop_style);
         barStyle = normalizeBarStyle(resumableSession.bar_style);
         extraConfigsEnabled = resumableSession.extra_configs === true;
+        workflowMode = extraConfigsEnabled ? "in-depth" : "fast";
+        liveCanvasMonitor = resumableSession.canvas_monitor || "";
         resumableSession = null;
         route = "workspace";
+        if (canvasActive) {
+            // A shell reload destroys this QML object, not the session-owned
+            // Demo windows. Rebind to the durable canvas state in place;
+            // calling demo open here would classify transiently reloading
+            // windows as missing and launch duplicate applications.
+            demoActive = true;
+            liveCanvasActive = true;
+            demoBusy = false;
+            livePanelOpen = false;
+            opened = false;
+        }
     }
 
     function restorePreviousSession() {
@@ -242,7 +280,7 @@ Item {
             regenerationPending = true;
             opened = true;
             route = "workspace";
-            backend.generateTheme(session.sessionId, sourceImage, shellStyle, desktopStyle, barStyle);
+            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null);
             return;
         }
 
@@ -252,6 +290,7 @@ Item {
     }
 
     function continueFromSetup() {
+        extraConfigsEnabled = workflowMode === "in-depth";
         if (extraConfigsEnabled) {
             route = "preview-config";
             errorMessage = "";
@@ -261,9 +300,35 @@ Item {
     }
 
     function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy && !applyBusy) session.selectVariant(variant) }
+    function enterLiveCanvas(variant) {
+        if (!session.workspaceReady || !session.hasPalette(variant) || previewBusy || cancelBusy || demoBusy || applyBusy)
+            return;
+
+        session.selectVariant(variant);
+        errorMessage = "";
+
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        opened = false;
+
+        // Once Live Canvas is active, changing direction only reapplies the
+        // candidate through the existing preview/rollback transaction. It does
+        // not create or discard the optional Demo workspace.
+        if (demoActive) {
+            previewBusy = true;
+            backend.applyPreview(session.sessionId, session.generationId, variant);
+            return;
+        }
+
+        testLive(variant);
+    }
     function testLive(variant) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
-        errorMessage = ""; previewBusy = true;
+        errorMessage = "";
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        opened = false;
+        previewBusy = true;
         backend.applyPreview(session.sessionId, session.generationId, variant);
     }
     function refreshProtocol() {
@@ -365,11 +430,13 @@ Item {
         }
     }
 
-    function demoVariant(variant) {
+    function startDemo(variant) {
         if (demoActive || demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
             return;
 
         errorMessage = "";
+        session.selectVariant(variant);
+        liveCanvasActive = true;
         pendingDemo = true;
         demoBusy = true;
         // Omarchy reloads all Ghostty instances as part of applying a theme.
@@ -402,6 +469,9 @@ Item {
         pendingApplyCapture = false;
         pendingApplyAbortAfterDemo = false;
         pendingApplyUnlock = false;
+        livePanelOpen = false;
+        liveCanvasMonitor = "";
+        liveCanvasActive = false;
         // The backend cancel command closes any demo, recovers an interrupted
         // Apply, restores the original theme/background, and removes the
         // session. It is deliberately the single cleanup path for explicit
@@ -430,6 +500,7 @@ Item {
         cancelBusy = false;
         closeAfterCancel = false;
         sourceImage = "";
+        workflowMode = "fast";
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" });
         desktopStyle = ({ borderStyle: "solid", borderSize: 0, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" });
@@ -443,6 +514,9 @@ Item {
         previewBusy = false;
         demoBusy = false;
         demoActive = false;
+        liveCanvasActive = false;
+        livePanelOpen = false;
+        liveCanvasMonitor = "";
         pendingDemo = false;
         pendingApplyAfterDemo = false;
         pendingApplyCapture = false;
@@ -509,13 +583,14 @@ Item {
             root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
             root.barStyle = root.normalizeBarStyle(backendBarStyle);
             root.extraConfigsEnabled = backendExtraConfigs;
+            root.workflowMode = backendExtraConfigs ? "in-depth" : "fast";
             if (root.closeAfterCancel) {
                 root.cancelSession();
                 return;
             }
             root.route = "workspace";
             root.generationBusy = true;
-            backend.generateTheme(sessionId, root.sourceImage);
+            backend.generateTheme(sessionId, root.sourceImage, null, null, null);
         }
 
         onSessionBeginFailed: function(message) {
@@ -574,14 +649,11 @@ Item {
             root.errorMessage = message;
         }
         onSessionRecovered: {
-            root.recoveryBusy = false;
-            root.resumableSession = null;
-            root.session.clear();
-            root.sourceImage = "";
-            root.closeAfterCancel = false;
-            root.route = "setup";
-            root.settingsOpen = false;
-            root.opened = false;
+            // Recovery is a terminal session transition. Clear the complete
+            // frontend state as well as the durable backend record; leaving
+            // demoActive or the generation behind would recreate the canvas
+            // handle after the original desktop has already been restored.
+            root.clearSession(true);
         }
         onSessionRecoverFailed: function(message) {
             root.recoveryBusy = false;
@@ -652,6 +724,9 @@ Item {
                 return;
             root.backBusy = false;
             root.regenerationPending = false;
+            root.liveCanvasActive = false;
+            root.demoActive = false;
+            root.livePanelOpen = false;
             session.clearGeneration();
             root.opened = true;
             root.route = "preview-config";
@@ -678,14 +753,30 @@ Item {
                 return;
             }
 
+            if (root.demoActive) {
+                // Reassert workspace ownership after the candidate reload. The
+                // Demo itself remains in Hyprland's dwindle layout; only the
+                // Studio panel is an overlay and must never become a tiled pane.
+                root.demoBusy = true;
+                backend.reflowDemo(session.sessionId);
+                return;
+            }
+
             if (root.pendingDemo) {
                 root.pendingDemo = false;
                 root.demoBusy = false;
+                root.livePanelOpen = true;
                 root.opened = false;
                 return;
             }
 
-            root.opened=false;
+            if (root.liveCanvasActive) {
+                root.livePanelOpen = true;
+                root.opened = false;
+            } else {
+                root.opened = false;
+                root.livePanelOpen = false;
+            }
         }
         onPreviewApplyFailed: function(message) {
             if (root.closeAfterCancel)
@@ -701,7 +792,7 @@ Item {
                 root.demoBusy = false;
             }
         }
-        onDemoOpened: function(sessionId, workspace, reused) {
+        onDemoOpened: function(sessionId, workspace, monitor, reused) {
             if (root.closeAfterCancel)
                 return;
             if (sessionId !== session.sessionId) {
@@ -711,6 +802,7 @@ Item {
                 return;
             }
             root.demoActive = true;
+            root.liveCanvasMonitor = monitor;
             if (root.pendingApplyCapture) {
                 root.previewBusy = true;
                 backend.applyPreview(session.sessionId, session.generationId, root.pendingApplyVariant);
@@ -723,19 +815,52 @@ Item {
             }
             root.demoBusy = false;
             root.opened = false;
+            root.livePanelOpen = root.liveCanvasActive;
         }
         onDemoOpenFailed: function(message) {
             if (root.closeAfterCancel)
                 return;
             root.demoBusy = false;
             root.demoActive = false;
+            root.livePanelOpen = root.liveCanvasActive;
+            root.liveCanvasMonitor = "";
             root.pendingDemo = false;
             if (root.pendingApplyAfterDemo || root.pendingApplyCapture) {
                 root.resetPendingApply()
                 root.applyBusy = false
             }
             root.errorMessage = message;
-            root.opened = true;
+            root.opened = root.liveCanvasActive ? false : true;
+        }
+        onDemoReflowed: function(sessionId) {
+            if (root.closeAfterCancel)
+                return;
+            if (sessionId !== session.sessionId) {
+                root.demoBusy = false;
+                root.errorMessage = "Backend reflowed a different live canvas session";
+                return;
+            }
+            root.demoBusy = false;
+            if (root.pendingDemo) {
+                root.pendingDemo = false;
+                root.livePanelOpen = true;
+                root.opened = false;
+                return;
+            }
+            // Reapplication from the side panel keeps the panel available for
+            // the next direction instead of forcing a trip back through the
+            // bar widget.
+            root.livePanelOpen = true;
+            root.opened = false;
+        }
+        onDemoReflowFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
+            root.demoBusy = false;
+            root.errorMessage = message;
+            root.pendingDemo = false;
+            root.livePanelOpen = root.liveCanvasActive;
+            root.opened = root.liveCanvasActive ? false : true;
         }
         onDemoCaptured: function(sessionId, previewPath) {
             if (root.closeAfterCancel)
@@ -767,6 +892,7 @@ Item {
                 return;
             }
             root.demoActive = false;
+            root.livePanelOpen = root.liveCanvasActive;
             if (root.pendingApplyAbortAfterDemo) {
                 root.resetPendingApply()
                 root.applyBusy = false
@@ -793,6 +919,7 @@ Item {
                 );
                 return;
             }
+            root.opened = root.liveCanvasActive ? false : true;
         }
         onDemoCloseFailed: function(message) {
             root.demoBusy = false;
@@ -903,11 +1030,14 @@ Item {
         sessionActive: session.active
         cancelBusy: root.cancelBusy
         sourceImage: root.sourceImage
-        extraConfigsEnabled: root.extraConfigsEnabled
         errorMessage: root.errorMessage
 
         onChooseImageRequested: root.chooseImage()
-        onExtraConfigsToggled: function(enabled) { root.extraConfigsEnabled = enabled }
+        workflowMode: root.workflowMode
+        onWorkflowModeSelected: function(mode) {
+            root.workflowMode = mode;
+            root.extraConfigsEnabled = mode === "in-depth";
+        }
         onContinueRequested: root.continueFromSetup()
         onCancelRequested: root.cancelSession()
         onHideRequested: root.close()
@@ -941,7 +1071,7 @@ Item {
 
     Views.WorkspaceWindow {
         id: workspaceWindow
-        active: root.opened && root.route === "workspace" && session.active
+        active: root.opened && root.route === "workspace" && session.active && !root.demoActive
         cancelBusy: root.cancelBusy
         backBusy: root.backBusy
         sourceImage: root.sourceImage
@@ -967,13 +1097,14 @@ Item {
         protocolBusy: root.protocolBusy
         protocolMessage: root.protocolMessage
 
-        onVariantSelected: function(variant) { root.selectVariant(variant) }
+        onVariantFocused: function(variant) { root.selectVariant(variant) }
+        onVariantSelected: function(variant) { root.enterLiveCanvas(variant) }
         onTestLiveRequested: function(variant) { root.testLive(variant) }
         onDemoRequested: function(variant) {
             if (root.demoActive)
                 root.dispatchDemo();
             else
-                root.demoVariant(variant);
+                root.startDemo(variant);
         }
         onHideRequested: root.close()
         onCancelRequested: root.cancelSession()
@@ -983,6 +1114,41 @@ Item {
         }
         onProtocolBackRequested: root.navigateProtocol("back")
         onProtocolForwardRequested: root.navigateProtocol("forward")
+    }
+
+    Views.LiveCanvasPanel {
+        active: root.route === "workspace" && session.active && root.liveCanvasActive && root.livePanelOpen
+        previewBusy: root.previewBusy
+        demoBusy: root.demoBusy
+        demoActive: root.demoActive
+        cancelBusy: root.cancelBusy
+        applyBusy: root.applyBusy
+        protocolCanBack: root.protocolCanBack
+        protocolCanForward: root.protocolCanForward
+        protocolBusy: root.protocolBusy
+        protocolMessage: root.protocolMessage
+        errorMessage: root.errorMessage
+        selectedVariant: session.selectedVariant
+        monitorName: root.liveCanvasMonitor
+        suggestedThemeName: root.suggestedThemeName()
+        variants: workspaceWindow.variants
+
+        onHideRequested: root.hideLiveCanvasPanel()
+        onCloseCanvasRequested: root.dispatchDemo()
+        onStartDemoRequested: root.startDemo(session.selectedVariant)
+        onCancelRequested: root.cancelSession()
+        onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
+        onProtocolBackRequested: root.navigateProtocol("back")
+        onProtocolForwardRequested: root.navigateProtocol("forward")
+        onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
+            root.applyTheme(variant, name, generateUnlock, capturePreview)
+        }
+    }
+
+    Views.LiveCanvasHandle {
+        active: session.active && root.liveCanvasActive && !root.opened && !root.livePanelOpen
+        monitorName: root.liveCanvasMonitor
+        onReopenRequested: root.reopenLiveCanvasPanel()
     }
 
     Views.SettingsWindow {

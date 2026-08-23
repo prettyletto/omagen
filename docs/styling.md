@@ -57,8 +57,8 @@ between surfaces matters.
 
 ## Extra configuration previews
 
-Enable **extra configs on preview** in setup to choose desktop composition
-before generating the six directions. The configuration window contains
+Choose **In-depth** in setup to choose desktop composition before generating
+the six directions. The configuration window contains
 Window, Shell, and Bar sections. Each choice updates the Source card so the
 composition can be judged alongside the extracted palette.
 

@@ -48,6 +48,7 @@ PanelWindow {
     signal hideRequested()
     signal cancelRequested()
     signal backToConfigurationRequested()
+    signal variantFocused(string variant)
     signal variantSelected(string variant)
     signal testLiveRequested(string variant)
     signal demoRequested(string variant)
@@ -83,7 +84,7 @@ PanelWindow {
         if (dy !== 0) row = (row + (dy > 0 ? 1 : -1) + 2) % 2;
         cursorIndex = row * 3 + col;
         if (workspaceReady && !previewBusy && !cancelBusy && !applyBusy)
-            variantSelected(variants[cursorIndex].variant);
+            variantFocused(variants[cursorIndex].variant);
     }
 
     function activateCursor() {
@@ -145,7 +146,7 @@ PanelWindow {
                             }
 
                             Text {
-                                text: "Choose a palette direction"
+                                text: root.demoActive ? "Live Canvas active" : "Choose a palette to enter Live Mode"
                                 color: Color.foreground
                                 font.family: Style.font.family
                                 font.pixelSize: Style.font.title
@@ -153,7 +154,7 @@ PanelWindow {
                             }
 
                             Text {
-                                text: root.generationBusy ? "Generating six interpretations…" : root.workspaceReady ? "Choose a direction" : "Preparing workspace…"
+                            text: root.generationBusy ? "Generating six interpretations…" : root.demoActive ? "Interact with the real desktop, then reopen Studio to try another direction" : root.workspaceReady ? "Select a direction to explore it in the live canvas" : "Preparing workspace…"
                                 color: Color.foreground
                             opacity: 0.58
                             font.family: Style.font.family
@@ -170,7 +171,7 @@ PanelWindow {
 
                         Text {
                             width: parent.width
-                            text: "STEP 2  /  6 DIRECTIONS"
+                            text: root.demoActive ? "LIVE CANVAS  /  REAL DESKTOP" : "STEP 2  /  6 DIRECTIONS"
                             horizontalAlignment: Text.AlignRight
                             color: Color.accent
                             font.family: Style.font.family
@@ -291,7 +292,7 @@ PanelWindow {
                             onClicked: root.applyRecoveryRequired ? root.cancelRequested() : (root.extraConfigsEnabled ? root.backToConfigurationRequested() : root.cancelRequested())
                         }
                         Button {
-                            text: root.previewBusy ? "Applying…" : "Test live"
+                            text: root.previewBusy ? "Opening live canvas…" : "Live Canvas"
                             foreground: Color.foreground
                             accent: Color.accent
                             background: Util.alpha(Color.accent, 0.08)

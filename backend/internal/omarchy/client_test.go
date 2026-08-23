@@ -144,6 +144,7 @@ func TestOmarchyCommandErrors(t *testing.T) {
 func TestRestoreCommands(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	bin := t.TempDir()
 	script := filepath.Join(bin, "omarchy")
 	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; else exit 0; fi\n"
@@ -178,8 +179,48 @@ func TestRestoreCommands(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(refreshLog); got != "-q background refresh \n" {
-		t.Fatalf("refresh command = %q", got)
+	if got := string(refreshLog); got != "background setInstant "+background+" \n" {
+		t.Fatalf("forced background command = %q", got)
+	}
+}
+
+func TestRestoreThemeReturnsAtCriticalThemeState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	contents := "#!/bin/sh\nif [ \"$2\" = \"set\" ]; then printf '%s\\n' \"$3\" > \"$HOME/.local/state/omarchy/current/theme.name\"; /usr/bin/sleep 0.20; printf done > \"$HOME/theme-set-finished\"; fi\n"
+	if err := os.WriteFile(filepath.Join(bin, "omarchy"), []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	started := time.Now()
+	if err := NewClient(nil).RestoreThemeFast("new", t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(started); elapsed >= 150*time.Millisecond {
+		t.Fatalf("RestoreThemeFast waited for post-commit completion: %v", elapsed)
+	}
+	if _, err := os.Stat(filepath.Join(home, "theme-set-finished")); err == nil {
+		t.Fatal("restore returned only after theme-set completion marker")
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(home, "theme-set-finished")); err == nil {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatal("theme-set did not finish after critical restore returned")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

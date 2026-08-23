@@ -37,6 +37,7 @@ type OpenResult struct {
 	OK        bool            `json:"ok"`
 	SessionID string          `json:"session_id"`
 	Workspace string          `json:"workspace"`
+	Monitor   string          `json:"monitor"`
 	DemoDir   string          `json:"demo_dir"`
 	LogPath   string          `json:"log_path"`
 	Reused    bool            `json:"reused"`
@@ -53,4 +54,9 @@ type CaptureResult struct {
 	OK          bool   `json:"ok"`
 	SessionID   string `json:"session_id"`
 	PreviewPath string `json:"preview_path"`
+}
+
+type SessionStatus struct {
+	Active  bool   `json:"active"`
+	Monitor string `json:"monitor,omitempty"`
 }
