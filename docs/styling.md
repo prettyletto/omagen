@@ -76,10 +76,15 @@ Window controls are:
 - **Pane spacing:** Native, Compact, Airy.
 - **Depth:** Native, Flat, Shadow.
 - **Active and inactive windows:** Each has Native or Frosted backdrop (Light,
-  Balanced, or Rich) treatment. Inactive also offers Soft dim.
+  Balanced, or Rich) treatment. Inactive also offers Soft dim or Shadow ·
+  Preserve transparency.
 
 Soft dim keeps inactive windows readable while moving attention to the focused
-window. Frosted backdrop uses a translucent inactive surface and Hyprland
+window. Shadow · Preserve transparency adds only a lower-alpha compositor
+shadow and leaves Omarchy/application opacity untouched. Frosted backdrop uses
+the existing translucent surface and inherits the current application/Omarchy
+opacity policy; its profile changes blur size/passes and optional dim strength,
+not the global alpha.
 background blur. The generated profiles use `ignore_opacity = true` so the
 inactive opacity does not collapse the backdrop sample into a dark shadow.
 Light is the low-cost option, Balanced is the recommended

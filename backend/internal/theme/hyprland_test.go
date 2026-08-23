@@ -204,10 +204,11 @@ func TestWriteHyprlandInactiveModes(t *testing.T) {
 		want []string
 	}{
 		{name: "shadow", want: []string{"dim_inactive = true, dim_strength = 0.32", "color_inactive = \"rgba(050607d0)\""}},
-		{name: "frosted_light", want: []string{"inactive_opacity = 0.80, dim_inactive = true, dim_strength = 0.12", "blur = { enabled = true, size = 10, passes = 2, ignore_opacity = true, new_optimizations = true }", "hl.layer_rule({ name = \"omagen-live-canvas-backdrop-blur\", match = { namespace = \"^omagen-live-canvas$\" }, blur = true, blur_popups = true, ignore_alpha = 0.20 })"}},
-		{name: "frosted_balanced", want: []string{"inactive_opacity = 0.68, dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
-		{name: "frosted_rich", want: []string{"inactive_opacity = 0.62, dim_inactive = true, dim_strength = 0.34", "blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }"}},
-		{name: "blur", want: []string{"inactive_opacity = 0.68, dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
+		{name: "shadow_only", want: []string{"color_inactive = \"rgba(05060788)\""}},
+		{name: "frosted_light", want: []string{"dim_inactive = true, dim_strength = 0.12", "blur = { enabled = true, size = 10, passes = 2, ignore_opacity = true, new_optimizations = true }", "hl.layer_rule({ name = \"omagen-live-canvas-backdrop-blur\", match = { namespace = \"^omagen-live-canvas$\" }, blur = true, blur_popups = true, ignore_alpha = 0.20 })"}},
+		{name: "frosted_balanced", want: []string{"dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
+		{name: "frosted_rich", want: []string{"dim_inactive = true, dim_strength = 0.34", "blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }"}},
+		{name: "blur", want: []string{"dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true, size = 18, passes = 3, ignore_opacity = true, new_optimizations = true }"}},
 	} {
 		t.Run(style.name, func(t *testing.T) {
 			dir := t.TempDir()
@@ -228,10 +229,25 @@ func TestWriteHyprlandInactiveModes(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if err := WriteHyprland(dir, p, "solid", 2, "native", "native", "native", "native"); err != nil {
+	if err := WriteHyprland(dir, p, "solid", 2, "native", "native", "native", "shadow_only"); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "dim_inactive = true") {
+		t.Fatal("shadow_only must not dim inactive windows")
+	}
+	if strings.Contains(string(data), "inactive_opacity =") {
+		t.Fatal("shadow_only must preserve the existing inactive opacity policy")
+	}
+
+	dir = t.TempDir()
+	if err := WriteHyprland(dir, p, "solid", 2, "native", "native", "native", "native"); err != nil {
+		t.Fatal(err)
+	}
+	data, err = os.ReadFile(filepath.Join(dir, "hyprland.lua"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -253,8 +269,7 @@ func TestWriteHyprlandSeparatesActiveInactiveBlurAndAnimations(t *testing.T) {
 	}
 	text := string(data)
 	for _, want := range []string{
-		"active_opacity = 0.80",
-		"inactive_opacity = 0.62, dim_inactive = true, dim_strength = 0.34",
+		"dim_inactive = true, dim_strength = 0.34",
 		"blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }",
 		`hl.animation({ leaf = "windows", enabled = true, speed = 5.5, bezier = "quick" })`,
 		`hl.animation({ leaf = "workspaces", enabled = true, speed = 3, bezier = "easeOutQuint", style = "slide" })`,

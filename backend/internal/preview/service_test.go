@@ -263,7 +263,7 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"border_size = 2", "rounding = 8", "inactive_opacity = 0.68", "blur = { enabled = true"} {
+	for _, want := range []string{"border_size = 2", "rounding = 8", "dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true"} {
 		if !strings.Contains(string(hyprland), want) {
 			t.Errorf("live composition hyprland.lua missing %q:\n%s", want, hyprland)
 		}

@@ -261,8 +261,9 @@ Item {
                     backgroundPath,
                     result.shell_style || ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" }),
                     result.extra_configs === true,
-                    result.desktop_style || ({ border_style: "solid", border_size: -1, border_size_mode: "default", border_speed: 36, shape: "native", spacing: "native", depth: "native", inactive_style: "native" }),
-                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+                    result.desktop_style || ({ border_style: "solid", border_size: -1, border_size_mode: "default", border_speed: 36, shape: "native", spacing: "native", depth: "native", active_style: "native", inactive_style: "native" }),
+                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" }),
+                    result.animations_style || ({ window: "native", workspace: "native", border: "native", border_speed: 36, reduced_motion: false })
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");

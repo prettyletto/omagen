@@ -156,6 +156,12 @@ func NormalizeDesktopStyle(s DesktopStyle) DesktopStyle {
 	if s.Inactive == "blur" {
 		s.Inactive = "frosted_balanced"
 	}
+	if s.Inactive == "shadow_full" {
+		// The first shipped name meant full-opacity shadow, but Omarchy's
+		// transparency policy must remain authoritative. Preserve it as the
+		// shadow-only profile during migration.
+		s.Inactive = "shadow_only"
+	}
 	return s
 }
 
@@ -171,7 +177,7 @@ func (s DesktopStyle) Valid() bool {
 		validChoice(s.Spacing, "native", "compact", "airy") &&
 		validChoice(s.Depth, "native", "flat", "shadow") &&
 		validChoice(s.Active, "native", "frosted_light", "frosted_balanced", "frosted_rich") &&
-		validChoice(s.Inactive, "native", "shadow", "blur", "frosted_light", "frosted_balanced", "frosted_rich")
+		validChoice(s.Inactive, "native", "shadow", "shadow_only", "blur", "frosted_light", "frosted_balanced", "frosted_rich")
 }
 
 func DefaultShellStyle() ShellStyle {
