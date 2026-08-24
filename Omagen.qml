@@ -26,10 +26,12 @@ Item {
     property bool applyRecoveryRequired: false
     property bool demoBusy: false
     property bool demoActive: false
+    property string demoMode: "none"
     property bool liveCanvasActive: false
     property bool livePanelOpen: false
     property string liveCanvasMonitor: ""
     property bool pendingDemo: false
+    property bool pendingWindowDemo: false
     property bool pendingApplyAfterDemo: false
     property bool pendingApplyCapture: false
     property bool pendingApplyPreview: false
@@ -48,9 +50,9 @@ Item {
     property string sourceImage: ""
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
     property string errorMessage: ""
 
@@ -68,6 +70,11 @@ Item {
             .toString()
             .replace("file://", "")
     )
+    readonly property string imagePickerPath: decodeURIComponent(
+        Qt.resolvedUrl("bin/omagen-file-select")
+            .toString()
+            .replace("file://", "")
+    )
 
     function normalizeShellStyle(value) {
         value = value || ({})
@@ -75,11 +82,15 @@ Item {
         var detail = value.detail || "native"
         var tooltip = value.tooltip || "native"
         var notifications = value.notifications || "native"
+        var overrides = {}
+        for (var key in (value.overrides || {}))
+            overrides[key] = String(value.overrides[key])
         return {
             surface: surface,
             detail: detail,
             tooltip: tooltip,
-            notifications: notifications
+            notifications: notifications,
+            overrides: overrides
         }
     }
     function normalizeDesktopStyle(value) {
@@ -102,7 +113,7 @@ Item {
         return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
     }
     function normalizeAnimationsStyle(value) { value = value || ({}); var speed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed); if (!isFinite(speed) || speed < 10 || speed > 100) speed = 36; return { window: value.window || "native", workspace: value.workspace || "native", border: value.border || "native", borderSpeed: speed, reducedMotion: value.reducedMotion === true || value.reduced_motion === true } }
-    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native" } }
+    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native", profile: value.profile || null, spec: value.spec || null } }
 
     function open(payload) {
         let action = "open";
@@ -184,6 +195,7 @@ Item {
             return;
         }
         const canvasActive = resumableSession.canvas_active === true;
+        const canvasMode = resumableSession.canvas_mode || "full";
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
         shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
@@ -200,6 +212,7 @@ Item {
         // demo open here would classify transiently reloading windows as
         // missing and launch duplicate applications.
         demoActive = canvasActive;
+        demoMode = canvasActive ? canvasMode : "none";
         liveCanvasActive = true;
         demoBusy = false;
         livePanelOpen = true;
@@ -462,21 +475,25 @@ Item {
             pendingApplyAfterDemo = true
             demoBusy = true
             opened = false
-            if (demoActive) {
+            if (root.backendDemoActive()) {
                 root.previewCurrentState(variant)
             } else {
+                if (demoMode === "bar")
+                    root.stopBarDemo()
                 backend.openDemo(session.sessionId)
             }
             return
         }
 
-        if (demoActive) {
+        if (root.backendDemoActive()) {
             pendingApplyAfterDemo = true
             pendingApplyCloseDemo = true
             demoBusy = true
             root.previewCurrentState(variant)
             return
         }
+        if (demoMode === "bar")
+            root.stopBarDemo()
         pendingApplyAfterDemo = false
         root.previewCurrentState(variant)
     }
@@ -525,8 +542,107 @@ Item {
         backend.openDemo(session.sessionId);
     }
 
+    function startWindowDemo() {
+        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
+            return;
+        if (demoMode === "window" && demoActive) {
+            dispatchDemo();
+            return;
+        }
+        if (demoMode === "shell" && demoActive)
+            stopShellDemo();
+        if (demoMode === "bar" && demoActive)
+            stopBarDemo();
+        errorMessage = "";
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        pendingWindowDemo = true;
+        opened = false;
+        if (demoActive) {
+            demoBusy = true;
+            backend.closeDemo(session.sessionId);
+            return;
+        }
+        pendingWindowDemo = false;
+        demoBusy = true;
+        backend.openWindowDemo(session.sessionId);
+    }
+
+    function startShellDemo() {
+        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
+            return;
+        if (demoMode === "shell" && demoActive) {
+            stopShellDemo();
+            return;
+        }
+        if (demoMode === "bar" && demoActive)
+            stopBarDemo();
+        if (demoActive) {
+            errorMessage = "Stop the current desktop demo before starting Shell Demo.";
+            return;
+        }
+
+        errorMessage = "";
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        opened = false;
+        demoActive = true;
+        demoMode = "shell";
+    }
+
+    function startBarDemo() {
+        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
+            return;
+        if (demoMode === "bar" && demoActive) {
+            stopBarDemo();
+            return;
+        }
+        if (demoActive) {
+            errorMessage = "Stop the current desktop demo before starting Bar Demo.";
+            return;
+        }
+        errorMessage = "";
+        liveCanvasActive = true;
+        livePanelOpen = true;
+        opened = false;
+        demoActive = true;
+        demoMode = "bar";
+    }
+
+    function stopBarDemo() {
+        if (demoMode !== "bar")
+            return;
+        demoActive = false;
+        demoMode = "none";
+        livePanelOpen = liveCanvasActive;
+    }
+
+    function backendDemoActive() {
+        return demoActive && (demoMode === "full" || demoMode === "window");
+    }
+
+    function stopShellDemo() {
+        if (demoMode !== "shell")
+            return;
+        demoActive = false;
+        demoMode = "none";
+        livePanelOpen = liveCanvasActive;
+    }
+
     function dispatchDemo() {
-        if (!demoActive || demoBusy || cancelBusy || session.sessionId === "")
+        if (!demoActive || demoBusy || cancelBusy)
+            return;
+
+        if (demoMode === "shell") {
+            stopShellDemo();
+            return;
+        }
+        if (demoMode === "bar") {
+            stopBarDemo();
+            return;
+        }
+
+        if (session.sessionId === "")
             return;
 
         errorMessage = "";
@@ -585,7 +701,7 @@ Item {
         extraConfigsEnabled = false;
         shellStyle = ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" });
         desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" });
-        barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" });
+        barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null });
         animationsStyle = ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false });
         errorMessage = "";
         opened = !shouldClose;
@@ -597,10 +713,12 @@ Item {
         pendingColorPreview = false;
         demoBusy = false;
         demoActive = false;
+        demoMode = "none";
         liveCanvasActive = false;
         livePanelOpen = false;
         liveCanvasMonitor = "";
         pendingDemo = false;
+        pendingWindowDemo = false;
         pendingApplyAfterDemo = false;
         pendingApplyCapture = false;
         pendingApplyAbortAfterDemo = false;
@@ -628,6 +746,7 @@ Item {
 
     Services.ImagePickerService {
         id: imagePicker
+        executable: root.imagePickerPath
 
         onSelected: function(path) {
             root.sourceImage = path;
@@ -827,6 +946,7 @@ Item {
             root.regenerationPending = false;
             root.liveCanvasActive = false;
             root.demoActive = false;
+            root.demoMode = "none";
             root.livePanelOpen = false;
             liveCanvasPanel.clearColorSession();
             session.clearGeneration();
@@ -886,7 +1006,10 @@ Item {
                 return;
             }
 
-            if (root.demoActive) {
+            // Shell and Bar Demos are QML-only reader surfaces. They do not own
+            // a backend workspace or demo-state.json, so previewing them must
+            // not enter the window/full-demo reflow path.
+            if (root.backendDemoActive()) {
                 // Reassert workspace ownership after the candidate reload. The
                 // Demo itself remains in Hyprland's dwindle layout; only the
                 // Studio panel is an overlay and must never become a tiled pane.
@@ -936,6 +1059,7 @@ Item {
                 return;
             }
             root.demoActive = true;
+            root.demoMode = "full";
             root.liveCanvasMonitor = monitor;
             if (root.pendingApplyCapture) {
                 root.previewCurrentState(root.pendingApplyVariant);
@@ -954,6 +1078,7 @@ Item {
                 return;
             root.demoBusy = false;
             root.demoActive = false;
+            root.demoMode = "none";
             root.livePanelOpen = root.liveCanvasActive;
             root.liveCanvasMonitor = "";
             root.pendingDemo = false;
@@ -961,6 +1086,36 @@ Item {
                 root.resetPendingApply()
                 root.applyBusy = false
             }
+            root.errorMessage = message;
+            root.opened = root.liveCanvasActive ? false : true;
+        }
+        onWindowDemoOpened: function(sessionId, workspace, monitor, reused) {
+            if (root.closeAfterCancel)
+                return;
+            if (sessionId !== session.sessionId) {
+                root.demoBusy = false;
+                root.pendingWindowDemo = false;
+                root.errorMessage = "Backend opened a different Window demo session";
+                root.opened = true;
+                return;
+            }
+            root.pendingWindowDemo = false;
+            root.demoActive = true;
+            root.demoMode = "window";
+            root.liveCanvasMonitor = monitor;
+            root.demoBusy = false;
+            root.opened = false;
+            root.livePanelOpen = root.liveCanvasActive;
+        }
+        onWindowDemoOpenFailed: function(message) {
+            if (root.closeAfterCancel)
+                return;
+            root.demoBusy = false;
+            root.pendingWindowDemo = false;
+            root.demoActive = false;
+            root.demoMode = "none";
+            root.livePanelOpen = root.liveCanvasActive;
+            root.liveCanvasMonitor = "";
             root.errorMessage = message;
             root.opened = root.liveCanvasActive ? false : true;
         }
@@ -989,6 +1144,19 @@ Item {
             if (root.closeAfterCancel)
                 return;
             root.demoBusy = false;
+            // Demo cleanup removes demo-state.json after its windows and
+            // workspace are gone. A queued reflow can arrive just after that
+            // cleanup and otherwise exposes an internal transient path to the
+            // user. Treat the missing state as an already-closed Demo.
+            if (message.indexOf("demo-state.json") !== -1 && message.indexOf("no such file") !== -1) {
+                root.demoActive = false;
+                root.demoMode = "none";
+                root.liveCanvasMonitor = "";
+                root.pendingDemo = false;
+                root.errorMessage = "";
+                root.livePanelOpen = root.liveCanvasActive;
+                return;
+            }
             root.errorMessage = message;
             root.pendingDemo = false;
             root.livePanelOpen = root.liveCanvasActive;
@@ -1024,12 +1192,19 @@ Item {
                 return;
             }
             root.demoActive = false;
+            root.demoMode = "none";
             root.livePanelOpen = root.liveCanvasActive;
             if (root.pendingApplyAbortAfterDemo) {
                 root.resetPendingApply()
                 root.applyBusy = false
                 root.opened = true
                 return
+            }
+            if (root.pendingWindowDemo) {
+                root.pendingWindowDemo = false;
+                root.demoBusy = true;
+                backend.openWindowDemo(session.sessionId);
+                return;
             }
             if (root.pendingApplyAfterDemo) {
                 const variant = root.pendingApplyVariant;
@@ -1056,12 +1231,13 @@ Item {
         onDemoCloseFailed: function(message) {
             root.demoBusy = false;
             root.errorMessage = message;
-            if (root.pendingApplyAfterDemo || root.pendingApplyAbortAfterDemo) {
+            if (root.pendingApplyAfterDemo || root.pendingApplyAbortAfterDemo || root.pendingWindowDemo) {
                 // A failed Demo close must abort this Apply attempt. Keeping
                 // applyBusy/pendingApplyAfterDemo set would leave the UI
                 // waiting forever for a demoClosed signal that will not come.
                 root.resetPendingApply();
                 root.applyBusy = false;
+                root.pendingWindowDemo = false;
                 root.opened = true;
             }
         }
@@ -1192,6 +1368,7 @@ Item {
         previewBusy: root.previewBusy
         demoBusy: root.demoBusy
         demoActive: root.demoActive
+        demoMode: root.demoMode
         cancelBusy: root.cancelBusy
         applyBusy: root.applyBusy
         generationBusy: root.generationBusy || root.describeBusy
@@ -1215,6 +1392,12 @@ Item {
         onHideRequested: root.hideLiveCanvasPanel()
         onCloseCanvasRequested: root.dispatchDemo()
         onStartDemoRequested: root.startDemo(session.selectedVariant)
+        onWindowDemoRequested: root.startWindowDemo()
+        onWindowDemoStopRequested: root.dispatchDemo()
+        onShellDemoRequested: root.startShellDemo()
+        onShellDemoStopRequested: root.stopShellDemo()
+        onBarDemoRequested: root.startBarDemo()
+        onBarDemoStopRequested: root.stopBarDemo()
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
         onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
@@ -1229,6 +1412,21 @@ Item {
         onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
             root.applyTheme(variant, name, generateUnlock, capturePreview)
         }
+    }
+
+    Views.ShellDemoPanel {
+        id: shellDemoPanel
+        active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "shell"
+        monitorName: root.liveCanvasMonitor
+        shellStyle: root.shellStyle
+    }
+
+    Views.BarDemoPanel {
+        id: barDemoPanel
+        active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "bar"
+        monitorName: root.liveCanvasMonitor
+        barStyle: root.barStyle
+        onCloseRequested: root.stopBarDemo()
     }
 
     Views.LiveCanvasHandle {

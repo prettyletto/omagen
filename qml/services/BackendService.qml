@@ -38,6 +38,8 @@ Item {
     signal themeApplyFailed(string message)
     signal demoOpened(string sessionId, string workspace, string monitor, bool reused)
     signal demoOpenFailed(string message)
+    signal windowDemoOpened(string sessionId, string workspace, string monitor, bool reused)
+    signal windowDemoOpenFailed(string message)
     signal demoReflowed(string sessionId)
     signal demoReflowFailed(string message)
     signal demoClosed(string sessionId, bool closed)
@@ -58,6 +60,12 @@ Item {
                   desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
                   "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility,
                   "--window-active-style", desktopStyle.activeStyle || desktopStyle.active_style || "native");
+        if (shellStyle.overrides && Object.keys(shellStyle.overrides).length > 0)
+            args.push("--shell-overrides-json", JSON.stringify(shellStyle.overrides));
+        if (barStyle.profile)
+            args.push("--bar-profile-json", JSON.stringify(barStyle.profile));
+        if (barStyle.spec)
+            args.push("--bar-spec-json", JSON.stringify(barStyle.spec));
         if (animationsStyle)
             args.push("--animations-json", JSON.stringify(animationsStyle));
     }
@@ -106,7 +114,8 @@ Item {
                 surface: shell.surface || "flat",
                 detail: shell.detail || "native",
                 tooltip: shell.tooltip || "native",
-                notifications: shell.notifications || "native"
+                notifications: shell.notifications || "native",
+                overrides: shell.overrides || ({})
             },
             desktop: {
                 border_style: desktop.borderStyle || desktop.border_style || "solid",
@@ -124,7 +133,8 @@ Item {
                 density: bar.density || "native",
                 attention: bar.attention || "semantic",
                 form: bar.form || "continuous",
-                visibility: bar.visibility || "native"
+                visibility: bar.visibility || "native",
+                profile: bar.profile || null
             },
             animations: {
                 window: animations.window || "native",
@@ -152,6 +162,7 @@ Item {
         applyProcess.exec(args);
     }
     function openDemo(sessionId) { demoOpenProcess.exec([root.executable, "demo", "open", sessionId]); }
+    function openWindowDemo(sessionId) { windowDemoOpenProcess.exec([root.executable, "demo", "open-window", sessionId]); }
     function reflowDemo(sessionId) { demoReflowProcess.exec([root.executable, "demo", "reflow", sessionId]); }
     function closeDemo(sessionId) { demoCloseProcess.exec([root.executable, "demo", "close", sessionId]); }
     function captureDemoPreview(sessionId) { demoCaptureProcess.exec([root.executable, "demo", "capture", sessionId]); }
@@ -262,7 +273,7 @@ Item {
                     result.shell_style || ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" }),
                     result.extra_configs === true,
                     result.desktop_style || ({ border_style: "solid", border_size: -1, border_size_mode: "default", border_speed: 36, shape: "native", spacing: "native", depth: "native", active_style: "native", inactive_style: "native" }),
-                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" }),
+                    result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null }),
                     result.animations_style || ({ window: "native", workspace: "native", border: "native", border_speed: 36, reduced_motion: false })
                 );
             } catch (error) {
@@ -395,6 +406,21 @@ Item {
                 if (result.ok !== true || !result.session_id || !result.workspace || !result.monitor) { root.demoOpenFailed("Backend returned incomplete live canvas data"); return }
                 root.demoOpened(result.session_id, result.workspace, result.monitor, result.reused === true)
             } catch (error) { root.demoOpenFailed("Backend returned invalid demo JSON") }
+        }
+    }
+
+    Process {
+        id: windowDemoOpenProcess
+        stdout: BoundedOutputParser { id: windowDemoOpenStdout }
+        stderr: BoundedOutputParser { id: windowDemoOpenStderr }
+        onStarted: root.resetOutputs(windowDemoOpenStdout, windowDemoOpenStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) { root.windowDemoOpenFailed(windowDemoOpenStderr.text.trim() || "Failed to open Window demo"); return }
+            try {
+                const result = JSON.parse(windowDemoOpenStdout.text)
+                if (result.ok !== true || !result.session_id || !result.workspace || !result.monitor) { root.windowDemoOpenFailed("Backend returned incomplete Window demo data"); return }
+                root.windowDemoOpened(result.session_id, result.workspace, result.monitor, result.reused === true)
+            } catch (error) { root.windowDemoOpenFailed("Backend returned invalid Window demo JSON") }
         }
     }
 

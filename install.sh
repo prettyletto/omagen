@@ -53,8 +53,12 @@ mkdir -p "$DEST_DIR/qml" "$DEST_DIR/bin"
 rsync -a --delete "$SRC_DIR/qml/" "$DEST_DIR/qml/"
 cp "$SRC_DIR/bin/omagen" "$DEST_DIR/bin/omagen"
 chmod +x "$DEST_DIR/bin/omagen"
+cp "$SRC_DIR/bin/omagen-studio" "$DEST_DIR/bin/omagen-studio"
+chmod +x "$DEST_DIR/bin/omagen-studio"
 cp "$SRC_DIR/bin/studio-theme-set" "$DEST_DIR/bin/studio-theme-set"
 chmod +x "$DEST_DIR/bin/studio-theme-set"
+cp "$SRC_DIR/bin/omagen-file-select" "$DEST_DIR/bin/omagen-file-select"
+chmod +x "$DEST_DIR/bin/omagen-file-select"
 
 echo "Installed $PLUGIN_ID -> $DEST_DIR"
 

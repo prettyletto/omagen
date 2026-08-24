@@ -10,13 +10,16 @@ import qs.Ui
 Item {
     id: root
 
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
     property int activeTab: 0
 
     signal stylesChanged(var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
+    signal sectionChanged(int index)
+
+    onActiveTabChanged: root.sectionChanged(root.activeTab)
 
     readonly property var tabs: [
         { title: "Window", eyebrow: "HYPRLAND" },
@@ -84,6 +87,42 @@ Item {
     ]
     readonly property var barVisibilityOptions: [
         { key: "native", title: "Native" }, { key: "islands", title: "Show islands" }
+    ]
+    readonly property var barProfileFormOptions: [
+        { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
+        { key: "sections", title: "Sections" }, { key: "split", title: "Split" },
+        { key: "islands", title: "Islands" }, { key: "dock", title: "Dock" },
+        { key: "minimal", title: "Minimal" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
+    ]
+    readonly property var barProfileVisibilityOptions: [
+        { key: "always", title: "Always" }, { key: "auto-hide", title: "Auto-hide" },
+        { key: "fullscreen-only", title: "Fullscreen" }, { key: "intelligent", title: "Intelligent" }
+    ]
+    readonly property var barProfileRevealOptions: [
+        { key: "edge", title: "Edge reveal" }, { key: "hover-zone", title: "Hover zone" },
+        { key: "hotkey", title: "Hotkey" }
+    ]
+    readonly property var barProfileExpansionOptions: [
+        { key: "none", title: "Fixed" }, { key: "hover", title: "Hover" },
+        { key: "focus", title: "Focus" }, { key: "adaptive", title: "Adaptive" }
+    ]
+    readonly property var barProfileWorkspaceOptions: [
+        { key: "native", title: "Native" }, { key: "dots", title: "Dots" },
+        { key: "numbers", title: "Numbers" }, { key: "labels", title: "Labels" },
+        { key: "segmented", title: "Segmented" }, { key: "window-aware", title: "Window aware" },
+        { key: "overview", title: "Overview" }
+    ]
+    readonly property var barPresetOptions: [
+        { key: "native", title: "Native" }, { key: "float", title: "Float" },
+        { key: "sections", title: "Sections" }, { key: "glass-islands", title: "Glass islands" },
+        { key: "dock", title: "Dock" }, { key: "minimal", title: "Minimal" },
+        { key: "split", title: "Split" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
+    ]
+    readonly property var barTopologyOptions: [
+        { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
+        { key: "sections", title: "Sections" }, { key: "islands", title: "Islands" },
+        { key: "dock", title: "Dock" }, { key: "split", title: "Split" },
+        { key: "minimal", title: "Minimal" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
     ]
     property int stagedBorderSize: root.desktopStyle.borderSize !== undefined ? Number(root.desktopStyle.borderSize) : -1
     property int stagedBorderSpeed: Number(root.desktopStyle.borderSpeed || 36)
@@ -162,7 +201,8 @@ Item {
             surface: root.shellStyle.surface || "flat",
             detail: root.shellStyle.detail || "native",
             tooltip: root.shellStyle.tooltip || "native",
-            notifications: root.shellStyle.notifications || "native"
+            notifications: root.shellStyle.notifications || "native",
+            overrides: root.shellStyle.overrides || ({})
         }
         next[group] = key
         root.stylesChanged(next, root.desktopStyle, root.barStyle, root.animationsStyle)
@@ -174,10 +214,211 @@ Item {
             density: root.barStyle.density || "native",
             attention: root.barStyle.attention || "semantic",
             form: root.barStyle.form || "continuous",
-            visibility: root.barStyle.visibility || "native"
+            visibility: root.barStyle.visibility || "native",
+            profile: root.barStyle.profile || null,
+            spec: root.barStyle.spec || null
         }
         next[group] = key
+        var spec = root.barSpec()
+        if (group === "surface") spec.surface.role = key
+        if (group === "density") spec.geometry.density = key
+        if (group === "attention") spec.attention.mode = key
+        next.spec = spec
         root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
+    }
+
+    function barSpec() {
+        var current = root.barStyle.spec || ({})
+        var surface = current.surface || ({})
+        var geometry = current.geometry || ({})
+        var behavior = current.behavior || ({})
+        var motion = current.motion || ({})
+        var result = {
+            version: 2,
+            engine: current.engine || "auto",
+            topology: current.topology || (root.barStyle.visibility === "islands" ? "sections" : root.barStyle.form === "docked" ? "sections" : "continuous"),
+            position: current.position || "top",
+            surface: { role: surface.role || root.barStyle.surface || "native", opacity: surface.opacity !== undefined ? surface.opacity : 1, blur: Number(surface.blur || 0), border_role: surface.border_role || "none", border_opacity: Number(surface.border_opacity || 0), border_width: Number(surface.border_width || 0), shadow: surface.shadow || "none" },
+            geometry: { density: geometry.density || root.barStyle.density || "native", thickness: Number(geometry.thickness || 0), edge_offset: Number(geometry.edge_offset || 0), outer_margin: Number(geometry.outer_margin || 0), inner_padding: Number(geometry.inner_padding || 0), section_gap: Number(geometry.section_gap !== undefined ? geometry.section_gap : 8), widget_gap: Number(geometry.widget_gap || 0), radius: Number(geometry.radius || 0), length_mode: geometry.length_mode || "full", length_value: Number(geometry.length_value || 0) },
+            attention: { mode: (current.attention && current.attention.mode) || root.barStyle.attention || "semantic" },
+            behavior: { visibility: behavior.visibility || "always", exclusive_zone: behavior.exclusive_zone || "reserve", hover_expand: behavior.hover_expand === true, hide_delay_ms: Number(behavior.hide_delay_ms || 500), reveal_delay_ms: Number(behavior.reveal_delay_ms || 50), edge_sensor: Number(behavior.edge_sensor || 3), keep_visible_while_popup_open: behavior.keep_visible_while_popup_open !== false },
+            motion: { preset: motion.preset || "native", duration_ms: Number(motion.duration_ms || 180), easing: motion.easing || "out_cubic" }
+        }
+        return root.normalizeBarSpecEngine(result)
+    }
+
+    function barSpecValue(group, fallback) {
+        var spec = root.barSpec()
+        var value = group === "surface" ? spec.surface.role : group === "density" ? spec.geometry.density : group === "attention" ? spec.attention.mode : spec[group]
+        return value || fallback
+    }
+
+    function barPresetValue() {
+        var topology = root.barSpecValue("topology", "continuous")
+        var mapping = { floating: "float", islands: "glass-islands" }
+        if (mapping[topology])
+            return mapping[topology]
+        for (var index = 0; index < root.barPresetOptions.length; index++) {
+            if (root.barPresetOptions[index].key === topology)
+                return topology
+        }
+        return "native"
+    }
+
+    function normalizeBarSpecEngine(spec) {
+        var nativeTopology = ["continuous", "minimal"].indexOf(spec.topology) >= 0
+        var surface = spec.surface || ({})
+        var geometry = spec.geometry || ({})
+        var behavior = spec.behavior || ({})
+        var motion = spec.motion || ({})
+        var nativeSurface = ["native", "background", "dark", "light", "accent", "transparent"].indexOf(surface.role) >= 0
+            && Number(surface.blur || 0) === 0
+            && (surface.border_role || "none") === "none"
+            && Number(surface.border_opacity || 0) === 0
+            && Number(surface.border_width || 0) === 0
+            && (surface.shadow || "none") === "none"
+        var nativeGeometry = (spec.position || "top") === "top"
+            && Number(geometry.edge_offset || 0) === 0
+            && Number(geometry.outer_margin || 0) === 0
+            && Number(geometry.inner_padding || 0) === 0
+            && Number(geometry.section_gap !== undefined ? geometry.section_gap : 8) === 8
+            && Number(geometry.widget_gap || 0) === 0
+            && Number(geometry.radius || 0) === 0
+            && (geometry.length_mode || "full") === "full"
+            && Number(geometry.length_value || 0) === 0
+        var nativeBehavior = (behavior.visibility || "always") === "always" && behavior.exclusive_zone === "reserve" && behavior.hover_expand !== true
+        var nativeMotion = (motion.preset || "native") === "native"
+            && Number(motion.duration_ms !== undefined ? motion.duration_ms : 180) === 180
+            && (motion.easing || "out_cubic") === "out_cubic"
+        var needsAdapter = !nativeTopology || !nativeSurface || !nativeGeometry || !nativeBehavior || !nativeMotion
+        if (!needsAdapter && spec.engine === "omagen")
+            spec.engine = "auto"
+        if (needsAdapter && spec.engine === "native")
+            spec.engine = "auto"
+        if (!spec.engine)
+            spec.engine = needsAdapter ? "omagen" : "auto"
+        if (needsAdapter && spec.engine === "auto")
+            spec.engine = "omagen"
+        return spec
+    }
+
+    function chooseBarSpec(group, key) {
+        var spec = root.barSpec()
+        if (group === "surface") {
+            spec.surface.role = key
+            if (key === "transparent") spec.surface.opacity = 0
+        } else if (group === "density") {
+            spec.geometry.density = key
+        } else if (group === "attention") {
+            spec.attention.mode = key
+        } else {
+            spec[group] = key
+        }
+        if (group === "topology")
+            spec.engine = ["continuous", "minimal"].indexOf(key) >= 0 ? "auto" : "omagen"
+        root.normalizeBarSpecEngine(spec)
+        var next = {
+            surface: key === "dark" || key === "light" || key === "accent" ? key : root.barStyle.surface || "native",
+            density: spec.geometry.density || root.barStyle.density || "native",
+            attention: spec.attention.mode || root.barStyle.attention || "semantic",
+            form: ["continuous", "floating", "minimal"].indexOf(spec.topology) >= 0 ? "continuous" : "docked",
+            visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : root.barStyle.visibility || "native",
+            profile: root.barStyle.profile || null,
+            spec: spec
+        }
+        root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
+    }
+
+    function chooseBarPreset(key) {
+        var spec = root.barSpec()
+        spec.engine = "auto"
+        spec.topology = "continuous"
+        spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "none", border_opacity: 0, border_width: 0, shadow: "none" }
+        spec.geometry = { density: "native", thickness: 0, edge_offset: 0, outer_margin: 0, inner_padding: 0, section_gap: 8, widget_gap: 0, radius: 0, length_mode: "full", length_value: 0 }
+        spec.behavior.visibility = "always"
+        switch (key) {
+        case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
+        case "sections": spec.topology = "sections"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "accent", border_opacity: 0.35, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 10; spec.geometry.radius = 14; break
+        case "glass-islands": spec.engine = "omagen"; spec.topology = "islands"; spec.surface = { role: "dark", opacity: 0.72, blur: 18, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "floating" }; spec.geometry.radius = 14; break
+        case "dock": spec.engine = "omagen"; spec.topology = "dock"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "foreground", border_opacity: 0.25, border_width: 1, shadow: "floating" }; spec.geometry.length_mode = "content"; spec.geometry.radius = 16; spec.behavior.visibility = "auto_hide"; break
+        case "minimal": spec.topology = "minimal"; spec.surface = { role: "transparent", opacity: 0, blur: 0, border_role: "none", border_opacity: 0, border_width: 0, shadow: "none" }; spec.geometry.density = "compact"; break
+        case "split": spec.engine = "omagen"; spec.topology = "split"; spec.surface.role = "dark"; break
+        case "notch": spec.engine = "omagen"; spec.topology = "notch"; spec.surface.role = "dark"; spec.geometry.radius = 14; break
+        case "rail": spec.engine = "omagen"; spec.topology = "rail"; spec.position = "left"; spec.surface.role = "dark"; break
+        }
+        var behavior = root.barStyle.profile && root.barStyle.profile.behavior ? root.barStyle.profile.behavior : ({})
+        behavior = JSON.parse(JSON.stringify(behavior))
+        behavior.form = ["continuous", "sections", "split", "islands", "dock", "rail"].indexOf(spec.topology) >= 0 ? spec.topology : "continuous"
+        behavior.visibility = spec.behavior.visibility === "auto_hide" ? "auto-hide" : "always"
+        var profile = { schema_version: 1, ownership: "overlay", implementation: spec.engine === "omagen" ? "adapter" : "native", behavior: behavior }
+        var next = { surface: ["native", "dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : "native", density: spec.geometry.density, attention: root.barStyle.attention || "semantic", form: ["continuous", "floating", "minimal"].indexOf(spec.topology) >= 0 ? "continuous" : "docked", visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native", profile: profile, spec: spec }
+        root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
+    }
+
+    function chooseBarProfile(group, key) {
+        var current = root.barStyle.profile || ({})
+        var behavior = JSON.parse(JSON.stringify(current.behavior || ({})))
+        behavior[group] = key
+        var profile = {
+            schema_version: 1,
+            ownership: current.ownership || "overlay",
+            implementation: current.implementation || "adapter",
+            behavior: behavior
+        }
+        if (group === "form") {
+            profile.behavior.form = key
+            profile.behavior.visibility = behavior.visibility || "always"
+            profile.behavior.reveal = behavior.reveal || "edge"
+            profile.behavior.expansion = behavior.expansion || "none"
+            profile.behavior.workspace = behavior.workspace || "native"
+        }
+        var nextSpec = root.barStyle.spec ? root.barSpec() : null
+        if (nextSpec) {
+            if (group === "form") {
+                var topologyByForm = { continuous: "continuous", floating: "floating", sections: "sections", split: "split", islands: "islands", dock: "dock", rail: "rail", minimal: "minimal", notch: "notch" }
+                nextSpec.topology = topologyByForm[key] || nextSpec.topology
+            } else if (group === "visibility") {
+                var visibilityByProfile = { always: "always", "auto-hide": "auto_hide", "fullscreen-only": "fullscreen", intelligent: "hover" }
+                nextSpec.behavior.visibility = visibilityByProfile[key] || nextSpec.behavior.visibility
+            } else if (group === "expansion") {
+                nextSpec.behavior.hover_expand = key !== "none"
+            }
+            root.normalizeBarSpecEngine(nextSpec)
+        }
+        var next = {
+            surface: root.barStyle.surface || "native",
+            density: root.barStyle.density || "native",
+            attention: root.barStyle.attention || "semantic",
+            form: ["continuous", "floating", "minimal"].indexOf(key) >= 0 ? "continuous" : "docked",
+            visibility: key === "islands" || key === "sections" ? "islands" : (root.barStyle.visibility || "native"),
+            profile: profile,
+            spec: nextSpec
+        }
+        root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
+    }
+
+    function barProfileValue(group, fallback) {
+        var profile = root.barStyle.profile || null
+        var behavior = profile && profile.behavior ? profile.behavior : null
+        if (behavior && behavior[group])
+            return behavior[group]
+        if (root.barStyle.spec) {
+            var spec = root.barSpec()
+            if (group === "form")
+                return spec.topology === "continuous" || spec.topology === "floating" || spec.topology === "minimal" ? "continuous" : spec.topology
+            if (group === "visibility")
+                return spec.behavior.visibility === "auto_hide" ? "auto-hide" : spec.behavior.visibility === "fullscreen" ? "fullscreen-only" : spec.behavior.visibility === "hover" ? "intelligent" : "always"
+            if (group === "expansion")
+                return spec.behavior.hover_expand === true ? "hover" : "none"
+        }
+        return fallback
+    }
+
+    function barOptionDescriptions(group, options) {
+        var descriptions = {}
+        for (var index = 0; index < options.length; index++)
+            descriptions[options[index].key] = root.optionDescription("bar", group, options[index].key)
+        return descriptions
     }
 
     function chooseAnimations(group, key) {
@@ -213,7 +454,11 @@ Item {
         if (group === "surface") return "Native bar surface colour and contrast."
         if (group === "density") return "Bar control density; this changes supported bar spacing and height tokens."
         if (group === "attention") return "Whether bar attention states use semantic colours or the theme accent."
-        if (group === "form") return "Continuous keeps the native bar surface; Docked adds Omagen-owned section surfaces beneath native widgets."
+        if (group === "form") return "Continuous keeps one native surface; Split, Islands, Dock, and Rail are theme-bounded additive compositions."
+        if (group === "visibility") return "Visibility is staged with the theme profile and restored with the user's bar state."
+        if (group === "expansion") return "Choose whether the themed bar expands fixed content on hover, focus, or available space."
+        if (group === "workspace") return "Workspace presentation is a theme profile; native workspace actions remain authoritative."
+        if (group === "reveal") return "How a hidden theme-bound bar is summoned without changing the native bar's ownership."
         return "Native keeps transparency; Show islands exposes the supported docked section surfaces."
     }
 
@@ -300,6 +545,11 @@ Item {
                 visibility: {
                     native: "Keep the native bar visibility and transparency.",
                     islands: "Show the supported docked section surfaces as separate islands."
+                },
+                reveal: {
+                    edge: "Reveal the hidden bar by touching the screen edge.",
+                    "hover-zone": "Reveal the hidden bar from a small hover target at the edge.",
+                    hotkey: "Reveal the hidden bar only through the configured shell shortcut."
                 }
             }
         }
@@ -358,7 +608,7 @@ Item {
         StackLayout {
             Layout.fillWidth: true
             currentIndex: root.activeTab
-            implicitHeight: root.activeTab === 0 ? windowColumn.implicitHeight : root.activeTab === 1 ? shellColumn.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationColumn.implicitHeight
+            implicitHeight: root.activeTab === 0 ? windowColumn.implicitHeight : root.activeTab === 1 ? shellPage.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationColumn.implicitHeight
 
             Item {
                 implicitHeight: windowColumn.implicitHeight
@@ -546,25 +796,13 @@ Item {
             }
 
             Item {
-                implicitHeight: shellColumn.implicitHeight
-                ColumnLayout {
-                    id: shellColumn
+                id: shellPage
+                implicitHeight: shellLab.implicitHeight
+                ShellLab {
+                    id: shellLab
                     width: parent.width
-                    spacing: Style.space(5)
-                    Text { Layout.fillWidth: true; text: "QUICKSHELL SURFACES"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "These choices feed Quattro's native popup, menu, launcher, control, tooltip, and notification readers."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Text { Layout.fillWidth: true; text: "SURFACE / DETAIL"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.surfaceOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Surface · " + modelData.title; description: root.optionDescription("shell", "surface", modelData.key); selected: root.shellStyle.surface === modelData.key; onClicked: root.chooseShell("surface", modelData.key) } }
-                        Repeater { model: root.detailOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Detail · " + modelData.title; description: root.optionDescription("shell", "detail", modelData.key); selected: root.shellStyle.detail === modelData.key; onClicked: root.chooseShell("detail", modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "FEEDBACK"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Style.space(5)
-                        Repeater { model: root.feedbackOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Tooltip · " + modelData.title; description: root.optionDescription("shell", "tooltip", modelData.key); selected: root.shellStyle.tooltip === modelData.key; onClicked: root.chooseShell("tooltip", modelData.key) } }
-                        Repeater { model: root.feedbackOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Alerts · " + modelData.title; description: root.optionDescription("shell", "notifications", modelData.key); selected: root.shellStyle.notifications === modelData.key; onClicked: root.chooseShell("notifications", modelData.key) } }
-                    }
+                    shellStyle: root.shellStyle
+                    onStyleChanged: root.stylesChanged(shellStyle, root.desktopStyle, root.barStyle, root.animationsStyle)
                 }
             }
 
@@ -573,16 +811,221 @@ Item {
                 ColumnLayout {
                     id: barColumn
                     width: parent.width
-                    spacing: Style.space(5)
-                    Text { Layout.fillWidth: true; text: "QUATTRO BAR COMPOSITION"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "Native left, centre, and right widgets remain owned by Quattro. These settings change the supported bar tokens and Omagen's additive docked surfaces."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.barSurfaceOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Surface · " + modelData.title; description: root.optionDescription("bar", "surface", modelData.key); selected: root.barStyle.surface === modelData.key; onClicked: root.chooseBar("surface", modelData.key) } }
-                        Repeater { model: root.barDensityOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Density · " + modelData.title; description: root.optionDescription("bar", "density", modelData.key); selected: root.barStyle.density === modelData.key; onClicked: root.chooseBar("density", modelData.key) } }
-                        Repeater { model: root.attentionOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Attention · " + modelData.title; description: root.optionDescription("bar", "attention", modelData.key); selected: root.barStyle.attention === modelData.key; onClicked: root.chooseBar("attention", modelData.key) } }
-                        Repeater { model: root.barFormOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Form · " + modelData.title; description: root.optionDescription("bar", "form", modelData.key); selected: root.barStyle.form === modelData.key; onClicked: root.chooseBar("form", modelData.key) } }
-                        Repeater { model: root.barVisibilityOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Visibility · " + modelData.title; description: root.optionDescription("bar", "visibility", modelData.key); selected: root.barStyle.visibility === modelData.key; onClicked: root.chooseBar("visibility", modelData.key) } }
+                    spacing: Style.space(8)
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "BAR INSPECTOR"
+                        color: Color.accent
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        font.letterSpacing: 1.0
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Shape the bar in groups. Native widgets and placement stay with Quattro; this profile only stages the theme-bound surface behavior."
+                        color: Color.foreground
+                        opacity: 0.62
+                        wrapMode: Text.WordWrap
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.bodySmall
+                    }
+
+                    BorderSurface {
+                        Layout.fillWidth: true
+                        implicitHeight: barSummaryColumn.implicitHeight + Style.space(20)
+                        color: Util.alpha(Color.accent, 0.09)
+                        radius: Math.max(Style.space(6), Style.cornerRadius / 2)
+                        borderSpec: Border.flat(Util.alpha(Color.accent, 0.55), 1)
+
+                        ColumnLayout {
+                            id: barSummaryColumn
+                            anchors.fill: parent
+                            anchors.margins: Style.space(10)
+                            spacing: Style.space(3)
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: ["continuous", "minimal"].indexOf(root.barSpecValue("topology", "continuous")) >= 0 && root.barSpec().engine !== "omagen" && !root.barStyle.profile
+                                        ? "NATIVE BAR · INHERITED" : "THEME PROFILE · ADAPTER"
+                                    color: Color.accent
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                    font.letterSpacing: 0.65
+                                }
+                                Text {
+                                    text: root.barSpecValue("topology", "continuous").toUpperCase()
+                                    color: Color.foreground
+                                    opacity: 0.78
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                }
+                            }
+
+                            Text {
+                                Layout.fillWidth: true
+                                text: root.barStyle.profile
+                                    ? "Changes are reversible and scoped to this theme session."
+                                    : "No theme-owned bar behavior is staged yet."
+                                color: Color.foreground
+                                opacity: 0.62
+                                wrapMode: Text.WordWrap
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+                        }
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Preset"
+                        subtitle: "Compose a BarSpec without changing widget ownership"
+                        options: root.barPresetOptions
+                        selectedKey: root.barPresetValue()
+                        optionDescriptions: root.barOptionDescriptions("preset", root.barPresetOptions)
+                        onChoiceSelected: root.chooseBarPreset(key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Topology"
+                        subtitle: "Native continuous/minimal; additive adapter for other shapes"
+                        options: root.barTopologyOptions
+                        selectedKey: root.barSpecValue("topology", "continuous")
+                        optionDescriptions: root.barOptionDescriptions("topology", root.barTopologyOptions)
+                        onChoiceSelected: root.chooseBarSpec("topology", key)
+                    }
+
+                    BarSpecControls {
+                        Layout.fillWidth: true
+                        spec: root.barSpec()
+                        onSpecEdited: function(spec) {
+                            root.normalizeBarSpecEngine(spec)
+                            var next = {
+                                surface: root.barStyle.surface || "native",
+                                density: root.barStyle.density || "native",
+                                attention: root.barStyle.attention || "semantic",
+                                form: root.barStyle.form || "continuous",
+                                visibility: root.barStyle.visibility || "native",
+                                profile: root.barStyle.profile || null,
+                                spec: spec
+                            }
+                            root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
+                        }
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Native surface"
+                        subtitle: "Quattro token readers"
+                        options: root.barSurfaceOptions
+                        selectedKey: root.barSpecValue("surface", "native")
+                        optionDescriptions: root.barOptionDescriptions("surface", root.barSurfaceOptions)
+                        onChoiceSelected: root.chooseBar("surface", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Density"
+                        subtitle: "Spacing and height"
+                        options: root.barDensityOptions
+                        selectedKey: root.barSpecValue("density", "native")
+                        optionDescriptions: root.barOptionDescriptions("density", root.barDensityOptions)
+                        onChoiceSelected: root.chooseBar("density", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Attention"
+                        subtitle: "Warnings and status"
+                        options: root.attentionOptions
+                        selectedKey: root.barSpecValue("attention", "semantic")
+                        optionDescriptions: root.barOptionDescriptions("attention", root.attentionOptions)
+                        onChoiceSelected: root.chooseBar("attention", key)
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: "THEME-BOUNDED BEHAVIOR"
+                        color: Color.foreground
+                        opacity: 0.5
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                        font.letterSpacing: 0.8
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Composition"
+                        subtitle: "Continuous, split, islands, dock, or rail"
+                        options: root.barProfileFormOptions
+                        selectedKey: root.barProfileValue("form", "continuous")
+                        optionDescriptions: root.barOptionDescriptions("form", root.barProfileFormOptions)
+                        onChoiceSelected: root.chooseBarProfile("form", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Visibility"
+                        subtitle: "When the themed layer is present"
+                        options: root.barProfileVisibilityOptions
+                        selectedKey: root.barProfileValue("visibility", "always")
+                        optionDescriptions: root.barOptionDescriptions("visibility", root.barProfileVisibilityOptions)
+                        onChoiceSelected: root.chooseBarProfile("visibility", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Reveal"
+                        subtitle: "How a hidden bar returns"
+                        options: root.barProfileRevealOptions
+                        selectedKey: root.barProfileValue("reveal", "edge")
+                        optionDescriptions: root.barOptionDescriptions("reveal", root.barProfileRevealOptions)
+                        onChoiceSelected: root.chooseBarProfile("reveal", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Expansion"
+                        subtitle: "Fixed, hover, focus, or adaptive"
+                        options: root.barProfileExpansionOptions
+                        selectedKey: root.barProfileValue("expansion", "none")
+                        optionDescriptions: root.barOptionDescriptions("expansion", root.barProfileExpansionOptions)
+                        onChoiceSelected: root.chooseBarProfile("expansion", key)
+                    }
+
+                    BarChoiceGroup {
+                        Layout.fillWidth: true
+                        title: "Workspace presentation"
+                        subtitle: "Visual treatment; native actions stay intact"
+                        options: root.barProfileWorkspaceOptions
+                        selectedKey: root.barProfileValue("workspace", "native")
+                        optionDescriptions: root.barOptionDescriptions("workspace", root.barProfileWorkspaceOptions)
+                        onChoiceSelected: root.chooseBarProfile("workspace", key)
+                    }
+
+                    BorderSurface {
+                        Layout.fillWidth: true
+                        implicitHeight: barBoundaryColumn.implicitHeight + Style.space(16)
+                        color: Util.alpha(Color.foreground, 0.025)
+                        radius: Math.max(Style.space(5), Style.cornerRadius / 2)
+                        borderSpec: Border.flat(Util.alpha(Color.popups.border, 0.58), 1)
+
+                        ColumnLayout {
+                            id: barBoundaryColumn
+                            anchors.fill: parent
+                            anchors.margins: Style.space(9)
+                            spacing: Style.space(2)
+                            Text { Layout.fillWidth: true; text: "OWNERSHIP"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.7 }
+                            Text { Layout.fillWidth: true; text: "The profile is applied additively and the user's shell.json plus native hidden-bar state are snapshotted for exact restore."; color: Color.foreground; opacity: 0.62; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                        }
                     }
                 }
             }

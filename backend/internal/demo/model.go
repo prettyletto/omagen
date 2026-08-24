@@ -4,6 +4,11 @@ import "time"
 
 const workspacePrefix = "__omagen_demo_"
 
+const (
+	ModeFull   = "full"
+	ModeWindow = "window"
+)
+
 type Slot string
 
 const (
@@ -15,6 +20,7 @@ const (
 
 type State struct {
 	SessionID           string          `json:"session_id"`
+	Mode                string          `json:"mode,omitempty"`
 	Workspace           string          `json:"workspace"`
 	DemoMonitor         string          `json:"demo_monitor"`
 	OriginMonitor       string          `json:"origin_monitor"`
@@ -36,6 +42,7 @@ func makeOwnerToken(sessionID string) string {
 type OpenResult struct {
 	OK        bool            `json:"ok"`
 	SessionID string          `json:"session_id"`
+	Mode      string          `json:"mode"`
 	Workspace string          `json:"workspace"`
 	Monitor   string          `json:"monitor"`
 	DemoDir   string          `json:"demo_dir"`
@@ -58,5 +65,13 @@ type CaptureResult struct {
 
 type SessionStatus struct {
 	Active  bool   `json:"active"`
+	Mode    string `json:"mode,omitempty"`
 	Monitor string `json:"monitor,omitempty"`
+}
+
+func normalizeMode(mode string) string {
+	if mode == ModeWindow {
+		return ModeWindow
+	}
+	return ModeFull
 }

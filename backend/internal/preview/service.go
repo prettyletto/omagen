@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
@@ -39,18 +40,46 @@ type Service struct {
 	sessions       *session.Store
 	applier        ThemeApplier
 	userThemesRoot string
+	bar            *barprofile.Store
 }
 
-func NewService(sessions *session.Store, applier ThemeApplier) (*Service, error) {
+func NewService(sessions *session.Store, applier ThemeApplier, barStores ...*barprofile.Store) (*Service, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolve user home: %w", err)
 	}
-	return newServiceWithThemeRoot(sessions, applier, filepath.Join(home, ".config", "omarchy", "themes")), nil
+	service := newServiceWithThemeRoot(sessions, applier, filepath.Join(home, ".config", "omarchy", "themes"))
+	if len(barStores) > 0 {
+		service.bar = barStores[0]
+	}
+	return service, nil
 }
 
 func newServiceWithThemeRoot(sessions *session.Store, applier ThemeApplier, root string) *Service {
 	return &Service{sessions: sessions, applier: applier, userThemesRoot: root}
+}
+
+func (s *Service) applyBarProfile(candidate string, record session.Record) (bool, error) {
+	if s.bar == nil {
+		return false, nil
+	}
+	if record.BarSnapshot != nil {
+		snapshot, err := s.bar.LoadSnapshot(record.SessionID)
+		if err != nil {
+			return false, fmt.Errorf("load bar baseline: %w", err)
+		}
+		if err := s.bar.Restore(snapshot); err != nil {
+			return false, fmt.Errorf("restore bar baseline: %w", err)
+		}
+	}
+	profile, err := barprofile.LoadProfile(filepath.Join(candidate, "omagen.bar.json"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, s.bar.Apply(profile)
 }
 
 func (s *Service) Apply(request Request) (result Result, err error) {
@@ -139,6 +168,9 @@ func (s *Service) ApplyCheckpoint(request Request) (result Result, err error) {
 		if _, err := verifier.VerifyNativeState(themeName); err != nil {
 			return Result{}, fmt.Errorf("verify reapplied preview theme %s: %w", themeName, err)
 		}
+	}
+	if _, err := s.applyBarProfile(candidate, record); err != nil {
+		return Result{}, fmt.Errorf("apply themed bar profile: %w", err)
 	}
 	applyStyleOverrides(&record, request.Styles)
 	record.PreviewVariant = string(request.Variant)
@@ -242,6 +274,9 @@ func (s *Service) applyLocked(request Request) (result Result, returnErr error) 
 			_, _ = journal.CompleteOperation(driverOperation.ID, protocol.StatusFailed, err.Error(), "native reader verification failed")
 			return Result{}, fmt.Errorf("verify preview theme %s: %w", themeName, err)
 		}
+	}
+	if _, err := s.applyBarProfile(candidate, record); err != nil {
+		return Result{}, fmt.Errorf("apply themed bar profile: %w", err)
 	}
 	if _, err := journal.CompleteOperation(driverOperation.ID, protocol.StatusSucceeded, "native theme driver reached critical state", driverEvidence); err != nil {
 		return Result{}, fmt.Errorf("complete preview driver protocol: %w", err)
@@ -448,16 +483,34 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		if err := theme.WriteHyprlandWithAnimations(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations); err != nil {
 			return fmt.Errorf("rewrite overridden hyprland style: %w", err)
 		}
-		if err := theme.WriteShell(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility); err != nil {
+		spec := styles.Bar.EffectiveBarSpec()
+		if err := theme.WriteShellWithOverridesAndSpec(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility, styles.Shell.Overrides, &spec); err != nil {
 			return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
+		}
+		if styles.Bar.Profile != nil {
+			if err := theme.WriteBarProfile(dir, *styles.Bar.Profile); err != nil {
+				return fmt.Errorf("rewrite bar profile: %w", err)
+			}
+		}
+		if err := theme.WriteBarSpec(dir, styles.Bar.EffectiveBarSpec()); err != nil {
+			return fmt.Errorf("rewrite bar spec: %w", err)
 		}
 		return nil
 	}
 	if !rewriteShell {
 		return nil
 	}
-	if err := theme.WriteShell(dir, palette, shellStyle.Surface, shellStyle.Detail, shellStyle.Tooltip, shellStyle.Notifications, barStyle.Surface, barStyle.Density, barStyle.Attention, barStyle.Form, barStyle.Visibility); err != nil {
+	spec := barStyle.EffectiveBarSpec()
+	if err := theme.WriteShellWithOverridesAndSpec(dir, palette, shellStyle.Surface, shellStyle.Detail, shellStyle.Tooltip, shellStyle.Notifications, barStyle.Surface, barStyle.Density, barStyle.Attention, barStyle.Form, barStyle.Visibility, shellStyle.Overrides, &spec); err != nil {
 		return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
+	}
+	if barStyle.Profile != nil {
+		if err := theme.WriteBarProfile(dir, *barStyle.Profile); err != nil {
+			return fmt.Errorf("rewrite bar profile: %w", err)
+		}
+	}
+	if err := theme.WriteBarSpec(dir, barStyle.EffectiveBarSpec()); err != nil {
+		return fmt.Errorf("rewrite bar spec: %w", err)
 	}
 	return nil
 }

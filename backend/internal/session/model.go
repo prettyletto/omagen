@@ -1,12 +1,21 @@
 package session
 
-import "time"
+import (
+	"maps"
+	"time"
+
+	"github.com/prettyletto/omagen/backend/internal/bar"
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
+)
 
 type ShellStyle struct {
 	Surface       string `json:"surface"`
 	Detail        string `json:"detail"`
 	Tooltip       string `json:"tooltip"`
 	Notifications string `json:"notifications"`
+	// Overrides contains additive section.key values for the native Quattro
+	// shell.toml reader. Empty maps preserve the active Omarchy defaults.
+	Overrides map[string]string `json:"overrides,omitempty"`
 }
 
 // DesktopStyle remains the window-level configuration used by existing
@@ -71,11 +80,16 @@ func (s AnimationsStyle) Valid() bool {
 }
 
 type BarStyle struct {
-	Surface    string `json:"surface"`
-	Density    string `json:"density"`
-	Attention  string `json:"attention"`
-	Form       string `json:"form"`
-	Visibility string `json:"visibility"`
+	Surface    string              `json:"surface"`
+	Density    string              `json:"density"`
+	Attention  string              `json:"attention"`
+	Form       string              `json:"form"`
+	Visibility string              `json:"visibility"`
+	Profile    *barprofile.Profile `json:"profile,omitempty"`
+	// Spec is the versioned appearance/behaviour document. The legacy fields
+	// stay serialized for old sessions and CLI callers; NormalizeBarStyle
+	// keeps both representations coherent during the migration.
+	Spec *bar.BarSpec `json:"spec,omitempty"`
 }
 
 func DefaultBarStyle() BarStyle {
@@ -100,6 +114,14 @@ func NormalizeBarStyle(s BarStyle) BarStyle {
 	if s.Visibility == "" {
 		s.Visibility = "native"
 	}
+	if s.Profile != nil {
+		profile := s.Profile.Normalize()
+		s.Profile = &profile
+	}
+	if s.Spec != nil {
+		spec := s.Spec.Normalize()
+		s.Spec = &spec
+	}
 	return s
 }
 
@@ -108,7 +130,60 @@ func (s BarStyle) Valid() bool {
 		validChoice(s.Density, "native", "compact", "comfortable") &&
 		validChoice(s.Attention, "semantic", "accent") &&
 		validChoice(s.Form, "continuous", "docked") &&
-		validChoice(s.Visibility, "native", "islands")
+		validChoice(s.Visibility, "native", "islands") &&
+		s.EffectiveBarSpec().Valid() &&
+		(s.Profile == nil || s.Profile.Valid())
+}
+
+// EffectiveBarSpec returns the versioned document without forcing legacy
+// sessions to rewrite their durable record. New callers may persist Spec;
+// older five-field bar_style records remain byte-compatible until edited.
+func (s BarStyle) EffectiveBarSpec() bar.BarSpec {
+	if s.Spec != nil {
+		return s.Spec.Normalize()
+	}
+	return migrateLegacyBarSpec(s)
+}
+
+func migrateLegacyBarSpec(s BarStyle) bar.BarSpec {
+	spec := bar.Default()
+	spec.Surface.Role = s.Surface
+	spec.Geometry.Density = s.Density
+	spec.Attention.Mode = s.Attention
+	spec.Topology = bar.TopologyContinuous
+	if s.Form == "docked" {
+		spec.Topology = bar.TopologySections
+	}
+	if s.Visibility == "islands" {
+		spec.Topology = bar.TopologySections
+	}
+	if s.Profile != nil {
+		behavior := s.Profile.Behavior
+		switch behavior.Form {
+		case "continuous":
+			spec.Topology = bar.TopologyContinuous
+		case "split":
+			spec.Topology = bar.TopologySplit
+		case "islands":
+			spec.Topology = bar.TopologyIslands
+		case "dock":
+			spec.Topology = bar.TopologyDock
+		case "rail":
+			spec.Topology = bar.TopologyRail
+		case "sections":
+			spec.Topology = bar.TopologySections
+		}
+		if s.Profile.Implementation == barprofile.ImplementationReplacement {
+			spec.Engine = bar.EngineOmagen
+		}
+		if behavior.Visibility == "auto-hide" {
+			spec.Behavior.Visibility = "auto_hide"
+		}
+		if behavior.Expansion != "none" {
+			spec.Behavior.HoverExpand = true
+		}
+	}
+	return spec.Normalize()
 }
 
 func DefaultDesktopStyle() DesktopStyle {
@@ -199,6 +274,9 @@ func NormalizeShellStyle(s ShellStyle) ShellStyle {
 	if s.Notifications == "" {
 		s.Notifications = "native"
 	}
+	if s.Overrides != nil {
+		s.Overrides = maps.Clone(s.Overrides)
+	}
 	return s
 }
 
@@ -242,24 +320,28 @@ type Record struct {
 	DesktopStyle       DesktopStyle    `json:"desktop_style,omitempty"`
 	BarStyle           BarStyle        `json:"bar_style,omitempty"`
 	AnimationsStyle    AnimationsStyle `json:"animations_style,omitempty"`
-	GenerationID       string          `json:"generation_id,omitempty"`
-	PreviewVariant     string          `json:"preview_variant,omitempty"`
-	ApplyPhase         ApplyPhase      `json:"apply_phase,omitempty"`
-	AppliedTheme       string          `json:"applied_theme,omitempty"`
-	AppliedGeneration  string          `json:"applied_generation,omitempty"`
-	AppliedVariant     string          `json:"applied_variant,omitempty"`
-	AppliedDisplayName string          `json:"applied_display_name,omitempty"`
+	// BarSnapshot preserves the exact pre-theme shell configuration, including
+	// fields this version does not understand, for reversible bar profiles.
+	BarSnapshot        *barprofile.Snapshot `json:"bar_snapshot,omitempty"`
+	GenerationID       string               `json:"generation_id,omitempty"`
+	PreviewVariant     string               `json:"preview_variant,omitempty"`
+	ApplyPhase         ApplyPhase           `json:"apply_phase,omitempty"`
+	AppliedTheme       string               `json:"applied_theme,omitempty"`
+	AppliedGeneration  string               `json:"applied_generation,omitempty"`
+	AppliedVariant     string               `json:"applied_variant,omitempty"`
+	AppliedDisplayName string               `json:"applied_display_name,omitempty"`
 }
 
 type BeginResult struct {
-	SessionID          string          `json:"session_id"`
-	OriginalTheme      string          `json:"original_theme"`
-	OriginalBackground BackgroundRef   `json:"original_background"`
-	ShellStyle         ShellStyle      `json:"shell_style"`
-	DesktopStyle       DesktopStyle    `json:"desktop_style"`
-	BarStyle           BarStyle        `json:"bar_style"`
-	AnimationsStyle    AnimationsStyle `json:"animations_style"`
-	ExtraConfigs       bool            `json:"extra_configs"`
+	SessionID          string               `json:"session_id"`
+	OriginalTheme      string               `json:"original_theme"`
+	OriginalBackground BackgroundRef        `json:"original_background"`
+	ShellStyle         ShellStyle           `json:"shell_style"`
+	DesktopStyle       DesktopStyle         `json:"desktop_style"`
+	BarStyle           BarStyle             `json:"bar_style"`
+	AnimationsStyle    AnimationsStyle      `json:"animations_style"`
+	ExtraConfigs       bool                 `json:"extra_configs"`
+	BarSnapshot        *barprofile.Snapshot `json:"bar_snapshot,omitempty"`
 }
 
 type ActiveRecord struct {

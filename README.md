@@ -138,7 +138,9 @@ After installation, click the Omagen widget in the Quattro bar:
 1. Choose an image.
 2. Optionally enable extra Window, Shell, and Bar configuration previews.
 3. Select a palette direction.
-4. Use **Test live**, **Demo**, or **Apply theme**.
+4. Use **Test live**, **Demo**, **Bar Demo**, or **Apply theme**. Bar Demo
+   previews the staged BarSpec motion and topology below the real native bar;
+   it does not replace Quattro's widgets or input ownership.
 
 Use **Cancel** to restore the original theme and background. If Omagen is
 interrupted during a preview, its next launch offers **Restore & close** or
@@ -165,6 +167,14 @@ decoration transparent, while the explicit Show islands policy can keep it
 visible over a transparent native bar. Native widgets, layout, and input remain
 Omarchy-owned. It falls back to the normal continuous bar when the active shell
 does not expose the geometry hooks required for the three section surfaces.
+
+Bar profiles are theme-bounded. A profile that only styles or decorates the
+native bar leaves the user's layout untouched. A profile that explicitly owns
+the layout or selects a replacement is applied through a reversible adapter:
+Omagen snapshots the exact user `shell.json` (and the native bar hidden toggle)
+before applying it, then restores that snapshot on Cancel, Restore, theme
+switch, or recovery. Replacement bars remain opt-in and must provide a native
+Quattro fallback.
 
 ## Documentation
 

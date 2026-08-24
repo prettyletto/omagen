@@ -14,6 +14,8 @@ if [[ "$OUTPUT" != /* ]]; then
     OUTPUT="$ROOT/$OUTPUT"
 fi
 
+STUDIO_OUTPUT="$(dirname -- "$OUTPUT")/omagen-studio"
+
 mkdir -p "$(dirname -- "$OUTPUT")"
 
 # Keep this command intentionally boring and explicit. The checked-in binary
@@ -35,6 +37,21 @@ mkdir -p "$(dirname -- "$OUTPUT")"
         -ldflags='-buildid=' \
         -o "$OUTPUT" \
         ./cmd/omagen
+
+    GOFLAGS= \
+    GOTOOLCHAIN="go$TOOLCHAIN_VERSION" \
+    GOEXPERIMENT=nodwarf5 \
+    CGO_ENABLED=0 \
+    GOOS=linux \
+    GOARCH=amd64 \
+    GOAMD64=v1 \
+    go build \
+        -mod=readonly \
+        -trimpath \
+        -buildvcs=false \
+        -ldflags='-buildid=' \
+        -o "$STUDIO_OUTPUT" \
+        ./cmd/omagen-studio
 )
 
-chmod +x "$OUTPUT"
+chmod +x "$OUTPUT" "$STUDIO_OUTPUT"

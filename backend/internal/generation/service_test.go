@@ -419,7 +419,7 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	}
 }
 
-func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
+func TestGenerateEmitsMergedShellAndSectionOverrides(t *testing.T) {
 	store := generationStore(t)
 	saveGenerationRecord(t, store, session.Record{
 		SessionID:          "styled-session",
@@ -445,8 +445,12 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 	}
 
 	sourceDir := filepath.Join(store.SessionDir("styled-session"), "generations", result.GenerationID, string(Source))
-	if _, err := os.Stat(filepath.Join(sourceDir, "shell.toml")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected generated root shell.toml: %v", err)
+	rootShell, err := os.ReadFile(filepath.Join(sourceDir, "shell.toml"))
+	if err != nil {
+		t.Fatalf("read generated root shell.toml: %v", err)
+	}
+	if !strings.Contains(string(rootShell), "[bar]\n") || !strings.Contains(string(rootShell), "[popups]\n") {
+		t.Fatalf("generated root shell.toml is missing merged sections:\n%s", rootShell)
 	}
 	for section, wants := range map[string][]string{
 		"bar":      {"background-alpha = 0.0", "size-horizontal = 30", "size-vertical = 32", "active = "},

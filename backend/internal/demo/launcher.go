@@ -37,6 +37,29 @@ func launchDemoSlots(demoDir, ownerToken string, slots []Slot, capabilities Capa
 	if err != nil {
 		return nil, err
 	}
+	return launchDemoCommands(launches, hints, slots, before, logger)
+}
+
+func launchWindowDemoSlot(demoDir, ownerToken string, slots []Slot, capabilities Capabilities, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
+	if capabilities.Terminal.Command == "" {
+		return nil, fmt.Errorf("window demo requires a terminal capability")
+	}
+	if len(slots) == 0 {
+		slots = []Slot{SlotEditor, SlotBtop}
+	}
+	launches := make([]slotLaunch, 0, len(slots))
+	for _, slot := range slots {
+		switch slot {
+		case SlotEditor, SlotBtop:
+			launches = append(launches, slotLaunch{Slot: slot, Cmd: buildWindowCommandFor(demoDir, ownerToken, slot, capabilities)})
+		default:
+			return nil, fmt.Errorf("window demo does not support slot %s", slot)
+		}
+	}
+	return launchDemoCommands(launches, launchHints{PIDs: map[Slot]int{}, OwnerToken: ownerToken}, slots, before, logger)
+}
+
+func launchDemoCommands(launches []slotLaunch, hints launchHints, slots []Slot, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
 	terminalExits := make(chan processExit, 4)
 	hints.terminalExits = terminalExits
 	for _, launch := range launches {
@@ -139,6 +162,29 @@ func buildEditorCommandFor(demoDir, token string, capabilities Capabilities) (*e
 	cmd := exec.Command(capabilities.Editor.Command, sample)
 	cmd.Dir = demoDir
 	return cmd, capabilities.Editor.Command
+}
+
+func buildWindowCommandFor(demoDir, token string, slot Slot, capabilities Capabilities) *exec.Cmd {
+	studioBinary := "omagen-studio"
+	if executable, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(executable), "omagen-studio")
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			studioBinary = candidate
+		}
+	}
+	return withColorTerminal(terminalCommand(capabilities.Terminal, demoAppID(token, slot), demoDir, studioBinary))
+}
+
+func withColorTerminal(cmd *exec.Cmd) *exec.Cmd {
+	filtered := make([]string, 0, len(cmd.Env)+2)
+	for _, entry := range cmd.Env {
+		if strings.HasPrefix(entry, "NO_COLOR=") || strings.HasPrefix(entry, "TERM=") || strings.HasPrefix(entry, "COLORTERM=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	cmd.Env = append(filtered, "TERM=xterm-256color", "COLORTERM=truecolor")
+	return cmd
 }
 func buildMonitorCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.Monitor.Command != "" {

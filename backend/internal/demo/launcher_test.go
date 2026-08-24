@@ -37,6 +37,38 @@ func TestBuildDemoLaunchesUsesResolvedPreferredApplications(t *testing.T) {
 	}
 }
 
+func TestBuildWindowCommandsUseStandaloneStudioForActiveAndInactive(t *testing.T) {
+	capabilities := Capabilities{Terminal: ApplicationCapability{Command: "omarchy-launch-tui", Source: CapabilitySourceOmarchy}}
+	for _, test := range []struct {
+		slot Slot
+		id   string
+	}{
+		{SlotEditor, "org.omagen.demo.abc123.editor"},
+		{SlotBtop, "org.omagen.demo.abc123.btop"},
+	} {
+		command := buildWindowCommandFor("/tmp/demo-scene", "abc123", test.slot, capabilities)
+		args := strings.Join(command.Args, " ")
+		if filepath.Base(command.Path) != "omarchy-launch-tui" {
+			t.Fatalf("%s path = %q, want Omarchy terminal launcher", test.slot, command.Path)
+		}
+		if !strings.Contains(args, "--app-id="+test.id) || !strings.Contains(args, "omagen-studio") {
+			t.Fatalf("%s command does not launch standalone Studio: %q", test.slot, args)
+		}
+		if strings.Contains(args, "fastfetch") || strings.Contains(args, "colors.toml") {
+			t.Fatalf("%s command still contains the old shell fixture: %q", test.slot, args)
+		}
+		if got := envValue(command.Env, "TERM"); got != "xterm-256color" {
+			t.Fatalf("%s TERM = %q, want xterm-256color", test.slot, got)
+		}
+		if got := envValue(command.Env, "COLORTERM"); got != "truecolor" {
+			t.Fatalf("%s COLORTERM = %q, want truecolor", test.slot, got)
+		}
+		if got := envValue(command.Env, "NO_COLOR"); got != "" {
+			t.Fatalf("%s still inherits NO_COLOR=%q", test.slot, got)
+		}
+	}
+}
+
 func TestBuildDemoLaunchesDegradesMissingSlotsToTerminal(t *testing.T) {
 	capabilities := Capabilities{
 		Terminal:    ApplicationCapability{Command: "omarchy-launch-tui", Source: CapabilitySourceOmarchy},
@@ -98,5 +130,20 @@ func TestMissingSlotsAndMergeWindows(t *testing.T) {
 	merged := mergeWindows(base, map[Slot]string{SlotBtop: "btop-address", SlotFiles: "files-address"})
 	if len(merged) != 4 || merged[SlotEditor] != "editor-address" || merged[SlotFiles] != "files-address" {
 		t.Fatalf("merged windows = %#v", merged)
+	}
+}
+
+func TestMissingWindowDemoSlotsRequiresActiveAndInactiveTerminals(t *testing.T) {
+	if got := missingSlotsForMode(ModeWindow, map[Slot]string{}); len(got) != 2 || got[0] != SlotEditor || got[1] != SlotBtop {
+		t.Fatalf("missing empty Window Demo slots = %#v", got)
+	}
+	if got := missingSlotsForMode(ModeWindow, map[Slot]string{SlotEditor: "editor-address"}); len(got) != 1 || got[0] != SlotBtop {
+		t.Fatalf("missing inactive Window Demo slots = %#v", got)
+	}
+	if got := missingSlotsForMode(ModeWindow, map[Slot]string{SlotBtop: "btop-address"}); len(got) != 1 || got[0] != SlotEditor {
+		t.Fatalf("missing active Window Demo slots = %#v", got)
+	}
+	if got := missingSlotsForMode(ModeWindow, map[Slot]string{SlotEditor: "editor-address", SlotBtop: "btop-address"}); len(got) != 0 {
+		t.Fatalf("missing complete Window Demo slots = %#v", got)
 	}
 }

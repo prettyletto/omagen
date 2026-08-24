@@ -14,6 +14,29 @@ The live operation seam is recorded in the
 checkpoints and streams them to observers without taking ownership of native
 desktop rollback.
 
+## Theme-bounded bar profiles
+
+Bar styling is represented by the generated `omagen.bar.json` profile. Its
+ownership is explicit: `inherit` changes no user layout, `overlay` merges only
+theme-owned bar fields, and `theme-owned` may replace the complete bar object
+for an opt-in replacement implementation. The backend's bar-profile store
+captures the exact user `~/.config/omarchy/shell.json` bytes before a profile
+transaction, including unknown fields and the native `bar-off` toggle, and
+restores them during Cancel, Restore, theme switching, or crash recovery.
+
+This keeps theme identity separate from persistent machine preference. The
+native Quattro bar remains the fallback unless a profile explicitly selects a
+replacement plugin.
+
+The Bar Lab also emits `omagen.bar.spec.json`, a versioned `BarSpec v2`
+document. It is the source of truth for bar surface primitives, geometry,
+topology, behaviour, attention, and motion; the compiler records whether the
+spec can stay on the native Quattro reader or needs Omagen's additive
+decoration adapter. Legacy five-field `bar_style` sessions are normalized into
+an effective spec without rewriting their durable record until the user edits
+the bar. Widget placement remains outside this document and stays owned by
+Quattro's canonical `shell.json`.
+
 ## Omarchy plugin contract
 
 The root [manifest.json](../manifest.json) is the package contract:

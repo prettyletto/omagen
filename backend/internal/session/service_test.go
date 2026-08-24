@@ -1,8 +1,12 @@
 package session
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 )
 
 type fakeOmarchy struct {
@@ -54,6 +58,38 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 	if _, err := s.Load(begin.SessionID); err == nil {
 		t.Fatal("session was not deleted")
+	}
+}
+
+func TestServiceRestoresThemeBoundBarSnapshot(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "shell.json")
+	original := []byte("{\n  \"version\": 1,\n  \"bar\": {\"layout\": {\"left\": [{\"id\": \"user.widget\", \"future\": true}]}}\n}\n")
+	if err := os.WriteFile(config, original, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	barStore := barprofile.NewStoreAt(config, filepath.Join(root, "bar-state"))
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	service := NewService(testStore(t), fake, barStore)
+	begin, err := service.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if begin.BarSnapshot == nil || begin.BarSnapshot.ConfigSHA256 == "" {
+		t.Fatalf("bar snapshot missing: %#v", begin.BarSnapshot)
+	}
+	if err := os.WriteFile(config, []byte("{\"bar\":{\"id\":\"pretty.theme.bar\"}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restored) != string(original) {
+		t.Fatalf("bar snapshot was not restored:\nwant %q\ngot  %q", original, restored)
 	}
 }
 
