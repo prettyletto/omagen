@@ -8,6 +8,8 @@ import (
 	"os"
 	"reflect"
 	"time"
+
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 )
 
 type Omarchy interface {
@@ -20,12 +22,25 @@ type Omarchy interface {
 type Service struct {
 	store   *Store
 	omarchy Omarchy
+	bar     barSnapshotStore
 }
 
 func (s *Service) Store() *Store { return s.store }
 
-func NewService(store *Store, omarchy Omarchy) *Service {
-	return &Service{store: store, omarchy: omarchy}
+type barSnapshotStore interface {
+	Capture(theme string) (barprofile.Snapshot, error)
+	LoadSnapshot(sessionID string) (barprofile.Snapshot, error)
+	Restore(snapshot barprofile.Snapshot) error
+	SaveSnapshot(sessionID string, snapshot barprofile.Snapshot) error
+	DeleteSnapshot(sessionID string) error
+}
+
+func NewService(store *Store, omarchy Omarchy, barStores ...barSnapshotStore) *Service {
+	var bar barSnapshotStore
+	if len(barStores) > 0 {
+		bar = barStores[0]
+	}
+	return &Service{store: store, omarchy: omarchy, bar: bar}
 }
 
 func (s *Service) Begin(styles ...any) (BeginResult, error) {
@@ -96,6 +111,20 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 		}
 		now := time.Now().UTC()
 		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, CreatedAt: now}
+		var capturedBarSnapshot *barprofile.Snapshot
+		if s.bar != nil {
+			snapshot, snapshotErr := s.bar.Capture(theme)
+			if snapshotErr != nil {
+				return BeginResult{}, fmt.Errorf("capture user bar: %w", snapshotErr)
+			}
+			// Keep the durable session record small. The full shell.json bytes live
+			// in the separately checksummed bar snapshot file; the record carries
+			// only its metadata for status/resume responses.
+			recordSnapshot := snapshot
+			recordSnapshot.Config = nil
+			record.BarSnapshot = &recordSnapshot
+			capturedBarSnapshot = &snapshot
+		}
 		if err := s.store.Save(record); err != nil {
 			return BeginResult{}, fmt.Errorf("persist session: %w", err)
 		}
@@ -103,7 +132,13 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			_ = s.store.Delete(sessionID)
 			return BeginResult{}, fmt.Errorf("persist active session: %w", err)
 		}
-		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, ExtraConfigs: extraConfigs}, nil
+		if s.bar != nil && capturedBarSnapshot != nil {
+			if err := s.bar.SaveSnapshot(sessionID, *capturedBarSnapshot); err != nil {
+				_ = s.store.Delete(sessionID)
+				return BeginResult{}, fmt.Errorf("persist user bar snapshot: %w", err)
+			}
+		}
+		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, ExtraConfigs: extraConfigs, BarSnapshot: record.BarSnapshot}, nil
 	})
 }
 
@@ -218,6 +253,17 @@ func (s *Service) restoreAndVerify(record Record) error {
 	if !reflect.DeepEqual(background, record.OriginalBackground) {
 		return fmt.Errorf("verify restored background: got %#v, want %#v", background, record.OriginalBackground)
 	}
+	if s.bar != nil && record.BarSnapshot != nil {
+		snapshot := *record.BarSnapshot
+		if persisted, err := s.bar.LoadSnapshot(record.SessionID); err == nil {
+			snapshot = persisted
+		} else if snapshot.ConfigExists && len(snapshot.Config) == 0 {
+			return fmt.Errorf("load user bar snapshot: %w", err)
+		}
+		if err := s.bar.Restore(snapshot); err != nil {
+			return fmt.Errorf("restore user bar: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -225,6 +271,11 @@ func (s *Service) finishRestoredSession(sessionID string) error {
 	record, err := s.store.Load(sessionID)
 	if err != nil {
 		return fmt.Errorf("load completed session: %w", err)
+	}
+	if s.bar != nil {
+		if err := s.bar.DeleteSnapshot(sessionID); err != nil {
+			return fmt.Errorf("remove bar snapshot: %w", err)
+		}
 	}
 	if err := s.store.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)

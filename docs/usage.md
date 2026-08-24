@@ -67,6 +67,14 @@ settings** and move between the four engines:
   notification feedback surfaces.
 - **Bar** controls the form, surface, density, attention color, and Docked
   visibility policy while preserving native Quattro layout behavior.
+- Advanced bar profiles can additionally stage split/island/dock/rail form,
+  auto-hide and reveal, hover expansion, and workspace presentation. These are
+  theme-bounded: a profile is applied through the reversible bar adapter, and
+  the user's shell layout is restored with the session.
+- **Bar Demo** opens an interactive reader surface below the real native bar.
+  It animates the staged BarSpec duration/easing, exercises hover expansion and
+  auto-hide when selected, and shows the requested topology, placement, surface,
+  and geometry. It never replaces the native bar or captures its widget input.
 - **Animations** controls window, workspace, and border motion plus reduced motion.
 
 Every choice is staged in the current session. Use **Test Live composition**

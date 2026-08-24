@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "qml/components" as Components
@@ -135,8 +136,75 @@ BarWidget {
     implicitHeight: barSize
 
     Components.DockedBarSurface {
+        id: dockedSurface
         anchorItem: root
         bar: root.bar
+    }
+
+    readonly property bool themedAutoHide: dockedSurface.specAutoHide || (dockedSurface.profileResolved && dockedSurface.profileVisibility === "auto-hide")
+    readonly property string barTogglePath: Quickshell.env("XDG_STATE_HOME") !== ""
+        ? Quickshell.env("XDG_STATE_HOME") + "/omarchy/toggles/bar-off"
+        : Quickshell.env("HOME") + "/.local/state/omarchy/toggles/bar-off"
+
+    // Quattro already owns hidden-state parking and exclusion. This adapter
+    // only provides a bounded edge reveal and inactivity timer for a themed
+    // profile; widget input and popouts remain native.
+    Process {
+        id: showBarProcess
+        command: ["rm", "-f", root.barTogglePath]
+    }
+    Process {
+        id: hideBarProcess
+        command: ["touch", root.barTogglePath]
+    }
+
+    Timer {
+        id: autoHideTimer
+        interval: 1200
+        repeat: false
+        running: root.themedAutoHide && root.bar && root.bar.barHidden !== true
+        onTriggered: {
+            if (!root.themedAutoHide || !root.bar || root.bar.barHovered === true || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
+                return
+            hideBarProcess.running = true
+        }
+    }
+
+    Connections {
+        target: root.bar
+        function onBarHoveredChanged() {
+            if (!root.themedAutoHide)
+                return
+            if (root.bar.barHovered === true) {
+                autoHideTimer.stop()
+                if (root.bar.barHidden === true)
+                    showBarProcess.running = true
+            } else {
+                autoHideTimer.restart()
+            }
+        }
+    }
+
+    PanelWindow {
+        id: revealEdge
+        visible: root.themedAutoHide && dockedSurface.profileReveal === "edge"
+        screen: root.bar && root.bar.targetWindow ? root.bar.targetWindow(root) ? root.bar.targetWindow(root).screen : null : null
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "pretty-omagen-bar-reveal"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        anchors {
+            top: root.bar && (root.bar.position === "top" || root.bar.vertical)
+            bottom: root.bar && (root.bar.position === "bottom" || root.bar.vertical)
+            left: root.bar && (root.bar.position === "left" || !root.bar.vertical)
+            right: root.bar && (root.bar.position === "right" || !root.bar.vertical)
+        }
+        implicitWidth: root.bar && root.bar.vertical ? root.bar.barSize : 0
+        implicitHeight: root.bar && !root.bar.vertical ? Style.space(4) : 0
+        HoverHandler {
+            onHoveredChanged: if (hovered && root.bar && root.bar.barHidden === true) showBarProcess.running = true
+        }
     }
 
     Timer {

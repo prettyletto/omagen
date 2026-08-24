@@ -45,6 +45,7 @@ section "CLI smoke tests"
 "$BIN" --help >/dev/null || fail "omagen --help failed"
 "$BIN" help >/dev/null || fail "omagen help failed"
 "$BIN" demo capabilities | python3 -m json.tool >/dev/null
+"$ROOT/bin/omagen-studio" --help >/dev/null
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
 python3 - "$capabilities" <<'PY'
@@ -92,10 +93,17 @@ required=(
     "OmagenBarWidget.qml"
     "manifest.json"
     "bin/omagen"
+    "bin/omagen-studio"
     "qml/services/BackendService.qml"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"
     "qml/views/LiveCanvasPanel.qml"
+    "qml/views/ShellDemoPanel.qml"
+    "qml/views/BarDemoPanel.qml"
+    "qml/components/ShellLab.qml"
+    "qml/components/ShellValueField.qml"
+    "qml/components/ShellRangeField.qml"
+    "qml/components/ShellColorField.qml"
 )
 for relative in "${required[@]}"; do
     [[ -e "$ROOT/$relative" ]] || fail "missing required file: $relative"

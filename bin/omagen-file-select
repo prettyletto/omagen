@@ -1,0 +1,215 @@
+#!/usr/bin/python3
+
+# Omagen's source-derived file chooser wrapper.
+#
+# This follows Omarchy's omarchy-file-select portal boundary and only adds an
+# initial-directory hint plus a small per-user last-directory state file. The
+# original Omarchy wrapper remains the compatibility fallback when the bundled
+# portal client cannot be initialized.
+
+import argparse
+import os
+import shutil
+import sys
+import tempfile
+
+
+ANSWER_TIMEOUT_SEC = 600
+EXIT_NOTHING_PICKED = 1
+EXIT_CHOOSER_FAILED = 2
+STATE_FILE_NAME = "file-picker-directory"
+
+
+def native_arguments(args):
+    result = []
+    if args.title != "Select file":
+        result.extend(("--title", args.title))
+    if args.multiple:
+        result.append("--multiple")
+    if args.directory:
+        result.append("--directory")
+    if args.extensions:
+        result.extend(("--extensions", args.extensions))
+    return result
+
+
+def fallback(native_args):
+    original = shutil.which("omarchy-file-select")
+    if original:
+        os.execv(original, [original, *native_args])
+
+    omarchy = shutil.which("omarchy")
+    if omarchy:
+        os.execv(omarchy, [omarchy, "file", "select", *native_args])
+
+    print("omagen-file-select: original Omarchy file picker is unavailable", file=sys.stderr)
+    return EXIT_CHOOSER_FAILED
+
+
+def state_path():
+    state_home = os.environ.get("XDG_STATE_HOME", "")
+    if not os.path.isabs(state_home):
+        state_home = os.path.join(os.path.expanduser("~"), ".local", "state")
+    return os.path.join(state_home, "omagen", STATE_FILE_NAME)
+
+
+def read_last_directory():
+    try:
+        with open(state_path(), "r", encoding="utf-8") as state:
+            candidate = state.read(4096).strip()
+    except OSError:
+        return ""
+    return usable_directory(candidate)
+
+
+def usable_directory(candidate):
+    if not candidate:
+        return ""
+    candidate = os.path.realpath(os.path.expanduser(candidate))
+    return candidate if os.path.isdir(candidate) else ""
+
+
+def write_last_directory(directory):
+    directory = usable_directory(directory)
+    if not directory:
+        return
+
+    destination = state_path()
+    parent = os.path.dirname(destination)
+    try:
+        os.makedirs(parent, mode=0o700, exist_ok=True)
+        fd, temporary = tempfile.mkstemp(prefix=f".{STATE_FILE_NAME}.", dir=parent, text=True)
+        try:
+            os.fchmod(fd, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as state:
+                state.write(directory + "\n")
+            os.replace(temporary, destination)
+        except Exception:
+            try:
+                os.unlink(temporary)
+            except OSError:
+                pass
+            raise
+    except OSError:
+        # Remembering a folder is an enhancement. A read-only or unavailable
+        # state root must not make the native chooser unusable.
+        pass
+
+
+def selected_directory(path, directory_mode):
+    path = os.path.realpath(path)
+    return path if directory_mode else os.path.dirname(path)
+
+
+def choose(args):
+    import gi
+
+    gi.require_version("Gio", "2.0")
+    gi.require_version("GLib", "2.0")
+    from gi.repository import Gio, GLib
+
+    bus = Gio.bus_get_sync(Gio.BusType.SESSION, None)
+    loop = GLib.MainLoop()
+    uris = []
+
+    def on_response(connection, sender, path, interface, signal, params):
+        code, results = params.unpack()
+        if code == 0:
+            uris.extend(results.get("uris", []))
+        loop.quit()
+
+    def subscribe(path):
+        bus.signal_subscribe(
+            "org.freedesktop.portal.Desktop",
+            "org.freedesktop.portal.Request",
+            "Response",
+            path,
+            None,
+            Gio.DBusSignalFlags.NONE,
+            on_response,
+        )
+
+    token = "omagen%d" % os.getpid()
+    sender = bus.get_unique_name()[1:].replace(".", "_")
+    predicted = "/org/freedesktop/portal/desktop/request/%s/%s" % (sender, token)
+    subscribe(predicted)
+
+    options = {
+        "handle_token": GLib.Variant("s", token),
+        "multiple": GLib.Variant("b", args.multiple),
+    }
+
+    initial_directory = usable_directory(args.initial_directory) or read_last_directory()
+    if initial_directory:
+        options["current_folder"] = GLib.Variant("ay", initial_directory.encode() + b"\0")
+
+    if args.directory:
+        options["directory"] = GLib.Variant("b", True)
+
+    if args.extensions and not args.directory:
+        exts = [ext.lstrip(".").lower() for ext in args.extensions.split()]
+        patterns = [(0, "*." + ext) for ext in exts] + [(0, "*." + ext.upper()) for ext in exts]
+        label = " ".join("*." + ext for ext in exts)
+        filters = GLib.Variant("a(sa(us))", [(label, patterns)])
+        options["filters"] = filters
+        options["current_filter"] = GLib.Variant("(sa(us))", (label, patterns))
+
+    handle = bus.call_sync(
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        "org.freedesktop.portal.FileChooser",
+        "OpenFile",
+        GLib.Variant("(ssa{sv})", ("", args.title, options)),
+        None,
+        Gio.DBusCallFlags.NONE,
+        -1,
+        None,
+    ).unpack()[0]
+
+    if handle != predicted:
+        subscribe(handle)
+
+    GLib.timeout_add_seconds(ANSWER_TIMEOUT_SEC, loop.quit)
+    loop.run()
+
+    paths = [GLib.filename_from_uri(uri)[0] for uri in uris]
+    for path in paths:
+        print(path)
+    if paths:
+        write_last_directory(selected_directory(paths[0], args.directory))
+
+    return 0 if paths else EXIT_NOTHING_PICKED
+
+
+def parse_arguments(argv):
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("directory_argument", nargs="?", default="")
+    parser.add_argument("--title", default="Select file")
+    parser.add_argument("--multiple", action="store_true")
+    parser.add_argument("--directory", action="store_true")
+    parser.add_argument("--initial-directory", dest="initial_directory", default="")
+    parser.add_argument("--extensions", default="")
+    args, unknown = parser.parse_known_args(argv)
+    if unknown:
+        print("omagen-file-select: unknown option %s" % unknown[0], file=sys.stderr)
+        return None
+    if args.directory_argument and args.initial_directory:
+        print("omagen-file-select: provide a directory either positionally or with --initial-directory", file=sys.stderr)
+        return None
+    args.initial_directory = args.initial_directory or args.directory_argument
+    return args
+
+
+def main(argv=None):
+    args = parse_arguments(sys.argv[1:] if argv is None else argv)
+    if args is None:
+        return EXIT_CHOOSER_FAILED
+
+    try:
+        return choose(args)
+    except Exception:
+        return fallback(native_arguments(args))
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -4,20 +4,26 @@ import Quickshell.Io
 Item {
     id: root
 
+    property string executable: ""
+
     signal selected(string path)
     signal cancelled()
     signal failed(string message)
 
-    function choose() {
-        picker.exec([
-            "omarchy",
-            "file",
-            "select",
+    function choose(directory) {
+        var command = root.executable !== "" ? root.executable : "omarchy"
+        var args = root.executable !== ""
+            ? [command]
+            : [command, "file", "select"]
+        if (directory && root.executable !== "")
+            args.push("--initial-directory", directory)
+        args.push(
             "--title",
             "Choose a PNG or JPEG image for Omagen",
             "--extensions",
             "png jpg jpeg"
-        ]);
+        )
+        picker.exec(args)
     }
 
     Process {

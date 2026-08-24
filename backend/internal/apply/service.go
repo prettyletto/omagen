@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
@@ -52,19 +53,47 @@ type Service struct {
 	applier          ThemeApplier
 	themesRoot       string
 	currentThemeRoot string
+	bar              *barprofile.Store
 }
 
-func NewService(sessions *session.Store, applier ThemeApplier) (*Service, error) {
+func NewService(sessions *session.Store, applier ThemeApplier, barStores ...*barprofile.Store) (*Service, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("resolve user home: %w", err)
 	}
-	return &Service{
+	service := &Service{
 		sessions:         sessions,
 		applier:          applier,
 		themesRoot:       filepath.Join(home, ".config", "omarchy", "themes"),
 		currentThemeRoot: filepath.Join(home, ".local", "state", "omarchy", "current", "theme"),
-	}, nil
+	}
+	if len(barStores) > 0 {
+		service.bar = barStores[0]
+	}
+	return service, nil
+}
+
+func (s *Service) applyBarProfile(themeRoot string, record session.Record) (bool, error) {
+	if s.bar == nil {
+		return false, nil
+	}
+	if record.BarSnapshot != nil {
+		snapshot, err := s.bar.LoadSnapshot(record.SessionID)
+		if err != nil {
+			return false, fmt.Errorf("load bar baseline: %w", err)
+		}
+		if err := s.bar.Restore(snapshot); err != nil {
+			return false, fmt.Errorf("restore bar baseline: %w", err)
+		}
+	}
+	profile, err := barprofile.LoadProfile(filepath.Join(themeRoot, "omagen.bar.json"))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, s.bar.Apply(profile)
 }
 
 func (s *Service) Apply(r Request) (Result, error) {
@@ -261,6 +290,15 @@ func (s *Service) Apply(r Request) (Result, error) {
 	}
 	if _, err := journal.Progress(operation.ID, "critical live state observed", driverEvidence, nil); err != nil {
 		return Result{}, fmt.Errorf("record apply promotion: %w", err)
+	}
+	barProfileApplied, err := s.applyBarProfile(destination, record)
+	if err != nil {
+		return Result{}, fmt.Errorf("apply themed bar profile: %w", err)
+	}
+	if barProfileApplied {
+		if _, err := journal.Progress(operation.ID, "theme bar profile applied", "user shell layout transaction completed", nil); err != nil {
+			return Result{}, fmt.Errorf("record bar profile application: %w", err)
+		}
 	}
 	state, err := json.Marshal(map[string]string{
 		"theme_name":    name.Slug,

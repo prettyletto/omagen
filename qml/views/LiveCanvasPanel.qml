@@ -15,12 +15,13 @@ PanelWindow {
     property bool workspaceReady: false
     property bool demoBusy: false
     property bool demoActive: false
+    property string demoMode: "none"
     property bool cancelBusy: false
     property bool applyBusy: false
     property bool extraConfigsEnabled: false
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
     property bool applyRecoveryRequired: false
     property bool protocolCanBack: false
@@ -41,9 +42,11 @@ PanelWindow {
     property bool moreColorsOpen: false
     property string expandedColorGroup: "surfaces"
     property bool advancedEditorOpen: false
+    property int advancedSection: 0
     readonly property string inactiveStyle: desktopStyle.inactiveStyle || desktopStyle.inactive_style || "native"
     readonly property bool frostedBackdropEnabled: inactiveStyle === "blur" || inactiveStyle.indexOf("frosted_") === 0
-    readonly property real frostedBackdropOpacity: inactiveStyle === "frosted_rich" ? 0.46
+    readonly property real frostedBackdropOpacity: inactiveStyle === "native" ? 1.0
+        : inactiveStyle === "frosted_rich" ? 0.46
         : inactiveStyle === "frosted_balanced" || inactiveStyle === "blur" ? 0.56
         : inactiveStyle === "frosted_light" ? 0.68 : 0.97
 
@@ -105,6 +108,12 @@ PanelWindow {
     signal hideRequested()
     signal closeCanvasRequested()
     signal startDemoRequested()
+    signal windowDemoRequested()
+    signal windowDemoStopRequested()
+    signal shellDemoRequested()
+    signal shellDemoStopRequested()
+    signal barDemoRequested()
+    signal barDemoStopRequested()
     signal cancelRequested()
     signal variantRequested(string variant)
     signal colorTestLiveRequested(string variant, var overrides, var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
@@ -681,6 +690,15 @@ PanelWindow {
                 onStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
                     root.advancedStylesChanged(shellStyle, desktopStyle, barStyle, animationsStyle)
                 }
+                onSectionChanged: function(index) {
+                    root.advancedSection = index
+                    if (index !== 0 && root.demoActive && root.demoMode === "window")
+                        root.windowDemoStopRequested()
+                    if (index !== 1 && root.demoActive && root.demoMode === "shell")
+                        root.shellDemoStopRequested()
+                    if (index !== 2 && root.demoActive && root.demoMode === "bar")
+                        root.barDemoStopRequested()
+                }
             }
 
             Rectangle {
@@ -802,7 +820,7 @@ PanelWindow {
         Rectangle {
             id: actionFooter
             z: 4
-            height: Style.space(146)
+            height: footerColumn.implicitHeight + Style.space(20)
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.bottom: parent.bottom
@@ -811,6 +829,7 @@ PanelWindow {
             border.width: 1
 
             ColumnLayout {
+                id: footerColumn
                 anchors.fill: parent
                 anchors.margins: Style.space(10)
                 spacing: Style.space(5)
@@ -858,6 +877,53 @@ PanelWindow {
                         enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.demoActive ? root.closeCanvasRequested() : root.startDemoRequested()
                     }
+
+                    Button {
+                        Layout.fillWidth: true
+                        visible: root.advancedEditorOpen && root.advancedSection === 0
+                        text: root.demoBusy
+                            ? (root.demoActive && root.demoMode === "window" ? "Stopping Window…" : "Opening Window…")
+                            : (root.demoActive && root.demoMode === "window" ? "Stop Window Demo" : "Window Demo")
+                        foreground: Color.foreground
+                        background: root.demoActive && root.demoMode === "window" ? Util.alpha(Color.accent, 0.16) : Util.alpha(Color.foreground, 0.045)
+                        accent: Color.accent
+                        bordered: true
+                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        onClicked: root.windowDemoRequested()
+                    }
+
+                    Button {
+                        Layout.fillWidth: true
+                        visible: root.advancedEditorOpen && root.advancedSection === 1
+                        text: root.demoBusy
+                            ? (root.demoActive && root.demoMode === "shell" ? "Stopping Shell…" : "Opening Shell…")
+                            : (root.demoActive && root.demoMode === "shell" ? "Stop Shell Demo" : "Shell Demo")
+                        foreground: Color.foreground
+                        background: root.demoActive && root.demoMode === "shell" ? Util.alpha(Color.accent, 0.16) : Util.alpha(Color.foreground, 0.045)
+                        accent: Color.accent
+                        bordered: true
+                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        onClicked: root.shellDemoRequested()
+                    }
+
+                    Button {
+                        Layout.fillWidth: true
+                        visible: root.advancedEditorOpen && root.advancedSection === 2
+                        text: root.demoBusy
+                            ? (root.demoActive && root.demoMode === "bar" ? "Stopping Bar…" : "Opening Bar…")
+                            : (root.demoActive && root.demoMode === "bar" ? "Stop Bar Demo" : "Bar Demo")
+                        foreground: Color.foreground
+                        background: root.demoActive && root.demoMode === "bar" ? Util.alpha(Color.accent, 0.16) : Util.alpha(Color.foreground, 0.045)
+                        accent: Color.accent
+                        bordered: true
+                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        onClicked: root.barDemoRequested()
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(5)
 
                     Button {
                         Layout.fillWidth: true

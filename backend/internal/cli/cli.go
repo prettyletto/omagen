@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
+	"github.com/prettyletto/omagen/backend/internal/bar"
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/cleanup"
 	"github.com/prettyletto/omagen/backend/internal/demo"
 	"github.com/prettyletto/omagen/backend/internal/generation"
@@ -44,6 +46,7 @@ type resumeResponse struct {
 	GenerationID           string                        `json:"generation_id,omitempty"`
 	WorkspaceResumable     bool                          `json:"workspace_resumable"`
 	CanvasActive           bool                          `json:"canvas_active"`
+	CanvasMode             string                        `json:"canvas_mode,omitempty"`
 	CanvasMonitor          string                        `json:"canvas_monitor,omitempty"`
 	PreviewVariant         string                        `json:"preview_variant,omitempty"`
 	ShellStyle             session.ShellStyle            `json:"shell_style,omitempty"`
@@ -85,12 +88,16 @@ func Run(
 	}
 
 	omarchyClient := omarchy.NewClient(stderr)
-	sessionService := session.NewService(store, omarchyClient)
-	previewService, err := preview.NewService(store, omarchyClient)
+	barStore, err := barprofile.NewStore()
+	if err != nil {
+		return fail(stderr, 1, "initialize bar profile store: %v", err)
+	}
+	sessionService := session.NewService(store, omarchyClient, barStore)
+	previewService, err := preview.NewService(store, omarchyClient, barStore)
 	if err != nil {
 		return fail(stderr, 1, "initialize preview service: %v", err)
 	}
-	applyService, err := apply.NewService(store, omarchyClient)
+	applyService, err := apply.NewService(store, omarchyClient, barStore)
 	if err != nil {
 		return fail(stderr, 1, "initialize apply service: %v", err)
 	}
@@ -99,14 +106,13 @@ func Run(
 		return fail(stderr, 1, "resolve user home: %v", err)
 	}
 	cleanupService := cleanup.NewService(store, filepath.Join(home, ".config", "omarchy", "themes"))
-
 	generationService := generation.NewServiceWithBaselineRestorer(store, settingsStore, omarchyClient)
 	demoService := demo.NewService(store)
 
 	switch args[0] {
 	case "--help", "-h", "help":
 		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
-		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, protocol, ping")
+		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, bar, protocol, ping")
 		return 0
 	case "ping":
 		return writeJSON(
@@ -164,6 +170,8 @@ func Run(
 
 	case "settings":
 		return runSettings(args[1:], settingsStore, stdout, stderr)
+	case "bar":
+		return runBar(args[1:], barStore, omarchyClient, stdout, stderr)
 	case "protocol":
 		return runProtocol(args[1:], store, previewService, stdout, stderr)
 
@@ -174,6 +182,62 @@ func Run(
 			"unknown command: %s",
 			args[0],
 		)
+	}
+}
+
+type barInspectResponse struct {
+	SchemaVersion int    `json:"schema_version"`
+	Theme         string `json:"theme,omitempty"`
+	ConfigPath    string `json:"config_path"`
+	ConfigExists  bool   `json:"config_exists"`
+	ConfigMode    uint32 `json:"config_mode,omitempty"`
+	ConfigSHA256  string `json:"config_sha256,omitempty"`
+}
+
+func runBar(args []string, store *barprofile.Store, native interface{ CurrentTheme() (string, error) }, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "usage: omagen bar {inspect|apply-profile|restore} ...")
+	}
+	switch args[0] {
+	case "inspect":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen bar inspect")
+		}
+		theme, err := native.CurrentTheme()
+		if err != nil {
+			return fail(stderr, 1, "inspect current theme: %v", err)
+		}
+		snapshot, err := store.Capture(theme)
+		if err != nil {
+			return fail(stderr, 1, "inspect bar: %v", err)
+		}
+		return writeJSON(stdout, stderr, barInspectResponse{SchemaVersion: snapshot.SchemaVersion, Theme: snapshot.Theme, ConfigPath: snapshot.ConfigPath, ConfigExists: snapshot.ConfigExists, ConfigMode: snapshot.ConfigMode, ConfigSHA256: snapshot.ConfigSHA256})
+	case "apply-profile":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen bar apply-profile <profile.json>")
+		}
+		profile, err := barprofile.LoadProfile(args[1])
+		if err != nil {
+			return fail(stderr, 2, "load bar profile: %v", err)
+		}
+		if err := store.Apply(profile); err != nil {
+			return fail(stderr, 1, "apply bar profile: %v", err)
+		}
+		return writeJSON(stdout, stderr, profile)
+	case "restore":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen bar restore <session_id>")
+		}
+		snapshot, err := store.LoadSnapshot(args[1])
+		if err != nil {
+			return fail(stderr, 1, "load bar snapshot: %v", err)
+		}
+		if err := store.Restore(snapshot); err != nil {
+			return fail(stderr, 1, "restore bar snapshot: %v", err)
+		}
+		return writeJSON(stdout, stderr, map[string]any{"restored": true, "session_id": args[1]})
+	default:
+		return fail(stderr, 2, "unknown bar command: %s", args[0])
 	}
 }
 
@@ -476,6 +540,7 @@ func runSessionWithDependencies(
 			canvas, statusErr := demoService.Status(record.SessionID)
 			if statusErr == nil {
 				result.CanvasActive = canvas.Active
+				result.CanvasMode = canvas.Mode
 				result.CanvasMonitor = canvas.Monitor
 			}
 		}
@@ -567,6 +632,38 @@ func runSessionWithDependencies(
 					if err := json.Unmarshal([]byte(args[index+1]), &animationsStyle); err != nil {
 						return fail(stderr, 2, "decode --animations-json: %v", err)
 					}
+					index++
+				case "--shell-overrides-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --shell-overrides-json requires a JSON object")
+					}
+					var overrides map[string]string
+					if err := json.Unmarshal([]byte(args[index+1]), &overrides); err != nil {
+						return fail(stderr, 2, "decode --shell-overrides-json: %v", err)
+					}
+					shellStyle.Overrides = overrides
+					index++
+				case "--bar-profile-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --bar-profile-json requires a JSON object")
+					}
+					var profile barprofile.Profile
+					if err := json.Unmarshal([]byte(args[index+1]), &profile); err != nil {
+						return fail(stderr, 2, "decode --bar-profile-json: %v", err)
+					}
+					profile = profile.Normalize()
+					barStyle.Profile = &profile
+					index++
+				case "--bar-spec-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --bar-spec-json requires a JSON object")
+					}
+					var spec bar.BarSpec
+					if err := json.Unmarshal([]byte(args[index+1]), &spec); err != nil {
+						return fail(stderr, 2, "decode --bar-spec-json: %v", err)
+					}
+					spec = spec.Normalize()
+					barStyle.Spec = &spec
 					index++
 				case "--bar-style":
 					// The marker was already consumed above.
@@ -865,6 +962,15 @@ func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int
 			return fail(stderr, 1, "%v", err)
 		}
 		return writeJSON(stdout, stderr, result)
+	case "open-window":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen demo open-window <session_id>")
+		}
+		result, err := service.OpenWindow(args[1])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
 	case "close":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen demo close <session_id>")
@@ -930,7 +1036,7 @@ func runGenerate(
 func parseGenerateArgs(args []string) (generation.Request, error) {
 	if len(args) < 2 {
 		return generation.Request{}, fmt.Errorf(
-			"usage: omagen generate <session_id> <image> [--harmony <mode>] [--shell-style <surface> <detail> <tooltip> <notifications> --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> <form> <visibility>]",
+			"usage: omagen generate <session_id> <image> [--harmony <mode>] [--shell-style <surface> <detail> <tooltip> <notifications> --desktop-style <border> <border-size> <shape> <spacing> <depth> <inactive-style> --bar-style <surface> <density> <attention> <form> <visibility>] [--bar-spec-json <object>]",
 		)
 	}
 
@@ -942,12 +1048,15 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	shellStyleSeen := false
 	desktopStyleSeen := false
 	barStyleSeen := false
+	barProfileSeen := false
+	barSpecSeen := false
 	activeStyleSeen := false
 	var shellStyle session.ShellStyle
 	var desktopStyle session.DesktopStyle
 	var barStyle session.BarStyle
 	var animationsStyle session.AnimationsStyle
 	animationsStyleSeen := false
+	shellOverridesSeen := false
 
 	for i := 2; i < len(args); i++ {
 		arg := args[i]
@@ -1018,6 +1127,36 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			barStyle = session.BarStyle{Surface: args[i+1], Density: args[i+2], Attention: args[i+3], Form: args[i+4], Visibility: args[i+5]}
 			barStyleSeen = true
 			i += 5
+		case arg == "--bar-profile-json":
+			if barProfileSeen {
+				return generation.Request{}, fmt.Errorf("--bar-profile-json specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--bar-profile-json requires a JSON object")
+			}
+			var profile barprofile.Profile
+			if err := json.Unmarshal([]byte(args[i+1]), &profile); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --bar-profile-json: %w", err)
+			}
+			profile = profile.Normalize()
+			barStyle.Profile = &profile
+			barProfileSeen = true
+			i++
+		case arg == "--bar-spec-json":
+			if barSpecSeen {
+				return generation.Request{}, fmt.Errorf("--bar-spec-json specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--bar-spec-json requires a JSON object")
+			}
+			var spec bar.BarSpec
+			if err := json.Unmarshal([]byte(args[i+1]), &spec); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --bar-spec-json: %w", err)
+			}
+			spec = spec.Normalize()
+			barStyle.Spec = &spec
+			barSpecSeen = true
+			i++
 		case arg == "--window-active-style":
 			if activeStyleSeen {
 				return generation.Request{}, fmt.Errorf("--window-active-style specified more than once")
@@ -1040,13 +1179,33 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			}
 			animationsStyleSeen = true
 			i++
+		case arg == "--shell-overrides-json":
+			if shellOverridesSeen {
+				return generation.Request{}, fmt.Errorf("--shell-overrides-json specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--shell-overrides-json requires a JSON object")
+			}
+			if err := json.Unmarshal([]byte(args[i+1]), &shellStyle.Overrides); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --shell-overrides-json: %w", err)
+			}
+			shellOverridesSeen = true
+			i++
 		default:
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
 		}
 	}
-	if shellStyleSeen || desktopStyleSeen || barStyleSeen {
-		if !shellStyleSeen || !desktopStyleSeen || !barStyleSeen {
-			return generation.Request{}, fmt.Errorf("generation configuration requires --shell-style, --desktop-style, and --bar-style together")
+	if shellStyleSeen || desktopStyleSeen || barStyleSeen || barProfileSeen || barSpecSeen {
+		if !shellStyleSeen {
+			shellStyle = session.DefaultShellStyle()
+		}
+		if !desktopStyleSeen {
+			desktopStyle = session.DefaultDesktopStyle()
+		}
+		if !barStyleSeen {
+			profile, spec := barStyle.Profile, barStyle.Spec
+			barStyle = session.DefaultBarStyle()
+			barStyle.Profile, barStyle.Spec = profile, spec
 		}
 		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle}
 	}

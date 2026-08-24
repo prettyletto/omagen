@@ -168,7 +168,8 @@ func (j job) run(
 		)
 	}
 	if j.shellStyle.Valid() && j.barStyle.Valid() {
-		if err := theme.WriteShell(
+		spec := j.barStyle.EffectiveBarSpec()
+		if err := theme.WriteShellWithOverridesAndSpec(
 			variantDir,
 			generatedPalette,
 			j.shellStyle.Surface,
@@ -180,8 +181,18 @@ func (j job) run(
 			j.barStyle.Attention,
 			j.barStyle.Form,
 			j.barStyle.Visibility,
+			j.shellStyle.Overrides,
+			&spec,
 		); err != nil {
 			return fmt.Errorf("write shell style: %w", err)
+		}
+		if j.barStyle.Profile != nil {
+			if err := theme.WriteBarProfile(variantDir, *j.barStyle.Profile); err != nil {
+				return fmt.Errorf("write bar profile: %w", err)
+			}
+		}
+		if err := theme.WriteBarSpec(variantDir, j.barStyle.EffectiveBarSpec()); err != nil {
+			return fmt.Errorf("write bar spec: %w", err)
 		}
 	}
 	if j.desktopStyle.Valid() {

@@ -507,6 +507,9 @@ Completed in this slice:
       including migration of legacy border-size defaults.
 - [x] Keep Test Live, Apply, History, Restore, and Hide in the fixed Live
       Canvas footer.
+- [x] Add a focused Window Demo mode that launches Omarchy's configured
+      terminal, shows an Omagen Window identity panel, floats the owned client
+      on the left, and cleans it up when stopped or when the section changes.
 
 Validation evidence: the full `scripts/v1-check.sh` gate passes; the
 development plugin was rebuilt and reinstalled; installed QML/source equality
@@ -517,10 +520,40 @@ follow-up.
 Known limitations: Shell and Bar controls exist in the editor but need their
 own runtime-reader and visual validation. The QML socket live-event consumer,
 full color suggestion/provenance/contrast work, and complete Window runtime
-proof remain unfinished.
+proof, including focused-demo click-through, remain unfinished.
 
-Next slice: live runtime validation of active/inactive glass and animation
-readers, followed by Shell and Bar labs.
+Next slice: manually exercise the focused Window Demo and its cleanup, then
+continue active/inactive glass and animation validation, followed by Shell and
+Bar labs.
+
+### Later — Cross-surface responsiveness pass
+
+Status: planned after the four engine labs have real runtime readers and
+representative demos.
+
+Goal: make the complete Studio experience adapt cleanly across monitors,
+scales, orientations, terminal sizes, and different desktop compositions
+without treating the current 1920×1200 landscape layout as universal.
+
+Scope:
+
+- [ ] Audit Window, Shell, Bar, and Animations controls at narrow, standard,
+      ultrawide, portrait, and multi-monitor configurations.
+- [ ] Make Window Demo geometry derive from available monitor space, safe
+      margins, scale, and the actual Studio panel instead of fixed assumptions.
+- [ ] Add adaptive active/inactive demo layouts, including compact stacked and
+      portrait variants that never clip or cover Studio controls.
+- [ ] Exercise Quickshell surfaces, native bar placement, popups, and input
+      regions across monitor scale and topology changes.
+- [ ] Make every engine's controls and previews use intentional breakpoints,
+      minimum usable sizes, and readable compact states.
+- [ ] Add automated geometry/model coverage plus live visual checks for each
+      supported monitor class.
+
+Exit criteria: the four engines remain usable and visually legible on the
+supported monitor matrix; no demo window overlaps the Studio controls; and
+runtime evidence documents which combinations are supported, degraded, or
+outside the product guarantee.
 
 ### N4 — Define the Studio document and live profiles
 
@@ -900,4 +933,259 @@ manual live proof for every compositor option. Shell and Bar runtime readers,
 complete color suggestion provenance/contrast evidence, and the socket-backed
 QML live-event consumer remain future work.
 Next slice: N3.2 Window runtime validation and polish, then Shell and Bar labs
+```
+
+```text
+Date: 2026-08-23
+Slice: N3.2 focused Window Demo
+Branch: nightly
+Changed owners: Demo mode state, Omarchy terminal fixture launch, ephemeral
+Hyprland floating/placement dispatch, Window-section controls, and section-
+change cleanup routing
+Validation evidence: focused Go tests, full Go tests, race tests, vet, QML
+syntax validation, bundled-backend reproducibility, plugin validation, and the
+full scripts/v1-check.sh gate pass
+Installed evidence: the development plugin was installed; bin/omagen,
+BackendService.qml, and the Window editor match the installed bundle hashes;
+the installed shell accepted an explicit plugin rescan and returned service
+ready
+Runtime contract: Window Demo uses omarchy-launch-tui, which delegates to the
+configured Omarchy xdg-terminal-exec terminal, assigns a session-owned app ID,
+opens one terminal in a session-owned workspace, floats/resizes/places it on
+the left, and closes/restores it through the existing Demo service
+Known limitation: a manual UI launch and visual compositor check remain
+pending because the first development-shell restart reported that Omarchy's
+shell was not running
+Next slice: live Window Demo click-through, cleanup, and option-by-option
+compositor validation
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.2 Window Demo runtime repair and footer control
+Branch: nightly
+Changed owners: Lua-mode Hyprland floating/resize/move dispatch and fixed Live
+Canvas footer actions
+Validation evidence: the focused Go tests, QML syntax validation, and diff
+validation pass; a live temporary session opened one Ghostty terminal, kept it
+alive, and reported floating=true with position [32,64] and size [844,816]
+on eDP-1; the demo then closed and the session was cancelled successfully
+Runtime contract: Window Demo placement now uses native hl.dsp.window.float,
+hl.dsp.window.resize, and hl.dsp.window.move calls required by the installed
+Lua-mode Hyprland runtime. The Window Demo action lives in the fixed footer and
+is available while the Advanced Window section is active.
+Root cause fixed: legacy resizewindowpixel/movewindowpixel strings were passed
+through hyprctl dispatch while Lua mode was active; Hyprland rejected them as
+invalid Lua, so the service cleaned up the terminal immediately after launch.
+Next slice: install this repaired bundle, then continue Window option-by-option
+visual validation before starting Shell and Bar labs
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.2 compact Window fastfetch and wheel-input cleanup
+Branch: nightly
+Changed owners: Window Demo terminal fixture and the user-owned prettyletto.audio
+bar widget input surface
+Validation evidence: the installed fastfetch JSONC parses with 28 output lines;
+its Hardware, Software, and Age/Uptime/Update modules match the installed
+/etc/fastfetch defaults while the logo is replaced by the compact two-line
+O <> / STUDIO mark. The Omarchy shell rescanned successfully after removing the
+audio bar icon's wheel-volume handler.
+Runtime contract: Window Demo runs fastfetch from its session-owned demo
+directory, so the logo file resolves locally and the rest of the Omarchy
+fastfetch layout stays native. Audio volume remains available through the
+explicit panel sliders/buttons, but the bar icon no longer changes volume when
+the wheel is used.
+Next slice: visually exercise the compact fixture in the focused Window Demo
+and continue Window option validation
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.2 Window Demo branded ASCII palette
+Branch: nightly
+Changed owners: Window Demo terminal presentation and active-theme palette
+reading
+Validation intent: replace the generic Fastfetch fixture with a deterministic
+Omagen Studio composition that stays inside the floating Window Demo surface
+Runtime contract: the terminal prints a large OMAGEN ASCII mark with a clean
+STUDIO subtitle, then renders ANSI color swatches and readable hex values from the active
+~/.local/state/omarchy/current/theme/colors.toml; built-in palette fallbacks
+keep the demo readable if the active theme file is temporarily unavailable
+Visual result: the Window Engine is a branded Studio preview with no Fastfetch
+dependency or decorative diamond competing with the wordmark
+Next slice: validate Window options one by one before starting Shell and Bar
+labs
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.2 standalone Omagen Studio TUI
+Branch: nightly
+Changed owners: new bin/omagen-studio executable, centered terminal layout,
+responsive ASCII branding, active-theme palette loading, and package/build
+provenance
+Runtime contract: bin/omagen-studio runs independently of an Omagen session,
+Hyprland workspace, Fastfetch, or shell fixture. It enters the terminal's
+alternate screen, centers large OMAGEN and STUDIO ASCII marks, reads the live
+Omarchy colors.toml directly in Go, automatically reloads when the preview
+rewrites that file, keeps r as a manual fallback, and exits with q, Escape, or
+Ctrl-C.
+Responsive contract: wide terminals render both large marks and the complete
+palette; narrow terminals collapse the marks and reduce palette rows rather
+than overflowing the terminal.
+Validation evidence: TUI model tests cover palette parsing, resize-safe
+rendering, automatic palette reload, and quit behavior; the real 120x40
+terminal run showed the centered full-size composition and restored the
+terminal cleanly; the full v1 gate passes with reproducible hashes for
+bin/omagen and bin/omagen-studio
+Installed evidence: the standalone TUI is installed at the plugin's bin/
+omagen-studio path and the shell successfully rescanned the plugin
+Next slice: the session-owned Window Demo button now launches this standalone
+TUI as its real content while retaining the compositor-placement harness
+around it
+```
+
+```text
+Date: 2026-08-23
+Slice: N3.2 Window Demo standalone TUI pair
+Branch: nightly
+Changed owners: Window Demo slot lifecycle, standalone TUI launch, and
+ephemeral Hyprland floating geometry
+Runtime contract: Window Demo launches two session-owned omagen-studio
+instances through omarchy-launch-tui. The editor slot is the large active
+window at the upper left; the btop slot is a wide, short companion directly
+beneath it and is left unfocused so Hyprland renders it as inactive. Both share the same
+live palette reader, launch with an explicit color-capable terminal
+environment, and disappear together when the Demo stops or changes
+section.
+Reopen contract: if one owned client disappears, only the missing slot is
+recreated; a surviving active/inactive pair is never duplicated.
+Validation intent: focused Go tests and the full reproducible bundle gate,
+followed by a live two-window Hyprland geometry and cleanup check
+```
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.3 Shell Demo reader surface
+Branch: nightly
+Changed owners: Quickshell Shell Demo surface, fixed-footer lifecycle, and
+staged Shell engine readers
+Runtime contract: Shell Demo is a session-owned QML PanelWindow inside the
+existing plugin shell. It is display-only, non-exclusive, monitor-aware, and
+does not create a second ShellRoot or Quickshell process. Leaving the Shell
+section or stopping the demo removes the surface immediately.
+Visual contract: the surface shows the staged surface, detail, tooltip, and
+notification choices through native-looking bar, popup/menu, control,
+tooltip, and notification samples. Changing a Shell choice updates the reader
+surface immediately; Test Live remains the operation that applies the actual
+Quattro shell tokens.
+Validation evidence: repository-wide qmllint passes; the plugin was installed,
+the new QML payload matches the installed bundle, and Omarchy rescanned and
+enabled the plugin successfully. Full backend validation remains environment-
+blocked by uncached module downloads and denied Unix-socket test setup.
+Known limitation: compact and multi-monitor visual proof remains part of the
+later responsiveness pass.
+Next slice: open Shell Demo on the real desktop, exercise each Shell option,
+then continue with Bar and Animations reader surfaces
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.3 Shell Lab repagination and additive reader overrides
+Branch: nightly
+Changed owners: Quickshell Shell Lab editor, session ShellStyle transport,
+theme sidecar writer, and the existing Shell Demo reader surface
+Information architecture: Shell Lab now separates Surfaces, Controls,
+Type + Spacing, Feedback, and Raw tokens. The four high-level composition
+presets remain available, but the lab also exposes native [popups], [menu],
+[launcher], [controls], [font], [spacing], [tooltip], [notifications],
+[polkit], [lock], and [image-picker] values.
+Runtime contract: each explicit field is stored as a section.key additive
+override. Omagen writes inspectable shell.<section>.toml sidecars and also
+materializes the merged shell.toml consumed by the installed Quattro reader, so
+omitted keys keep the active theme or user shell defaults. Window-owned
+Hyprland settings and Bar-owned layout settings remain in their separate
+engines.
+Raw-token contract: documented future shell keys can be staged through the
+direct reader page. Section and key names are validated before serialization;
+values are quoted losslessly and native Quickshell readers perform their normal
+coercion.
+Validation evidence: full Go tests, race tests, vet, the reproducible bundled
+backend gate, repository-wide qmllint, and diff checks pass. The installed
+backend and Shell Lab payload hashes match the workspace, and the live shell
+reload reaches normal startup without a Shell Lab load error.
+Next slice: exercise each Shell page and raw-token round trip manually, then
+verify the merged shell.toml values against live Quattro readers
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.4 Shell Lab guided UX pass
+Branch: nightly
+Changed owners: Quickshell Shell Lab information architecture and staged
+reader controls; native Quattro shell ownership is unchanged
+UX contract: Shell opens on Start with four intent-based recipes: Native,
+Comfortable, Compact, and High contrast. Surfaces, States, Scale, and Feedback
+expose the common choices first; detailed section.key fields stay behind an
+explicit Fine-tune action; Advanced remains the escape hatch for direct reader
+tokens.
+Safety contract: recipe changes remain staged in the existing ShellStyle
+override map. Native clears the additive map, unspecified values continue to
+come from the active theme or user shell.toml, and Test Live / Apply remains
+the only live mutation path.
+Validation intent: exercise recipe selection, page navigation, fine-tune
+disclosure, reset behavior, and resumed-session state before expanding the
+same guided model to Bar and Animations.
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.5 BarSpec v2 and guided Bar Lab foundation
+Branch: nightly
+Changed owners: BarSpec compiler model, legacy bar_style migration, native
+Quattro shell writer, Bar Lab presets/geometry controls, and topology preview
+renderer
+Runtime contract: the Bar Lab stages a versioned BarSpec v2 document with
+surface primitives, geometry, topology, behavior, attention, and motion.
+Continuous/minimal specs compile to the native Quattro reader; advanced shapes
+and visibility behavior are consumed by Omagen's additive decoration adapter.
+The generated omagen.bar.spec.json artifact records and drives this decision.
+Compatibility contract: old five-field bar_style sessions remain valid and
+derive an effective spec without being rewritten until the user edits the bar.
+Widget layout, ordering, centerAnchor, and shell.json ownership remain outside
+BarSpec and are not changed by theme-only generation.
+Validation evidence: full Go tests, race tests, vet, reproducible bundled
+backend gate, repository-wide qmllint, native plugin validation, and diff
+checks pass.
+Known limitation: the compatible pretty.omagen.bar host, explicit shell.json
+layout editor, and live multi-monitor/auto-hide interaction proof remain later
+phases; the native bar remains the only active runtime engine in this slice.
+Next slice: add the explicit Quattro layout profile editor and its reversible
+shell.json snapshot/restore flow before enabling the replacement bar host.
+```
+
+```text
+Date: 2026-08-24
+Slice: N3.6 Interactive Bar Demo reader surface
+Branch: nightly
+Changed owners: Quickshell Bar Demo surface, Bar Lab footer lifecycle, and
+BarSpec motion/topology preview bindings; native Quattro bar ownership remains
+unchanged
+Runtime contract: Bar Demo is a QML-only PanelWindow below the real native bar.
+It renders the staged topology, placement, surface, geometry, behavior, and
+motion fields; its pause/play control, hover handler, and timed cycle exercise
+the configured duration/easing, hover expansion, and auto-hide presentation.
+The demo does not reserve space, replace widgets, or capture native bar input.
+Lifecycle contract: switching away from the Bar Lab stops the demo, closing
+the panel stops it, and Test Live/Apply continues through the existing session
+preview path. A Bar Demo is never persisted as a backend workspace demo.
+Validation evidence: repository-wide qmllint and the full bundled backend gate
+pass; the installed plugin is rebuilt, rescanned, enabled, and its Bar Demo
+payload matches the workspace. Live visual interaction proof remains the next
+manual check.
+Next slice: exercise Bar Demo motion, hover, auto-hide, vertical placement, and
+close/reopen behavior on the real desktop at compact and multi-monitor scales.
 ```

@@ -13,8 +13,8 @@ Item {
     property bool configurationPreview: false
     property int activeSection: 0
     property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: -1, borderSizeMode: "default", shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" })
+    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property bool selected: false
     property bool focused: false
     property bool hovered: false
@@ -64,6 +64,19 @@ Item {
         : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 7 : 9
     readonly property real previewBarHeight: root.barStyle.density === "comfortable" ? 34
         : root.barStyle.density === "compact" ? 22 : 28
+    readonly property var barSpec: root.barStyle.spec || ({})
+    readonly property string barTopology: root.barSpec.topology || (root.barStyle.visibility === "islands" ? "sections" : root.barStyle.form === "docked" ? "sections" : "continuous")
+    readonly property string barPosition: root.barSpec.position || "top"
+    readonly property bool verticalBar: root.barPosition === "left" || root.barPosition === "right"
+    readonly property real barOpacity: root.barSpec.surface && root.barSpec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.opacity))) : 1
+    readonly property int barRadius: root.barSpec.geometry && root.barSpec.geometry.radius !== undefined ? Number(root.barSpec.geometry.radius) : 0
+    readonly property int barEdgeOffset: root.barSpec.geometry && root.barSpec.geometry.edge_offset !== undefined ? Math.max(0, Number(root.barSpec.geometry.edge_offset)) : 0
+    readonly property int barOuterMargin: root.barSpec.geometry && root.barSpec.geometry.outer_margin !== undefined ? Math.max(0, Number(root.barSpec.geometry.outer_margin)) : 0
+    readonly property int barThickness: root.barSpec.geometry && Number(root.barSpec.geometry.thickness) > 0 ? Number(root.barSpec.geometry.thickness) : root.previewBarHeight
+    readonly property int barBorderWidth: root.barSpec.surface && root.barSpec.surface.border_width !== undefined ? Math.max(0, Number(root.barSpec.surface.border_width)) : 0
+    readonly property real barBorderOpacity: root.barSpec.surface && root.barSpec.surface.border_opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.border_opacity))) : 0
+    readonly property int barMotionDuration: root.barSpec.motion && root.barSpec.motion.duration_ms !== undefined ? Math.max(0, Number(root.barSpec.motion.duration_ms)) : 150
+    readonly property bool separatedBar: ["sections", "islands", "split", "notch"].indexOf(root.barTopology) >= 0
 
     function shellPopupSurface() {
         var surface = root.shellStyle.surface || "flat"
@@ -86,7 +99,11 @@ Item {
     }
 
     function barSurface() {
-        switch (root.barStyle.surface) {
+        var role = root.barSpec.surface && root.barSpec.surface.role ? root.barSpec.surface.role : root.barStyle.surface
+        if (role === "background") return root.bg
+        if (role === "selection") return root.selection
+        if (role === "transparent") return root.bg
+        switch (role) {
         case "dark": return root.darkBg
         case "light": return root.fg
         case "accent": return root.accent
@@ -95,7 +112,15 @@ Item {
     }
 
     function barForeground() {
-        return root.barStyle.surface === "light" || root.barStyle.surface === "accent" ? root.bg : root.fg
+        var role = root.barSpec.surface && root.barSpec.surface.role ? root.barSpec.surface.role : root.barStyle.surface
+        return role === "light" || role === "accent" ? root.bg : root.fg
+    }
+
+    function barBorderColor() {
+        var role = root.barSpec.surface && root.barSpec.surface.border_role ? root.barSpec.surface.border_role : "foreground"
+        if (role === "accent") return root.accent
+        if (role === "custom") return root.accent
+        return root.fg
     }
 
     Rectangle {
@@ -237,41 +262,40 @@ Item {
             Rectangle {
                 id: shellBar
                 visible: root.configurationPreview
-                anchors.top: parent.top
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.topMargin: root.windowMargin
-                anchors.leftMargin: root.windowMargin
-                anchors.rightMargin: root.windowMargin
-                height: root.previewBarHeight
-                radius: Math.min(root.windowRadius, height / 2)
-                color: root.barStyle.form === "docked" ? "transparent" : root.barSurface()
-                border.width: root.barStyle.form === "docked" ? 0 : root.activeSection === 2 ? 2 : 1
-                border.color: root.activeSection === 2 ? root.accent : Util.alpha(root.fg, 0.22)
+                x: root.verticalBar ? (root.barPosition === "right" ? parent.width - width - root.barOuterMargin : root.barOuterMargin) : root.windowMargin + (root.barTopology === "dock" ? parent.width * 0.18 : 0)
+                y: root.verticalBar ? root.windowMargin : (root.barPosition === "bottom" ? parent.height - height - root.barEdgeOffset : root.barEdgeOffset)
+                width: root.verticalBar ? root.barThickness : parent.width - 2 * root.windowMargin - (root.barTopology === "dock" ? parent.width * 0.36 : 0)
+                height: root.verticalBar ? parent.height - 2 * root.windowMargin : root.barThickness
+                radius: root.barRadius > 0 ? Math.min(root.barRadius, height / 2) : Math.min(root.windowRadius, height / 2)
+                color: root.separatedBar ? "transparent" : Util.alpha(root.barSurface(), root.barOpacity)
+                border.width: root.separatedBar ? 0 : root.activeSection === 2 ? Math.max(2, root.barBorderWidth) : root.barBorderWidth
+                border.color: root.activeSection === 2 ? root.accent : Util.alpha(root.barBorderColor(), root.barBorderOpacity)
+                opacity: root.barOpacity > 0 ? 1 : 0.72
 
-                Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
-                Behavior on color { ColorAnimation { duration: 150; easing.type: Easing.OutCubic } }
+                Behavior on height { NumberAnimation { duration: root.barMotionDuration; easing.type: Easing.OutCubic } }
+                Behavior on color { ColorAnimation { duration: root.barMotionDuration; easing.type: Easing.OutCubic } }
 
                 Repeater {
-                    model: root.barStyle.form === "docked" ? [
+                    model: root.separatedBar ? [
                         { x: 0.00, width: 0.30 },
                         { x: 0.36, width: 0.28 },
                         { x: 0.70, width: 0.30 }
                     ] : []
                     delegate: Rectangle {
                         required property var modelData
-                        x: parent.width * modelData.x
-                        width: parent.width * modelData.width
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        radius: Math.min(root.windowRadius, height / 2)
-                        color: root.barSurface()
-                        border.width: 1
-                        border.color: root.activeSection === 2 ? Util.alpha(root.accent, 0.78) : Util.alpha(root.barForeground(), 0.24)
+                        x: root.verticalBar ? 0 : parent.width * modelData.x
+                        y: root.verticalBar ? parent.height * modelData.x : 0
+                        width: root.verticalBar ? parent.width : parent.width * modelData.width
+                        height: root.verticalBar ? parent.height * modelData.width : parent.height
+                        radius: Math.min(root.barRadius > 0 ? root.barRadius : root.windowRadius, Math.min(width, height) / 2)
+                        color: Util.alpha(root.barSurface(), root.barOpacity)
+                        border.width: root.barBorderWidth
+                        border.color: root.activeSection === 2 ? Util.alpha(root.accent, 0.78) : Util.alpha(root.barBorderColor(), root.barBorderOpacity)
                     }
                 }
 
                 Row {
+                    visible: !root.verticalBar
                     anchors.left: parent.left
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
@@ -293,6 +317,7 @@ Item {
                 }
 
                 Rectangle {
+                    visible: !root.verticalBar
                     anchors.centerIn: parent
                     width: Math.max(74, parent.width * 0.25)
                     height: Math.max(14, parent.height - 10)
@@ -313,6 +338,7 @@ Item {
                 }
 
                 Row {
+                    visible: !root.verticalBar
                     anchors.right: parent.right
                     anchors.rightMargin: 9
                     anchors.verticalCenter: parent.verticalCenter
@@ -323,6 +349,17 @@ Item {
                         color: root.barStyle.attention === "accent" ? root.accent : root.red
                     }
                     Text { text: "10:42"; color: root.barForeground(); font.family: Style.font.family; font.pixelSize: 8; font.bold: true }
+                }
+
+                Text {
+                    visible: root.verticalBar
+                    anchors.centerIn: parent
+                    text: "omagen"
+                    color: root.barForeground()
+                    rotation: root.barPosition === "left" ? 90 : -90
+                    font.family: Style.font.family
+                    font.pixelSize: 8
+                    font.bold: true
                 }
             }
 

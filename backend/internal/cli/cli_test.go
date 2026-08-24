@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
@@ -68,6 +69,40 @@ func TestParseGenerateArgsWithConfiguration(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgsWithThemeBarProfile(t *testing.T) {
+	profile := `{"schema_version":1,"ownership":"theme-owned","implementation":"replacement","bar":{"id":"pretty.theme.bar"},"behavior":{"form":"dock","visibility":"auto-hide","reveal":"edge","expansion":"hover","workspace":"dots"}}`
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+		"--bar-profile-json", profile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.BarStyle.Profile == nil {
+		t.Fatalf("profile was not parsed: %#v", request.Configuration)
+	}
+	if request.Configuration.BarStyle.Profile.Implementation != barprofile.ImplementationReplacement || request.Configuration.BarStyle.Profile.Behavior.Workspace != "dots" {
+		t.Fatalf("unexpected profile: %#v", request.Configuration.BarStyle.Profile)
+	}
+}
+
+func TestParseGenerateArgsWithBarSpecUsesDefaultCompatibilityStyles(t *testing.T) {
+	spec := `{"version":2,"engine":"auto","topology":"minimal","position":"top","surface":{"role":"transparent","opacity":0},"geometry":{"density":"compact"},"attention":{"mode":"semantic"},"behavior":{"visibility":"always","exclusive_zone":"reserve"},"motion":{"preset":"native"}}`
+	request, err := parseGenerateArgs([]string{"session", "image", "--bar-spec-json", spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.BarStyle.Spec == nil {
+		t.Fatalf("bar spec configuration was not parsed: %#v", request.Configuration)
+	}
+	if request.Configuration.ShellStyle.Surface != "flat" || request.Configuration.DesktopStyle.BorderStyle != "solid" || request.Configuration.BarStyle.Surface != "native" {
+		t.Fatalf("compatibility defaults were not applied: %#v", request.Configuration)
+	}
+}
+
 func TestParseGenerateArgsWithBorderSizeMode(t *testing.T) {
 	request, err := parseGenerateArgs([]string{
 		"session", "image",
@@ -89,7 +124,7 @@ func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 		{"session", "image", "--harmony", "random"},
 		{"session", "image", "--harmony=triadic", "--harmony", "auto"},
 		{"session", "image", "--unknown"},
-		{"session", "image", "--shell-style", "flat", "native", "native", "native"},
+		{"session", "image", "--shell-style", "flat", "native", "native"},
 		{"session", "image", "--desktop-style", "solid", "not-a-number", "native", "native", "native", "native"},
 	} {
 		if _, err := parseGenerateArgs(args); err == nil {

@@ -145,6 +145,60 @@ func focusWindow(address string) error {
 	return nil
 }
 
+// floatWindowLeft turns the focused-demo fixture into a compositor-managed
+// floating client and places it on the left side of the selected monitor. The
+// placement is ephemeral dispatch state: no user Hyprland rule is written.
+func floatWindowLeft(address string, monitor monitorInfo) error {
+	width, height, x, y := windowDemoActiveGeometry(monitor)
+	return floatWindowAt(address, width, height, x, y, true)
+}
+
+func windowDemoActiveGeometry(monitor monitorInfo) (width, height, x, y int) {
+	width = monitor.Width * 47 / 100
+	height = monitor.Height * 62 / 100
+	if width < 680 {
+		width = 680
+	}
+	if height < 480 {
+		height = 480
+	}
+	if monitor.Width > 0 && width > monitor.Width-64 {
+		width = monitor.Width - 64
+	}
+	if monitor.Height > 0 && height > monitor.Height-112 {
+		height = monitor.Height - 112
+	}
+	x = monitor.X + 32
+	y = monitor.Y + 80
+	return
+}
+
+func floatWindowAt(address string, width, height, x, y int, focus bool) error {
+	if address == "" {
+		return fmt.Errorf("cannot float empty window address")
+	}
+	selector := luaString("address:" + address)
+	if err := hyprLuaDispatch(fmt.Sprintf("hl.dsp.window.float({ action = \"on\", window = %s })", selector)); err != nil {
+		return fmt.Errorf("float demo window %s: %w", address, err)
+	}
+	if err := hyprLuaDispatch(fmt.Sprintf(
+		"hl.dsp.window.resize({ x = %d, y = %d, relative = false, window = %s })",
+		width, height, selector,
+	)); err != nil {
+		return fmt.Errorf("size focused demo window %s: %w", address, err)
+	}
+	if err := hyprLuaDispatch(fmt.Sprintf(
+		"hl.dsp.window.move({ x = %d, y = %d, relative = false, window = %s })",
+		x, y, selector,
+	)); err != nil {
+		return fmt.Errorf("place focused demo window %s: %w", address, err)
+	}
+	if focus {
+		return focusWindow(address)
+	}
+	return nil
+}
+
 func preselectDwindle(direction string) error {
 	if direction != "r" && direction != "d" {
 		return fmt.Errorf("unsupported Demo dwindle preselection %q", direction)
@@ -385,6 +439,57 @@ func placeDemoWindows(s State) error {
 		if err := placeWindow(address, s.Workspace); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func placeWindowDemo(s State, monitor monitorInfo) error {
+	activeAddress := s.Windows[SlotEditor]
+	inactiveAddress := s.Windows[SlotBtop]
+	if activeAddress == "" {
+		return fmt.Errorf("window demo has no terminal window")
+	}
+	if inactiveAddress == "" {
+		return fmt.Errorf("window demo has no inactive terminal window")
+	}
+	current, err := windowAddresses()
+	if err != nil {
+		return err
+	}
+	for _, address := range []string{activeAddress, inactiveAddress} {
+		if client, ok := current[address]; !ok || client.Workspace.Name != s.Workspace {
+			if err := placeWindow(address, s.Workspace); err != nil {
+				return err
+			}
+		}
+	}
+	if err := floatWindowLeft(activeAddress, monitor); err != nil {
+		return err
+	}
+
+	// Keep both fixtures inside the left side of the screen and stack the
+	// inactive companion beneath the active one. This leaves the right side
+	// clear for the Studio controls and makes the active/inactive relationship
+	// obvious without a second column competing for space.
+	activeWidth, activeHeight, activeX, activeY := windowDemoActiveGeometry(monitor)
+	width := activeWidth
+	height := monitor.Height * 22 / 100
+	if height < 160 {
+		height = 160
+	}
+	if monitor.Height > 0 && height > monitor.Height-112 {
+		height = monitor.Height - 112
+	}
+	x := activeX
+	y := activeY + activeHeight + 20
+	if err := floatWindowAt(inactiveAddress, width, height, x, y, false); err != nil {
+		return err
+	}
+	if err := switchWorkspace(s.Workspace); err != nil {
+		return fmt.Errorf("focus Window Demo workspace: %w", err)
+	}
+	if err := focusWindow(activeAddress); err != nil {
+		return fmt.Errorf("refocus active Window Demo terminal: %w", err)
 	}
 	return nil
 }
