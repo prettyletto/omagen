@@ -4,15 +4,19 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 MAP="$ROOT/docs/agents/context-map.yaml"
 
+"$ROOT/scripts/check-context-integrity.py" >/dev/null
+
 usage() {
     printf 'Usage: %s <domain>\n\n' "${0##*/}"
     printf 'Available domains:\n'
     awk '/^  [a-z0-9-]+:$/ { name=$0; sub(/^  /, "", name); sub(/:$/, "", name); print "  " name }' "$MAP"
 }
 
-if (($# != 1)) || [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+if (($# != 1)) || [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "--list" ]]; then
     usage
-    (($# == 1)) && exit 0
+    if (($# == 1)) && [[ "$1" == "-h" || "$1" == "--help" || "$1" == "--list" ]]; then
+        exit 0
+    fi
     exit 2
 fi
 

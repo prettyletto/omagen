@@ -13,7 +13,7 @@ warn_large() {
     fi
 }
 
-printf 'Architecture/context checks (warnings only)\n'
+printf 'Architecture/context checks (size warnings only)\n'
 
 canonical=(
     "AGENTS.md"
@@ -31,22 +31,13 @@ canonical=(
 )
 for relative in "${canonical[@]}"; do
     if [[ ! -e "$ROOT/$relative" ]]; then
-        printf 'WARNING: canonical context file is missing: %s\n' "$relative" >&2
-        warnings=$((warnings + 1))
+        printf 'ERROR: canonical context file is missing: %s\n' "$relative" >&2
+        exit 1
     fi
 done
 
-if ! "$ROOT/scripts/check-doc-links.py"; then
-    printf 'WARNING: relative Markdown link check reported a problem.\n' >&2
-    warnings=$((warnings + 1))
-fi
-
-if direct_processes="$(rg -n '\bProcess\b' "$ROOT/qml/views" --glob '*.qml' || true)"; then
-    if [[ -n "$direct_processes" ]]; then
-        printf 'WARNING: a QML view contains direct process mechanics; route backend calls through qml/gateways: %s\n' "$direct_processes" >&2
-        warnings=$((warnings + 1))
-    fi
-fi
+"$ROOT/scripts/check-context-integrity.py"
+"$ROOT/scripts/check-doc-links.py"
 
 warn_large Omagen.qml 400
 warn_large backend/internal/cli/cli.go 350
@@ -62,9 +53,7 @@ while IFS= read -r -d '' file; do
     esac
 done < <(find "$ROOT/qml" -name '*.qml' -print0)
 
-for domain in lifecycle palette generation qml-ui live-canvas bar look-feel runtime protocol packaging; do
-    "$ROOT/scripts/agent-context" "$domain" >/dev/null
-done
+"$ROOT/scripts/agent-context" --list >/dev/null
 
 if (( warnings == 0 )); then
     printf 'No size warnings.\n'
