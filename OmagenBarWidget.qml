@@ -33,6 +33,82 @@ BarWidget {
         return configured && configured.length > 0 ? configured : home + "/.local/state"
     }
     readonly property string activeSessionPath: root.stateHome + "/omagen/active-session.json"
+    readonly property string barProfilePath: root.stateHome + "/omarchy/current/theme/omagen.bar.json"
+    readonly property string currentStatePath: root.stateHome + "/omarchy/current"
+    property bool replacementTheme: false
+    property string barImplementation: ""
+    // Older Theme Set candidates carry only omagen.bar.toml. DockedBarSurface
+    // already understands that metadata, so allow it to mount even before a
+    // versioned JSON profile exists. Without this bridge, shell.toml can set
+    // the native bar alpha to zero while no Omagen surface is visible.
+    readonly property bool legacyDockedAdapter: root.barImplementation === ""
+        && dockedSurface.metadataResolved
+        && dockedSurface.omagenBarForm === "docked"
+
+    // Theme switching only reloads shell.toml; it does not interpret Omagen's
+    // bar profile. Keep the persisted bar selection synchronized with the
+    // theme marker while respecting any other custom bar the user chose.
+    function syncThemeBarSelection(raw) {
+        if (!root.bar || !root.bar.shell || typeof root.bar.shell.mutateShellConfig !== "function") return
+        var replacement = false
+        try {
+            var document = JSON.parse(String(raw || "{}"))
+            replacement = !!(document && String(document.implementation || "") === "replacement")
+        } catch (error) {
+            replacement = false
+        }
+        root.barImplementation = String(document && document.implementation || "")
+        root.replacementTheme = replacement
+        var current = root.bar.barConfig && root.bar.barConfig.id ? String(root.bar.barConfig.id) : "omarchy.bar"
+        if (replacement && (current === "omarchy.bar" || current === "")) {
+            root.bar.shell.mutateShellConfig(function(copy) {
+                if (!copy.bar || typeof copy.bar !== "object") copy.bar = {}
+                if (!copy.bar.id || copy.bar.id === "omarchy.bar") copy.bar.id = "pretty.omagen.bar"
+            })
+        } else if (!replacement && current === "pretty.omagen.bar") {
+            root.bar.shell.mutateShellConfig(function(copy) {
+                if (copy.bar && typeof copy.bar === "object") delete copy.bar.id
+            })
+        }
+    }
+
+    FileView {
+        id: barProfileFile
+        path: root.barProfilePath
+        watchChanges: true
+        printErrors: false
+        onLoaded: {
+            missingBarProfileTimer.stop()
+            root.syncThemeBarSelection(text())
+        }
+        onFileChanged: reload()
+        onLoadFailed: missingBarProfileTimer.restart()
+        Component.onCompleted: reload()
+    }
+
+    Timer {
+        id: barProfileRefreshTimer
+        interval: 80
+        repeat: false
+        onTriggered: barProfileFile.reload()
+    }
+
+    Timer {
+        id: missingBarProfileTimer
+        interval: 280
+        repeat: false
+        onTriggered: root.syncThemeBarSelection("")
+    }
+
+    FileView {
+        path: root.currentStatePath
+        watchChanges: true
+        printErrors: false
+        // Keep the long-lived widget attached to the promoted `current`
+        // directory rather than to the previous theme file inode.
+        onFileChanged: barProfileRefreshTimer.restart()
+    }
+
     function buildAccentRainbow(baseColor) {
         var base = Qt.color(baseColor)
         var hue = base.hsvHue
@@ -139,9 +215,16 @@ BarWidget {
         id: dockedSurface
         anchorItem: root
         bar: root.bar
+        // In replacement mode this widget is only the Omagen launcher. The
+        // full bar host owns the surface, so mounting the old adapter here
+        // would recreate the additive-bar bug inside the replacement.
+        visible: !(root.bar && root.bar.replacementHost === true)
+            && (root.barImplementation === "adapter" || root.legacyDockedAdapter)
     }
 
-    readonly property bool themedAutoHide: dockedSurface.specAutoHide || (dockedSurface.profileResolved && dockedSurface.profileVisibility === "auto-hide")
+    readonly property bool themedAutoHide: !(root.bar && root.bar.replacementHost === true) && root.barImplementation === "adapter"
+        && (dockedSurface.specAutoHide || (dockedSurface.profileResolved && dockedSurface.profileVisibility === "auto-hide"))
+    property bool revealHovered: false
     readonly property string barTogglePath: Quickshell.env("XDG_STATE_HOME") !== ""
         ? Quickshell.env("XDG_STATE_HOME") + "/omarchy/toggles/bar-off"
         : Quickshell.env("HOME") + "/.local/state/omarchy/toggles/bar-off"
@@ -162,9 +245,13 @@ BarWidget {
         id: autoHideTimer
         interval: 1200
         repeat: false
-        running: root.themedAutoHide && root.bar && root.bar.barHidden !== true
+        running: root.themedAutoHide
+            && root.bar
+            && root.bar.barHidden !== true
+            && root.bar.barHovered !== true
+            && !root.revealHovered
         onTriggered: {
-            if (!root.themedAutoHide || !root.bar || root.bar.barHovered === true || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
+            if (!root.themedAutoHide || !root.bar || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
                 return
             hideBarProcess.running = true
         }
@@ -203,7 +290,16 @@ BarWidget {
         implicitWidth: root.bar && root.bar.vertical ? root.bar.barSize : 0
         implicitHeight: root.bar && !root.bar.vertical ? Style.space(4) : 0
         HoverHandler {
-            onHoveredChanged: if (hovered && root.bar && root.bar.barHidden === true) showBarProcess.running = true
+            onHoveredChanged: {
+                root.revealHovered = hovered
+                if (hovered) {
+                    autoHideTimer.stop()
+                    if (root.bar && root.bar.barHidden === true)
+                        showBarProcess.running = true
+                } else if (root.bar && root.bar.barHovered !== true) {
+                    autoHideTimer.restart()
+                }
+            }
         }
     }
 

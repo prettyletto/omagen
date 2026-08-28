@@ -10,10 +10,12 @@ import (
 // nil; when present, the candidate is regenerated through the real Hyprland
 // and Quickshell theme writers before the native theme driver runs.
 type StyleOverrides struct {
-	Shell      session.ShellStyle      `json:"shell"`
-	Desktop    session.DesktopStyle    `json:"desktop"`
-	Bar        session.BarStyle        `json:"bar"`
-	Animations session.AnimationsStyle `json:"animations"`
+	Shell      session.ShellStyle            `json:"shell"`
+	Desktop    session.DesktopStyle          `json:"desktop"`
+	Bar        session.BarStyle              `json:"bar"`
+	Animations session.AnimationsStyle       `json:"animations"`
+	LookFeel   *session.LookFeelDocument     `json:"look_feel,omitempty"`
+	Terminal   *session.TerminalTranslucency `json:"terminal,omitempty"`
 }
 
 func (s StyleOverrides) Valid() bool {
@@ -21,7 +23,16 @@ func (s StyleOverrides) Valid() bool {
 	desktop := session.NormalizeDesktopStyle(s.Desktop)
 	bar := session.NormalizeBarStyle(s.Bar)
 	animations := session.NormalizeAnimationsStyle(s.Animations)
-	return shell.Valid() && desktop.Valid() && bar.Valid() && animations.Valid()
+	if !shell.Valid() || !desktop.Valid() || !bar.Valid() || !animations.Valid() {
+		return false
+	}
+	if s.LookFeel != nil {
+		document := session.NormalizeLookFeelDocument(*s.LookFeel)
+		if document.SchemaVersion != 1 || document.PresetRevision < 1 || document.Preset == "" {
+			return false
+		}
+	}
+	return s.Terminal == nil || session.NormalizeTerminalTranslucency(*s.Terminal).Valid()
 }
 
 type Request struct {

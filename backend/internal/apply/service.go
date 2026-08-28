@@ -13,6 +13,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
+	"github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
@@ -96,6 +97,24 @@ func (s *Service) applyBarProfile(themeRoot string, record session.Record) (bool
 	return true, s.bar.Apply(profile)
 }
 
+// runtimeBridgeOwnsBarActivation reports whether an installed, consented
+// Omagen hook will activate an advanced theme after the native driver commits.
+// In that case Apply must not also write the bar profile: doing so would make
+// the runtime adapter capture the already-themed state as its rollback
+// baseline and would make restoration incorrect.
+func runtimeBridgeOwnsBarActivation(themeRoot string) bool {
+	_, advanced, err := runtime.ReadManifest(themeRoot)
+	if err != nil || !advanced {
+		return false
+	}
+	_, hookPath, _, err := runtime.Paths()
+	if err != nil || !runtime.IsOwnedHook(hookPath) {
+		return false
+	}
+	state, err := runtime.LoadState()
+	return err == nil && state.Installed
+}
+
 func (s *Service) Apply(r Request) (Result, error) {
 	if err := validComponent("session id", r.SessionID); err != nil {
 		return Result{}, err
@@ -171,12 +190,10 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if err := validateCandidate(candidate, s.sessions.SessionDir(r.SessionID)); err != nil {
 		return Result{}, err
 	}
-	if err := stageOptionalAssets(candidate, s.sessions.SessionDir(r.SessionID), r); err != nil {
-		return Result{}, err
-	}
-	fastFinalize := s.canFinalizePreview(record, r)
+	matchingPreview := s.matchesLivePreview(record, r)
+	fastFinalize := matchingPreview && canFinalizePreviewWithoutApply(r)
 	publishSource := candidate
-	if fastFinalize {
+	if matchingPreview {
 		publishSource = s.currentThemeRoot
 	}
 	destination := filepath.Join(s.themesRoot, name.Slug)
@@ -227,7 +244,9 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist prepared apply: %w", err)
 	}
-	if err := publish(publishSource, destination, s.themesRoot, r.SessionID); err != nil {
+	if err := publish(publishSource, destination, s.themesRoot, r.SessionID, func(staged string) error {
+		return stageOptionalAssets(staged, s.sessions.SessionDir(r.SessionID), r)
+	}); err != nil {
 		_, _ = journal.CompleteOperation(stageOperation.ID, protocol.StatusFailed, err.Error(), "owned destination was not published")
 		return Result{}, fmt.Errorf("publish theme: %w", err)
 	}
@@ -236,6 +255,19 @@ func (s *Service) Apply(r Request) (Result, error) {
 	}
 	if _, err := journal.Progress(operation.ID, "candidate published", "owned destination staged", nil); err != nil {
 		return Result{}, fmt.Errorf("record apply staging: %w", err)
+	}
+	// A matching Live preview may already have applied the bar profile. Seed
+	// the permanent runtime snapshot from the session's original baseline
+	// before the Apply driver starts its post-commit hook; otherwise the hook
+	// could race and capture the themed bar as its rollback state.
+	if matchingPreview && runtimeBridgeOwnsBarActivation(destination) && s.bar != nil && record.BarSnapshot != nil {
+		snapshot, snapshotErr := s.bar.LoadSnapshot(record.SessionID)
+		if snapshotErr != nil {
+			return Result{}, fmt.Errorf("load session bar baseline for runtime activation: %w", snapshotErr)
+		}
+		if err := runtime.SeedBarSnapshot(s.bar, name.Slug, snapshot); err != nil {
+			return Result{}, fmt.Errorf("seed runtime bar baseline: %w", err)
+		}
 	}
 	driverOperation, err := journal.StartOperation(protocol.OperationInput{
 		ParentID:     operation.ID,
@@ -291,14 +323,24 @@ func (s *Service) Apply(r Request) (Result, error) {
 	if _, err := journal.Progress(operation.ID, "critical live state observed", driverEvidence, nil); err != nil {
 		return Result{}, fmt.Errorf("record apply promotion: %w", err)
 	}
-	barProfileApplied, err := s.applyBarProfile(destination, record)
-	if err != nil {
-		return Result{}, fmt.Errorf("apply themed bar profile: %w", err)
+	barProfileApplied := false
+	if !runtimeBridgeOwnsBarActivation(destination) {
+		barProfileApplied, err = s.applyBarProfile(destination, record)
+		if err != nil {
+			return Result{}, fmt.Errorf("apply themed bar profile: %w", err)
+		}
 	}
 	if barProfileApplied {
 		if _, err := journal.Progress(operation.ID, "theme bar profile applied", "user shell layout transaction completed", nil); err != nil {
 			return Result{}, fmt.Errorf("record bar profile application: %w", err)
 		}
+	}
+	fallbackStatus, fallbackErr := runtime.CheckAndNotifyFallback(destination, name.Display)
+	if fallbackErr != nil {
+		// The native theme transaction is already live. A malformed or
+		// unavailable Omagen runtime marker is diagnostic state, not a reason to
+		// roll back colors.toml and shell.toml.
+		fallbackStatus = runtime.FallbackStatus{}
 	}
 	state, err := json.Marshal(map[string]string{
 		"theme_name":    name.Slug,
@@ -332,23 +374,24 @@ func (s *Service) Apply(r Request) (Result, error) {
 		return Result{}, err
 	}
 	return Result{
-		SessionID:          r.SessionID,
-		GenerationID:       r.GenerationID,
-		Variant:            r.Variant,
-		ThemeName:          name.Slug,
-		DisplayName:        name.Display,
-		ThemePath:          destination,
-		ProtocolOperation:  operation.ID,
-		ProtocolCheckpoint: checkpoint.ID,
-		ProtocolEvents:     protocolPaths.Events,
-		ProtocolSocket:     protocolPaths.Socket,
+		SessionID:                 r.SessionID,
+		GenerationID:              r.GenerationID,
+		Variant:                   r.Variant,
+		ThemeName:                 name.Slug,
+		DisplayName:               name.Display,
+		ThemePath:                 destination,
+		AdvancedRuntimeRequired:   fallbackStatus.Required,
+		AdvancedRuntimeInstalled:  fallbackStatus.Installed,
+		NativeOnlyFallback:        fallbackStatus.NativeOnly,
+		FallbackNotificationShown: fallbackStatus.NotificationShown,
+		ProtocolOperation:         operation.ID,
+		ProtocolCheckpoint:        checkpoint.ID,
+		ProtocolEvents:            protocolPaths.Events,
+		ProtocolSocket:            protocolPaths.Socket,
 	}, nil
 }
 
-func (s *Service) canFinalizePreview(record session.Record, request Request) bool {
-	if request.GenerateUnlock || request.CapturePreview || request.RetintRun != "" || request.RetintSkip != "" {
-		return false
-	}
+func (s *Service) matchesLivePreview(record session.Record, request Request) bool {
 	if record.GenerationID != request.GenerationID || record.PreviewVariant != string(request.Variant) {
 		return false
 	}
@@ -361,11 +404,34 @@ func (s *Service) canFinalizePreview(record session.Record, request Request) boo
 		return false
 	}
 	current, err := inspector.CurrentTheme()
-	if err != nil || current != previewThemeName(request) {
+	if err != nil || !isPreviewForRequest(current, request) {
 		return false
 	}
 	info, err := os.Stat(s.currentThemeRoot)
 	return err == nil && info.IsDir()
+}
+
+func canFinalizePreviewWithoutApply(request Request) bool {
+	return !request.GenerateUnlock &&
+		!request.CapturePreview &&
+		request.RetintRun == "" &&
+		request.RetintSkip == "" &&
+		request.Scope == "" &&
+		request.WaitMode == "" &&
+		!request.AllowTrustedHooks
+}
+
+// isPreviewForRequest accepts both the plain preview name and the hashed
+// materialized-preview name. Styled previews include a content hash so their
+// active theme name is longer than previewThemeName(request); rejecting that
+// suffix caused Apply to fall back to the original generation candidate and
+// silently lose Shell/Bar choices made in Live Canvas.
+func isPreviewForRequest(current string, request Request) bool {
+	prefix := previewThemeName(request)
+	if current == prefix {
+		return true
+	}
+	return strings.HasPrefix(current, prefix+"-colors-")
 }
 
 func previewThemeName(request Request) string {
@@ -537,7 +603,7 @@ func candidateWallpaper(candidate string) (string, error) {
 	return "", fmt.Errorf("no generated wallpaper found")
 }
 
-func publish(source, destination, parent, sessionID string) error {
+func publish(source, destination, parent, sessionID string, prepare func(string) error) error {
 	if err := fsutil.EnsureDir(parent, 0o755); err != nil {
 		return err
 	}
@@ -553,6 +619,11 @@ func publish(source, destination, parent, sessionID string) error {
 	}()
 	if err := copyTree(source, temp); err != nil {
 		return err
+	}
+	if prepare != nil {
+		if err := prepare(temp); err != nil {
+			return err
+		}
 	}
 	if err := writeOwnerMarker(temp, sessionID); err != nil {
 		return err

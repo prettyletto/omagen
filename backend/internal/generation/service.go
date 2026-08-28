@@ -67,12 +67,16 @@ func (s *Service) Generate(
 	desktopStyle := session.NormalizeDesktopStyle(record.DesktopStyle)
 	barStyle := session.NormalizeBarStyle(record.BarStyle)
 	animationsStyle := session.NormalizeAnimationsStyle(record.AnimationsStyle)
+	lookFeel := session.NormalizeLookFeelDocument(record.LookFeel)
+	terminalTranslucency := session.NormalizeTerminalTranslucency(record.TerminalTranslucency)
 	if request.Configuration != nil {
 		configuration := *request.Configuration
 		configuration.ShellStyle = session.NormalizeShellStyle(configuration.ShellStyle)
 		configuration.DesktopStyle = session.NormalizeDesktopStyle(configuration.DesktopStyle)
 		configuration.BarStyle = session.NormalizeBarStyle(configuration.BarStyle)
 		configuration.AnimationsStyle = session.NormalizeAnimationsStyle(configuration.AnimationsStyle)
+		configuration.LookFeel = session.NormalizeLookFeelDocument(configuration.LookFeel)
+		configuration.Terminal = session.NormalizeTerminalTranslucency(configuration.Terminal)
 		if !configuration.ShellStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid shell style configuration")
 		}
@@ -85,16 +89,26 @@ func (s *Service) Generate(
 		if !configuration.AnimationsStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid animations style configuration")
 		}
+		if !configuration.LookFeel.Valid() {
+			return Result{}, fmt.Errorf("invalid Look & Feel configuration")
+		}
+		if !configuration.Terminal.Valid() {
+			return Result{}, fmt.Errorf("invalid terminal translucency configuration")
+		}
 		request.Configuration = &configuration
 		shellStyle = configuration.ShellStyle
 		desktopStyle = configuration.DesktopStyle
 		barStyle = configuration.BarStyle
 		animationsStyle = configuration.AnimationsStyle
+		lookFeel = configuration.LookFeel
+		terminalTranslucency = configuration.Terminal
 	} else if !record.ExtraConfigs {
 		shellStyle = session.ShellStyle{}
 		desktopStyle = session.DesktopStyle{}
 		barStyle = session.BarStyle{}
 		animationsStyle = session.AnimationsStyle{}
+		lookFeel = session.LookFeelDocument{}
+		terminalTranslucency = session.TerminalTranslucency{}
 	} else if !shellStyle.Valid() {
 		shellStyle = session.DefaultShellStyle()
 	}
@@ -191,6 +205,7 @@ func (s *Service) Generate(
 		desktopStyle,
 		barStyle,
 		animationsStyle,
+		compositionInput{lookFeel: lookFeel, terminal: terminalTranslucency},
 	); err != nil {
 		return Result{}, err
 	}
@@ -273,6 +288,8 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 		record.DesktopStyle = request.Configuration.DesktopStyle
 		record.BarStyle = request.Configuration.BarStyle
 		record.AnimationsStyle = request.Configuration.AnimationsStyle
+		record.LookFeel = request.Configuration.LookFeel
+		record.TerminalTranslucency = request.Configuration.Terminal
 	}
 	if err := s.sessions.Save(record); err != nil {
 		_ = fsutil.RemoveAllAndSync(finalRoot)
@@ -286,6 +303,11 @@ type jobResult struct {
 	err     error
 }
 
+type compositionInput struct {
+	lookFeel session.LookFeelDocument
+	terminal session.TerminalTranslucency
+}
+
 func runJobs(
 	ctx context.Context,
 	generationRoot string,
@@ -296,7 +318,14 @@ func runJobs(
 	desktopStyle session.DesktopStyle,
 	barStyle session.BarStyle,
 	animationsStyle session.AnimationsStyle,
+	composition ...compositionInput,
 ) error {
+	var lookFeel session.LookFeelDocument
+	var terminal session.TerminalTranslucency
+	if len(composition) > 0 {
+		lookFeel = composition[0].lookFeel
+		terminal = composition[0].terminal
+	}
 	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -325,6 +354,8 @@ func runJobs(
 				desktopStyle:    desktopStyle,
 				barStyle:        barStyle,
 				animationsStyle: animationsStyle,
+				lookFeel:        lookFeel,
+				terminal:        terminal,
 			}).run(
 				ctx,
 				generationRoot,

@@ -19,12 +19,15 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/cleanup"
 	"github.com/prettyletto/omagen/backend/internal/demo"
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/lookfeel"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
 	palettecfg "github.com/prettyletto/omagen/backend/internal/palette"
 	"github.com/prettyletto/omagen/backend/internal/preview"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
+	"github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
+	"github.com/prettyletto/omagen/backend/internal/terminaltheme"
 )
 
 type pingResponse struct {
@@ -53,6 +56,8 @@ type resumeResponse struct {
 	DesktopStyle           session.DesktopStyle          `json:"desktop_style,omitempty"`
 	BarStyle               session.BarStyle              `json:"bar_style,omitempty"`
 	AnimationsStyle        session.AnimationsStyle       `json:"animations_style,omitempty"`
+	LookFeel               session.LookFeelDocument      `json:"look_feel,omitempty"`
+	TerminalTranslucency   session.TerminalTranslucency  `json:"terminal_translucency,omitempty"`
 	ExtraConfigs           bool                          `json:"extra_configs,omitempty"`
 	OriginalTheme          string                        `json:"original_theme,omitempty"`
 	OriginalBackgroundKind string                        `json:"original_background_kind,omitempty"`
@@ -112,7 +117,7 @@ func Run(
 	switch args[0] {
 	case "--help", "-h", "help":
 		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
-		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, bar, protocol, ping")
+		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, bar, look-feel, terminal, runtime, protocol, ping")
 		return 0
 	case "ping":
 		return writeJSON(
@@ -172,6 +177,12 @@ func Run(
 		return runSettings(args[1:], settingsStore, stdout, stderr)
 	case "bar":
 		return runBar(args[1:], barStore, omarchyClient, stdout, stderr)
+	case "look-feel":
+		return runLookFeel(args[1:], stdout, stderr)
+	case "terminal":
+		return runTerminal(args[1:], stdout, stderr)
+	case "runtime":
+		return runRuntime(args[1:], stdout, stderr)
 	case "protocol":
 		return runProtocol(args[1:], store, previewService, stdout, stderr)
 
@@ -182,6 +193,121 @@ func Run(
 			"unknown command: %s",
 			args[0],
 		)
+	}
+}
+
+func runTerminal(args []string, stdout, stderr io.Writer) int {
+	if len(args) != 2 || args[0] != "materialize" {
+		return fail(stderr, 2, "usage: omagen terminal materialize <staged-theme-directory>")
+	}
+	report, err := terminaltheme.Materialize(args[1])
+	if err != nil {
+		return fail(stderr, 1, "materialize terminal themes: %v", err)
+	}
+	return writeJSON(stdout, stderr, report)
+}
+
+func runLookFeel(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "usage: omagen look-feel {list|resolve <preset>|export <preset>|import <manifest.json>}")
+	}
+	switch args[0] {
+	case "list":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen look-feel list")
+		}
+		return writeJSON(stdout, stderr, lookfeel.Catalog())
+	case "resolve":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen look-feel resolve <preset>")
+		}
+		composition, err := lookfeel.Resolve(args[1])
+		if err != nil {
+			return fail(stderr, 2, "%v", err)
+		}
+		return writeJSON(stdout, stderr, composition)
+	case "export":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen look-feel export <preset>")
+		}
+		manifest, err := lookfeel.Export(args[1])
+		if err != nil {
+			return fail(stderr, 2, "%v", err)
+		}
+		return writeJSON(stdout, stderr, manifest)
+	case "import":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen look-feel import <manifest.json>")
+		}
+		data, err := os.ReadFile(args[1])
+		if err != nil {
+			return fail(stderr, 2, "read recipe manifest: %v", err)
+		}
+		manifest, err := lookfeel.DecodeManifest(data)
+		if err != nil {
+			return fail(stderr, 2, "%v", err)
+		}
+		return writeJSON(stdout, stderr, manifest.Recipe)
+	default:
+		return fail(stderr, 2, "unknown look-feel subcommand: %s", args[0])
+	}
+}
+
+func runRuntime(args []string, stdout, stderr io.Writer) int {
+	if len(args) == 0 {
+		return fail(stderr, 2, "usage: omagen runtime {status|install|dismiss|theme-set <theme>}")
+	}
+	switch args[0] {
+	case "status":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen runtime status")
+		}
+		themeRoot, themeName, err := runtime.ActiveThemePaths()
+		if err != nil {
+			home, homeErr := os.UserHomeDir()
+			if homeErr != nil {
+				return fail(stderr, 1, "inspect advanced runtime: %v", err)
+			}
+			themeRoot = filepath.Join(home, ".local", "state", "omarchy", "current", "theme")
+			themeName = ""
+		}
+		status, err := runtime.InspectStatus(themeRoot, themeName)
+		if err != nil {
+			return fail(stderr, 1, "inspect advanced runtime: %v", err)
+		}
+		return writeJSON(stdout, stderr, status)
+	case "install":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen runtime install")
+		}
+		result, err := runtime.Install()
+		if err != nil {
+			return fail(stderr, 1, "install advanced runtime: %v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	case "dismiss":
+		if len(args) != 1 {
+			return fail(stderr, 2, "usage: omagen runtime dismiss")
+		}
+		if err := runtime.DismissPrompt(); err != nil {
+			return fail(stderr, 1, "dismiss advanced runtime setup: %v", err)
+		}
+		return writeJSON(stdout, stderr, map[string]bool{"prompted": true})
+	case "theme-set":
+		if len(args) != 2 {
+			return fail(stderr, 2, "usage: omagen runtime theme-set <theme>")
+		}
+		themeRoot, _, err := runtime.ActiveThemePaths()
+		if err != nil {
+			return fail(stderr, 1, "resolve active theme for runtime: %v", err)
+		}
+		result, err := runtime.ThemeSet(themeRoot, args[1])
+		if err != nil {
+			return fail(stderr, 1, "apply advanced runtime bridge: %v", err)
+		}
+		return writeJSON(stdout, stderr, result)
+	default:
+		return fail(stderr, 2, "unknown runtime subcommand: %s", args[0])
 	}
 }
 
@@ -535,7 +661,7 @@ func runSessionWithDependencies(
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
-		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, AnimationsStyle: session.NormalizeAnimationsStyle(record.AnimationsStyle), ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, AnimationsStyle: session.NormalizeAnimationsStyle(record.AnimationsStyle), LookFeel: session.NormalizeLookFeelDocument(record.LookFeel), TerminalTranslucency: session.NormalizeTerminalTranslucency(record.TerminalTranslucency), ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
 		if demoService != nil {
 			canvas, statusErr := demoService.Status(record.SessionID)
 			if statusErr == nil {
@@ -569,6 +695,9 @@ func runSessionWithDependencies(
 		var desktopStyle session.DesktopStyle
 		var barStyle session.BarStyle
 		var animationsStyle session.AnimationsStyle
+		var lookFeel session.LookFeelDocument
+		var terminalTranslucency session.TerminalTranslucency
+		lookFeelSeen := false
 		if len(args) >= 13 {
 			shellStyleEnd := 4
 			newShellStyle := len(args) >= 17
@@ -625,6 +754,46 @@ func runSessionWithDependencies(
 					}
 					desktopStyle.Active = args[index+1]
 					index++
+				case "--shell-preset":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --shell-preset requires a value")
+					}
+					shellStyle.Preset = args[index+1]
+					index++
+				case "--look-feel":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --look-feel requires a preset")
+					}
+					composition, resolveErr := lookfeel.Resolve(args[index+1])
+					if resolveErr != nil {
+						return fail(stderr, 2, "%v", resolveErr)
+					}
+					shellStyle = composition.Shell
+					desktopStyle = composition.Window
+					barStyle = composition.Bar
+					animationsStyle = composition.Animations
+					lookFeel = composition.LookFeelDocument()
+					terminalTranslucency = composition.Terminal
+					lookFeelSeen = true
+					index++
+				case "--look-feel-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --look-feel-json requires a JSON object")
+					}
+					if err := json.Unmarshal([]byte(args[index+1]), &lookFeel); err != nil {
+						return fail(stderr, 2, "decode --look-feel-json: %v", err)
+					}
+					lookFeelSeen = true
+					index++
+				case "--terminal-json":
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --terminal-json requires a JSON object")
+					}
+					if err := json.Unmarshal([]byte(args[index+1]), &terminalTranslucency); err != nil {
+						return fail(stderr, 2, "decode --terminal-json: %v", err)
+					}
+					lookFeelSeen = true
+					index++
 				case "--animations-json":
 					if index+1 >= len(args) {
 						return fail(stderr, 2, "usage: --animations-json requires a JSON object")
@@ -679,7 +848,11 @@ func runSessionWithDependencies(
 		if len(args) == 1 {
 			result, err = service.Begin()
 		} else {
-			result, err = service.Begin(shellStyle, desktopStyle, barStyle, animationsStyle)
+			if lookFeelSeen {
+				result, err = service.Begin(shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency)
+			} else {
+				result, err = service.Begin(shellStyle, desktopStyle, barStyle, animationsStyle)
+			}
 		}
 		if err != nil {
 			return fail(
@@ -1057,6 +1230,9 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	var animationsStyle session.AnimationsStyle
 	animationsStyleSeen := false
 	shellOverridesSeen := false
+	lookFeelSeen := false
+	var lookFeelDocument session.LookFeelDocument
+	var terminalTranslucency session.TerminalTranslucency
 
 	for i := 2; i < len(args); i++ {
 		arg := args[i]
@@ -1095,6 +1271,49 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			shellStyle = session.ShellStyle{Surface: args[i+1], Detail: args[i+2], Tooltip: args[i+3], Notifications: args[i+4]}
 			shellStyleSeen = true
 			i += 4
+		case arg == "--shell-preset":
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--shell-preset requires a value")
+			}
+			shellStyle.Preset = args[i+1]
+			shellStyleSeen = true
+			i++
+		case arg == "--look-feel":
+			if lookFeelSeen {
+				return generation.Request{}, fmt.Errorf("--look-feel specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--look-feel requires a preset")
+			}
+			composition, err := lookfeel.Resolve(args[i+1])
+			if err != nil {
+				return generation.Request{}, err
+			}
+			lookFeelDocument = composition.LookFeelDocument()
+			terminalTranslucency = composition.Terminal
+			lookFeelSeen = true
+			i++
+		case arg == "--look-feel-json":
+			if lookFeelSeen {
+				return generation.Request{}, fmt.Errorf("--look-feel specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--look-feel-json requires a JSON object")
+			}
+			if err := json.Unmarshal([]byte(args[i+1]), &lookFeelDocument); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --look-feel-json: %w", err)
+			}
+			lookFeelSeen = true
+			i++
+		case arg == "--terminal-json":
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--terminal-json requires a JSON object")
+			}
+			if err := json.Unmarshal([]byte(args[i+1]), &terminalTranslucency); err != nil {
+				return generation.Request{}, fmt.Errorf("decode --terminal-json: %w", err)
+			}
+			lookFeelSeen = true
+			i++
 		case arg == "--desktop-style":
 			if desktopStyleSeen {
 				return generation.Request{}, fmt.Errorf("--desktop-style specified more than once")
@@ -1195,19 +1414,49 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
 		}
 	}
-	if shellStyleSeen || desktopStyleSeen || barStyleSeen || barProfileSeen || barSpecSeen {
+	if lookFeelSeen {
+		composition, err := lookfeel.Resolve(lookFeelDocument.Preset)
+		if err != nil {
+			return generation.Request{}, err
+		}
 		if !shellStyleSeen {
-			shellStyle = session.DefaultShellStyle()
+			shellStyle = composition.Shell
 		}
 		if !desktopStyleSeen {
+			desktopStyle = composition.Window
+		}
+		if !barStyleSeen && !barProfileSeen && !barSpecSeen {
+			barStyle = composition.Bar
+		}
+		if !animationsStyleSeen {
+			animationsStyle = composition.Animations
+		}
+		if shellStyleSeen {
+			lookFeelDocument.Customized["shell"] = true
+		}
+		if desktopStyleSeen {
+			lookFeelDocument.Customized["window"] = true
+		}
+		if barStyleSeen || barProfileSeen || barSpecSeen {
+			lookFeelDocument.Customized["bar"] = true
+		}
+		if animationsStyleSeen {
+			lookFeelDocument.Customized["animations"] = true
+		}
+	}
+	if shellStyleSeen || desktopStyleSeen || barStyleSeen || barProfileSeen || barSpecSeen || lookFeelSeen {
+		if !shellStyleSeen && !lookFeelSeen {
+			shellStyle = session.DefaultShellStyle()
+		}
+		if !desktopStyleSeen && !lookFeelSeen {
 			desktopStyle = session.DefaultDesktopStyle()
 		}
-		if !barStyleSeen {
+		if !barStyleSeen && !lookFeelSeen {
 			profile, spec := barStyle.Profile, barStyle.Spec
 			barStyle = session.DefaultBarStyle()
 			barStyle.Profile, barStyle.Spec = profile, spec
 		}
-		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle}
+		request.Configuration = &generation.Configuration{ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeelDocument, Terminal: terminalTranslucency}
 	}
 
 	return request, nil

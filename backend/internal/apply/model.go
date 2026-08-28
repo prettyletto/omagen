@@ -15,14 +15,18 @@ type Request struct {
 	AllowTrustedHooks       bool
 }
 type Result struct {
-	SessionID          string             `json:"session_id"`
-	GenerationID       string             `json:"generation_id"`
-	Variant            generation.Variant `json:"variant"`
-	ThemeName          string             `json:"theme_name"`
-	DisplayName        string             `json:"display_name"`
-	ThemePath          string             `json:"theme_path"`
-	ProtocolOperation  string             `json:"protocol_operation,omitempty"`
-	ProtocolCheckpoint string             `json:"protocol_checkpoint,omitempty"`
-	ProtocolEvents     string             `json:"protocol_events,omitempty"`
-	ProtocolSocket     string             `json:"protocol_socket,omitempty"`
+	SessionID                 string             `json:"session_id"`
+	GenerationID              string             `json:"generation_id"`
+	Variant                   generation.Variant `json:"variant"`
+	ThemeName                 string             `json:"theme_name"`
+	DisplayName               string             `json:"display_name"`
+	ThemePath                 string             `json:"theme_path"`
+	AdvancedRuntimeRequired   bool               `json:"advanced_runtime_required,omitempty"`
+	AdvancedRuntimeInstalled  bool               `json:"advanced_runtime_installed,omitempty"`
+	NativeOnlyFallback        bool               `json:"native_only_fallback,omitempty"`
+	FallbackNotificationShown bool               `json:"fallback_notification_shown,omitempty"`
+	ProtocolOperation         string             `json:"protocol_operation,omitempty"`
+	ProtocolCheckpoint        string             `json:"protocol_checkpoint,omitempty"`
+	ProtocolEvents            string             `json:"protocol_events,omitempty"`
+	ProtocolSocket            string             `json:"protocol_socket,omitempty"`
 }

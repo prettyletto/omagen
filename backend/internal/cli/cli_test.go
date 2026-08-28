@@ -25,7 +25,7 @@ func TestRunCommandValidation(t *testing.T) {
 	}{
 		{nil, 2, "missing command"}, {[]string{"unknown"}, 2, "unknown command"},
 		{[]string{"session"}, 2, "missing session subcommand"}, {[]string{"session", "unknown"}, 2, "unknown session subcommand"},
-		{[]string{"session", "cancel"}, 2, "usage:"}, {[]string{"generate"}, 2, "usage:"},
+		{[]string{"session", "cancel"}, 2, "usage:"}, {[]string{"generate"}, 2, "usage:"}, {[]string{"look-feel"}, 2, "usage:"},
 	} {
 		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
 			var out, err bytes.Buffer
@@ -33,6 +33,48 @@ func TestRunCommandValidation(t *testing.T) {
 				t.Fatalf("code=%d stderr=%q", code, err.String())
 			}
 		})
+	}
+}
+
+func TestRunLookFeelListAndResolve(t *testing.T) {
+	testenv.Isolate(t)
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "list"}, &out, &errOut); code != 0 {
+		t.Fatalf("list code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "glass-blur") || !strings.Contains(out.String(), "omarchy-native") {
+		t.Fatalf("catalog output=%q", out.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "resolve", "glass-blur"}, &out, &errOut); code != 0 {
+		t.Fatalf("resolve code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"preset":"glass-blur"`) || !strings.Contains(out.String(), `"opacity":0.82`) {
+		t.Fatalf("composition output=%q", out.String())
+	}
+}
+
+func TestRunLookFeelExportsAndImportsPortableManifest(t *testing.T) {
+	testenv.Isolate(t)
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "export", "nature"}, &out, &errOut); code != 0 {
+		t.Fatalf("export code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"kind":"omagen.look-feel.recipe"`) || !strings.Contains(out.String(), `"id":"nature"`) {
+		t.Fatalf("manifest output=%q", out.String())
+	}
+	path := filepath.Join(t.TempDir(), "nature.omagen-recipe.json")
+	if err := os.WriteFile(path, out.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "import", path}, &out, &errOut); code != 0 {
+		t.Fatalf("import code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"preset":"nature"`) || !strings.Contains(out.String(), `"curve":"spring"`) {
+		t.Fatalf("imported recipe=%q", out.String())
 	}
 }
 
@@ -66,6 +108,23 @@ func TestParseGenerateArgsWithConfiguration(t *testing.T) {
 	}
 	if request.Configuration.ShellStyle.Surface != "accent" || request.Configuration.DesktopStyle.BorderSize != 2 || request.Configuration.BarStyle.Visibility != "islands" {
 		t.Fatalf("unexpected configuration: %#v", request.Configuration)
+	}
+}
+
+func TestParseGenerateArgsWithLookFeelComposition(t *testing.T) {
+	request, err := parseGenerateArgs([]string{"session", "image", "--look-feel", "glass-blur"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil {
+		t.Fatal("Look & Feel did not create a generation configuration")
+	}
+	configuration := request.Configuration
+	if configuration.LookFeel.Preset != "glass-blur" || configuration.Terminal.Mode != "preset" || configuration.Terminal.Opacity != 0.82 || configuration.Terminal.CellMode != "painted" {
+		t.Fatalf("unexpected Look & Feel configuration: %#v", configuration)
+	}
+	if configuration.DesktopStyle.Active != "frosted_light" || configuration.ShellStyle.Preset != "glass" || configuration.BarStyle.Spec == nil || configuration.BarStyle.Profile == nil || configuration.BarStyle.Profile.Implementation != barprofile.ImplementationReplacement || configuration.AnimationsStyle.Preset != "smooth" {
+		t.Fatalf("composition did not populate all engines: %#v", configuration)
 	}
 }
 

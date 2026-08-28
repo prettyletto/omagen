@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components" as Components
 
 // A live, read-only shell surface for the Shell engine.  This deliberately
 // uses the same Quickshell surface vocabulary as the native shell while the
@@ -13,9 +14,12 @@ PanelWindow {
 
     property bool active: false
     property string monitorName: ""
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
 
     readonly property var targetScreen: root.resolveScreen()
+    readonly property string presetChoice: String(root.shellStyle.preset || "default")
     readonly property string surfaceChoice: String(root.shellStyle.surface || "flat")
     readonly property string detailChoice: String(root.shellStyle.detail || "native")
     readonly property string tooltipChoice: String(root.shellStyle.tooltip || "native")
@@ -24,6 +28,7 @@ PanelWindow {
     readonly property int overrideCount: Object.keys(root.overrides).length
 
     readonly property color canvasColor: {
+        if (root.presetChoice === "glass") return Util.alpha(Color.popups.background, 0.78)
         // The panel surface itself is opaque by default. Transparency is a
         // deliberate Shell choice, not a property every generated theme must
         // inherit just because the PanelWindow uses an alpha-capable surface.
@@ -32,7 +37,9 @@ PanelWindow {
         if (root.surfaceChoice === "layered") return Util.alpha(Color.popups.background, 0.90)
         return Color.popups.background
     }
-    readonly property color cardColor: root.surfaceChoice === "accent"
+    readonly property color cardColor: root.presetChoice === "glass"
+        ? Util.alpha(Color.foreground, 0.055)
+        : root.surfaceChoice === "accent"
         ? Util.alpha(Color.accent, 0.12)
         : root.surfaceChoice === "layered"
             ? Util.alpha(Color.foreground, 0.055)
@@ -61,7 +68,8 @@ PanelWindow {
     function titleFor(choice) {
         var labels = {
             flat: "Flat", layered: "Layered", contrast: "Contrast", accent: "Accent",
-            native: "Native", framed: "Framed", edge: "Edge", focus: "Focus"
+            native: "Native", framed: "Framed", edge: "Edge", focus: "Focus",
+            default: "Default", glass: "Glass"
         }
         return labels[choice] || choice
     }
@@ -102,6 +110,15 @@ PanelWindow {
         color: root.canvasColor
         radius: Style.cornerRadius
         borderSpec: Border.flat(root.detailColor, root.detailWidth)
+
+        Components.SignalGlitch {
+            anchors.fill: parent
+            z: 10
+            enabled: root.glitchEnabled
+            triggerEpoch: root.glitchEpoch
+            accentColor: Color.accent
+            secondaryColor: Color.foreground
+        }
 
         ColumnLayout {
             anchors.fill: parent
@@ -153,10 +170,10 @@ PanelWindow {
 
                 Repeater {
                     model: [
-                        { label: "SURFACE", value: root.titleFor(root.surfaceChoice) },
-                        { label: "DETAIL", value: root.titleFor(root.detailChoice) },
-                        { label: "TOOLTIP", value: root.titleFor(root.tooltipChoice) },
-                        { label: "ALERTS", value: root.titleFor(root.notificationChoice) }
+                        { label: "LOOK", value: root.titleFor(root.presetChoice) },
+                        { label: "MATERIAL", value: root.presetChoice === "glass" ? "Blurred glass" : "Native" },
+                        { label: "PALETTE", value: "Native" },
+                        { label: "TOKENS", value: String(root.overrideCount) }
                     ]
 
                     delegate: BorderSurface {
@@ -195,7 +212,7 @@ PanelWindow {
             BorderSurface {
                 Layout.fillWidth: true
                 Layout.preferredHeight: Style.space(44)
-                color: Util.alpha(Color.bar.background, root.surfaceChoice === "layered" ? 0.82 : 0.96)
+                color: Util.alpha(Color.bar.background, root.presetChoice === "glass" ? 0.82 : root.surfaceChoice === "layered" ? 0.82 : 0.96)
                 radius: Style.cornerRadius
                 borderSpec: Border.flat(Util.alpha(root.detailColor, 0.72), 1)
 
@@ -366,7 +383,9 @@ PanelWindow {
 
             Text {
                 Layout.fillWidth: true
-                text: "Visual shell reader harness  ·  Test Live applies the actual Quattro tokens"
+                text: root.presetChoice === "glass"
+                    ? "Glass preset · native Quickshell reader · scoped backdrop blur"
+                    : "Default preset · native Quickshell reader · Test Live applies the actual tokens"
                 color: Color.foreground
                 opacity: 0.54
                 font.family: Style.font.family

@@ -160,6 +160,119 @@ func TestApplyFinalizesMatchingLivePreviewWithoutRetinting(t *testing.T) {
 	}
 }
 
+func TestApplyFinalizesMaterializedStyledPreviewWithoutLosingCandidate(t *testing.T) {
+	// A preview with style or color overrides is assigned a deterministic
+	// -colors-<hash> suffix. Apply must recognize that as the same preview so
+	// it publishes the already-materialized dock/bar candidate.
+	applier := &fastPreviewApplier{theme: "omagen-preview-session-1-generation-1-source-colors-99bfca879b614431"}
+	service, store, sessionID := setupApplyTest(t, applier)
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.GenerationID = "generation-1"
+	record.PreviewVariant = "source"
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(service.currentThemeRoot, "backgrounds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "colors.toml"), []byte("from-styled-preview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "shell.toml"), []byte("bar = \"dock\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	variant, _ := generation.ParseVariant("source")
+	result, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Styled Dock Theme"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applier.finalized != "styled-dock-theme" || applier.applyCalled {
+		t.Fatalf("finalized=%q full_apply_called=%t", applier.finalized, applier.applyCalled)
+	}
+	contents, err := os.ReadFile(filepath.Join(result.ThemePath, "shell.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != "bar = \"dock\"\n" {
+		t.Fatalf("published styled preview=%q", contents)
+	}
+}
+
+func TestApplyWithOptionalAssetsPublishesMatchingMaterializedPreview(t *testing.T) {
+	applier := &fastPreviewApplier{theme: "omagen-preview-session-1-generation-1-source-colors-99bfca879b614431"}
+	service, store, sessionID := setupApplyTest(t, applier)
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.GenerationID = "generation-1"
+	record.PreviewVariant = "source"
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(service.currentThemeRoot, "backgrounds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	wallpaper := image.NewRGBA(image.Rect(0, 0, 4, 3))
+	wallpaper.Set(1, 1, color.RGBA{R: 255, A: 255})
+	wallpaperFile, err := os.Create(filepath.Join(service.currentThemeRoot, "backgrounds", "wallpaper.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(wallpaperFile, wallpaper); err != nil {
+		_ = wallpaperFile.Close()
+		t.Fatal(err)
+	}
+	if err := wallpaperFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "colors.toml"), []byte("from-styled-preview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "hyprland.lua"), []byte("-- cyberpunk materialized preview\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "omagen-cyberpunk-glitch.frag"), []byte("#version 320 es\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := service.Apply(Request{
+		SessionID:      sessionID,
+		GenerationID:   "generation-1",
+		Variant:        generation.Variant("source"),
+		ThemeName:      "Cyber Materialized",
+		GenerateUnlock: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if applier.finalized != "" || !applier.applyCalled {
+		t.Fatalf("finalized=%q full_apply_called=%t", applier.finalized, applier.applyCalled)
+	}
+	for name, expected := range map[string]string{
+		"colors.toml":                  "from-styled-preview\n",
+		"hyprland.lua":                 "-- cyberpunk materialized preview\n",
+		"omagen-cyberpunk-glitch.frag": "#version 320 es\n",
+	} {
+		contents, readErr := os.ReadFile(filepath.Join(result.ThemePath, name))
+		if readErr != nil {
+			t.Fatalf("read published %s: %v", name, readErr)
+		}
+		if string(contents) != expected {
+			t.Fatalf("published %s=%q", name, contents)
+		}
+	}
+	for _, name := range []string{"unlock.png", "preview-unlock.png"} {
+		if info, statErr := os.Stat(filepath.Join(result.ThemePath, name)); statErr != nil || !info.Mode().IsRegular() {
+			t.Fatalf("optional asset %s missing: info=%v err=%v", name, info, statErr)
+		}
+	}
+}
+
 func setupApplyTest(t *testing.T, applier ThemeApplier) (*Service, *session.Store, string) {
 	t.Helper()
 	testenv.Isolate(t)

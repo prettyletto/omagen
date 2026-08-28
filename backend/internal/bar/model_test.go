@@ -37,6 +37,36 @@ func TestPresetCompilationSelectsNativeOrOmagen(t *testing.T) {
 	if compiled.Engine != EngineOmagen || compiled.Native {
 		t.Fatalf("dock compilation = %#v", compiled)
 	}
+
+	islands, err := Preset("islands")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if islands.Topology != TopologyIslands || islands.Engine != EngineOmagen {
+		t.Fatalf("islands preset = %#v", islands)
+	}
+	compiled, err = Compile(islands)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("islands compilation = %#v", compiled)
+	}
+
+	minimal, err := Preset("minimal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if minimal.Topology != TopologyMinimal || minimal.Engine != EngineOmagen || !minimal.Behavior.HoverExpand || minimal.Surface.Role != "native" || minimal.Surface.Opacity != 1 {
+		t.Fatalf("minimal preset = %#v", minimal)
+	}
+	compiled, err = Compile(minimal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("minimal compilation = %#v", compiled)
+	}
 }
 
 func TestExplicitNativeRejectsAdvancedBehavior(t *testing.T) {
@@ -50,7 +80,6 @@ func TestExplicitNativeRejectsAdvancedBehavior(t *testing.T) {
 
 func TestUnsupportedNativeSurfaceAndGeometrySelectOmagen(t *testing.T) {
 	for name, mutate := range map[string]func(*BarSpec){
-		"blur": func(spec *BarSpec) { spec.Surface.Blur = 8 },
 		"border": func(spec *BarSpec) {
 			spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth = "foreground", .3, 1
 		},
@@ -72,6 +101,111 @@ func TestUnsupportedNativeSurfaceAndGeometrySelectOmagen(t *testing.T) {
 	}
 }
 
+func TestGlassSurfaceKeepsContinuousBarNative(t *testing.T) {
+	spec := Default()
+	spec.Surface.Treatment = "glass"
+	spec.Surface.Role = "background"
+	spec.Surface.Opacity = 0.72
+	spec.Surface.Blur = 1
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineNative || !compiled.Native || !compiled.Capabilities.Surface {
+		t.Fatalf("glass surface should remain native-capable: %#v", compiled)
+	}
+}
+
+func TestMetalSurfaceKeepsContinuousBarNative(t *testing.T) {
+	spec := Default()
+	spec.Surface.Treatment = "metal"
+	spec.Surface.Role = "dark"
+	spec.Surface.Opacity = 0.94
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineNative || !compiled.Native || !compiled.Capabilities.Surface {
+		t.Fatalf("metal surface should remain native-capable: %#v", compiled)
+	}
+}
+
+func TestRegionSurfaceModesAreValidatedAndAdapterBound(t *testing.T) {
+	spec := Default()
+	spec.Regions.Center.Mode = "island"
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("region decoration compiled as native: %#v", compiled)
+	}
+	spec.Regions.Left.Mode = "unsupported"
+	if err := spec.Validate(); err == nil {
+		t.Fatal("unsupported region mode was accepted")
+	}
+}
+
+func TestDockAlignmentAndWorkspaceGlyphsAreValidatedAndAdapterBound(t *testing.T) {
+	spec := Default()
+	spec.Topology = TopologyDock
+	spec.Geometry.LengthMode = "content"
+	spec.Geometry.Alignment = "start"
+	spec.Workspace = WorkspacePresentation{Mode: "glyphs", Glyphs: []string{"一", "二", "三"}}
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("custom dock compiled as native: %#v", compiled)
+	}
+
+	spec.Geometry.Alignment = "middle"
+	if err := spec.Validate(); err == nil {
+		t.Fatal("invalid dock alignment was accepted")
+	}
+	spec.Geometry.Alignment = "center"
+	spec.Workspace.Glyphs = []string{"this-is-too-long"}
+	if err := spec.Validate(); err == nil {
+		t.Fatal("oversized workspace glyph was accepted")
+	}
+}
+
+func TestWorkspacePresentationModesAreAccepted(t *testing.T) {
+	for _, mode := range []string{"native", "numbers", "kanji", "roman", "letters", "dots"} {
+		spec := Default()
+		spec.Workspace.Mode = mode
+		if err := spec.Validate(); err != nil {
+			t.Fatalf("workspace mode %q rejected: %v", mode, err)
+		}
+	}
+
+	spec := Default()
+	spec.Workspace = WorkspacePresentation{Mode: "glyphs", Glyphs: []string{"①", "②", "③", "④", "⑤"}}
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("five custom workspace glyphs rejected: %v", err)
+	}
+	spec.Workspace.Glyphs = append(spec.Workspace.Glyphs, "⑥")
+	if err := spec.Validate(); err == nil {
+		t.Fatal("more than five custom workspace glyphs were accepted")
+	}
+}
+
+func TestJapaneseKanjiWorkspacePresentationUsesOmagenLabels(t *testing.T) {
+	spec := Default()
+	spec.Workspace.Mode = "kanji"
+	if err := spec.Validate(); err != nil {
+		t.Fatalf("Japanese Kanji workspace presentation rejected: %v", err)
+	}
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native || compiled.Capabilities.Workspace {
+		t.Fatalf("Japanese Kanji workspace presentation should use the Omagen reader: %#v", compiled)
+	}
+}
+
 func TestPresetNamesAreStable(t *testing.T) {
 	for _, name := range Presets() {
 		spec, err := Preset(name)
@@ -81,5 +215,35 @@ func TestPresetNamesAreStable(t *testing.T) {
 		if err := spec.Validate(); err != nil {
 			t.Fatalf("preset %q invalid: %v", name, err)
 		}
+	}
+}
+
+func TestFloatingPresetUsesCompactDensity(t *testing.T) {
+	spec, err := Preset("float")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Topology != TopologyFloating || spec.Geometry.Density != "compact" {
+		t.Fatalf("floating preset should be compact: %#v", spec)
+	}
+}
+
+func TestFloatingExpandedPresetUsesNativeTrayComposition(t *testing.T) {
+	spec, err := Preset("float-expanded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Topology != TopologyFloating || spec.Geometry.Density != "native" || !spec.Behavior.HoverExpand {
+		t.Fatalf("floating expanded preset should retain native tray behavior: %#v", spec)
+	}
+}
+
+func TestDockPresetUsesAutoHideContentSizedOmagenComposition(t *testing.T) {
+	spec, err := Preset("dock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Topology != TopologyDock || spec.Engine != EngineOmagen || spec.Geometry.LengthMode != "content" || spec.Geometry.Alignment != "center" || spec.Behavior.Visibility != "auto_hide" || !spec.Behavior.HoverExpand {
+		t.Fatalf("dock preset should be centered, content-sized, and hover-expanded: %#v", spec)
 	}
 }

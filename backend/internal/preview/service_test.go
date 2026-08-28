@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/bar"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
 	"github.com/prettyletto/omagen/backend/internal/session"
@@ -246,10 +247,28 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	}
 	themeRoot := t.TempDir()
 	service := newServiceWithThemeRoot(store, previewApplier{}, themeRoot)
+	dockSpec, err := bar.Preset("dock")
+	if err != nil {
+		t.Fatal(err)
+	}
 	styles := &StyleOverrides{
-		Shell:   session.ShellStyle{Surface: "contrast", Detail: "focus", Tooltip: "accent", Notifications: "accent"},
+		Shell: session.ShellStyle{
+			Surface: "contrast", Detail: "focus", Tooltip: "accent", Notifications: "accent",
+			Overrides: map[string]string{
+				"bar.background": "#123456", "bar.text": "#FEDCBA", "bar.active": "#FF3366",
+			},
+		},
 		Desktop: session.DesktopStyle{BorderStyle: "neon", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "frosted_balanced"},
-		Bar:     session.BarStyle{Surface: "dark", Density: "comfortable", Attention: "accent", Form: "docked", Visibility: "islands"},
+		Animations: session.AnimationsStyle{
+			Version: 1, Preset: "custom", Window: "spring", WindowOpen: "popin", WindowClose: "fade",
+			WindowMove: "spring", WindowAmount: 74, WindowSpeed: 5, Workspace: "slidefade", WorkspaceAxis: "vertical",
+			WorkspaceTravel: 24, Special: "fade", Focus: "smooth", Layers: "slide", Curve: "spring", Border: "spin", BorderSpeed: 42,
+		},
+		Bar: session.BarStyle{
+			Surface: "dark", Density: "comfortable", Attention: "accent", Form: "docked", Visibility: "islands", Spec: &dockSpec,
+		},
+		LookFeel: &session.LookFeelDocument{SchemaVersion: 1, Preset: "glass-blur", PresetRevision: 1, Customized: map[string]bool{"window": true, "shell": false, "bar": true, "animations": false, "terminal": false}},
+		Terminal: &session.TerminalTranslucency{SchemaVersion: 1, Mode: "preset", Opacity: 0.82, CellMode: "background"},
 	}
 	result, err := service.Apply(Request{SessionID: record.SessionID, GenerationID: "generation-1", Variant: generation.Source, Styles: styles})
 	if err != nil {
@@ -263,7 +282,14 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"border_size = 2", "rounding = 8", "dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true"} {
+	for _, want := range []string{
+		"border_size = 2", "rounding = 8", "dim_inactive = true, dim_strength = 0.26", "blur = { enabled = true",
+		`hl.curve("omagenSpring", { type = "spring", mass = 1, stiffness = 85, dampening = 17 })`,
+		`style = "popin 74%"`, `style = "slidefadevert 24%"`,
+		`hl.animation({ leaf = "specialWorkspace", enabled = true`,
+		`hl.animation({ leaf = "fadeSwitch", enabled = true, speed = 2.4, bezier = "easeOutQuint" })`,
+		`hl.animation({ leaf = "layersIn", enabled = true, speed = 4, bezier = "easeOutQuint", style = "slide" })`,
+	} {
 		if !strings.Contains(string(hyprland), want) {
 			t.Errorf("live composition hyprland.lua missing %q:\n%s", want, hyprland)
 		}
@@ -271,6 +297,7 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	for name, want := range map[string]string{
 		"shell.popups.toml":  `background = "#777777"`,
 		"shell.tooltip.toml": `border = "accent"`,
+		"shell.bar.toml":     "active = \"#FF3366\"\nbackground = \"#123456\"\ntext = \"#FEDCBA\"",
 		"omagen.bar.toml":    `form = "docked"`,
 	} {
 		data, err := os.ReadFile(filepath.Join(target, name))
@@ -285,7 +312,18 @@ func TestApplyMaterializesLiveCompositionWithoutMutatingPreset(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.DesktopStyle.Inactive != "frosted_balanced" || updated.BarStyle.Form != "docked" || updated.ShellStyle.Detail != "focus" {
+	if updated.DesktopStyle.Inactive != "frosted_balanced" || updated.ShellStyle.Detail != "focus" || updated.BarStyle.Form != "docked" || updated.AnimationsStyle.WorkspaceAxis != "vertical" || updated.AnimationsStyle.WindowAmount != 74 {
 		t.Fatalf("session did not retain live composition: %#v", updated)
+	}
+	if updated.BarStyle.Spec == nil || updated.BarStyle.Spec.Topology != bar.TopologyDock || updated.BarStyle.Spec.Geometry.LengthMode != "content" {
+		t.Fatalf("session dropped live BarSpec: %#v", updated.BarStyle.Spec)
+	}
+	if updated.LookFeel.Preset != "glass-blur" || updated.TerminalTranslucency.Opacity != 0.82 {
+		t.Fatalf("session dropped Look & Feel metadata: %#v %#v", updated.LookFeel, updated.TerminalTranslucency)
+	}
+	for name := range map[string]bool{"omagen.look-feel.json": true, "omagen.terminal.json": true} {
+		if _, err := os.Stat(filepath.Join(target, name)); err != nil {
+			t.Fatalf("live composition metadata %s missing: %v", name, err)
+		}
 	}
 }

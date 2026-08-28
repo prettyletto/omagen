@@ -470,6 +470,30 @@ func TestFinalizePreviewThemeWritesPermanentNameOnly(t *testing.T) {
 	}
 }
 
+func TestAppendOmarchyEnvironmentPrefersConfiguredPath(t *testing.T) {
+	home := t.TempDir()
+	configured := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OMARCHY_PATH", configured)
+
+	for _, root := range []string{configured, filepath.Join(home, ".local", "share", "omarchy")} {
+		if err := os.MkdirAll(filepath.Join(root, "shell"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "shell", "shell.qml"), []byte("Item {}\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	resolved := appendOmarchyEnvironment([]string{"PATH=/usr/bin", "OMARCHY_PATH=" + configured})
+	for _, value := range resolved {
+		if value == "OMARCHY_PATH="+configured {
+			return
+		}
+	}
+	t.Fatalf("configured OMARCHY_PATH was not preserved: %v", resolved)
+}
+
 func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	home := t.TempDir()
 	omarchyPath := t.TempDir()
@@ -514,22 +538,25 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	}
 	writeCommand("omarchy-theme-set-templates", "exit 0")
 	writeCommand("omarchy-shell", "printf '%s\\n' \"$@\" >> \"$HOME/commands.log\"")
-	writeCommand("omarchy-restart-terminal", "printf terminal >> \"$HOME/allowlist.log\"; exit 1")
+	writeCommand("omarchy-restart-terminal", "printf terminal >> \"$HOME/allowlist.log\"; (sleep 0.50; printf finished > \"$HOME/post-commit-finished\") & exit 1")
 	writeCommand("omarchy-theme-set-browser", "printf browser >> \"$HOME/allowlist.log\"")
 	writeCommand("omarchy-hook", "printf hook >> \"$HOME/disallowed.log\"")
 	writeCommand("omarchy-restart-hyprctl", "printf hyprctl >> \"$HOME/disallowed.log\"")
+	postCommitLog := filepath.Join(home, "post-commit.log")
+	t.Setenv("OMAGEN_STUDIO_POST_COMMIT_LOG", postCommitLog)
 
 	_, currentFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve test source path")
 	}
 	driver := filepath.Join(filepath.Dir(currentFile), "../../../bin/studio-theme-set")
+	started := time.Now()
 	output, err := exec.Command(driver, "preview", "candidate", "--no-hooks", "--run", "terminal,browser", "--skip", "hyprland").CombinedOutput()
 	if err != nil {
 		t.Fatalf("studio-theme-set preview: %v: %s", err, output)
 	}
-	if !strings.Contains(string(output), "adapter=terminal status=failed") {
-		t.Fatalf("missing non-fatal adapter failure in output: %s", output)
+	if elapsed := time.Since(started); elapsed >= 400*time.Millisecond {
+		t.Fatalf("critical preview waited for detached post-commit work: %v", elapsed)
 	}
 
 	activeTheme, err := os.ReadFile(filepath.Join(home, ".local/state/omarchy/current/theme.name"))
@@ -545,6 +572,18 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "disallowed.log")); !os.IsNotExist(err) {
 		t.Fatalf("disallowed command ran, err=%v", err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		logData, logErr := os.ReadFile(postCommitLog)
+		_, finishedErr := os.Stat(filepath.Join(home, "post-commit-finished"))
+		if logErr == nil && strings.Contains(string(logData), "adapter=terminal status=failed") && finishedErr == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("detached post-commit work did not finish: log=%q logErr=%v markerErr=%v", logData, logErr, finishedErr)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

@@ -83,21 +83,28 @@ Soft dim keeps inactive windows readable while moving attention to the focused
 window. Shadow · Preserve transparency adds only a lower-alpha compositor
 shadow and leaves Omarchy/application opacity untouched. Frosted backdrop uses
 the existing translucent surface and inherits the current application/Omarchy
-opacity policy; its profile changes blur size/passes and optional dim strength,
-not the global alpha.
+opacity policy when selected as a standalone Window style; the Glass Blur
+preset explicitly adds `0.72` active and inactive window opacity so the full
+desktop treatment remains visibly translucent.
 background blur. The generated profiles use `ignore_opacity = true` so the
 inactive opacity does not collapse the backdrop sample into a dark shadow.
 Light is the low-cost option, Balanced is the recommended
-default, and Rich uses a larger multipass blur. The Live Canvas layer also uses
+default, and Rich uses a larger multipass blur. Hyprland exposes one blur
+kernel for normal windows, so when both active and inactive windows are
+frosted, the active choice owns that shared strength; a stronger inactive
+choice still keeps its independent dim/opacity intent without making the
+focused window blur more strongly. The Live Canvas layer also uses
 `ignore_alpha = 0.20` and profile-specific panel alpha so the glass surface is
 visibly translucent. Opaque application pixels stay
 sharp: native Hyprland blur affects only the backdrop visible through a
 translucent surface.
 
-Active and inactive profiles are separate compositor paths. A focused surface
-can be translucent while inactive panes use a stronger dim, or either path can
-remain native. This makes the blur choice explicit instead of pretending that
-one inactive toggle can blur opaque application content.
+Active and inactive profiles keep separate opacity and dim intent. A focused
+surface can be translucent while inactive panes use a stronger dim, or either
+path can remain native. The shared normal-window blur kernel is resolved in
+favor of the focused frosted profile because Hyprland does not expose separate
+active/inactive blur sizes. This makes the limitation explicit instead of
+pretending that one inactive toggle can blur opaque application content.
 
 The Live Canvas is a Quickshell layer surface rather than a managed window.
 When a Frosted backdrop profile is selected, Omagen therefore emits a scoped Hyprland
@@ -131,40 +138,39 @@ Shell surface choices affect Quickshell popups, menus, and interactive
 controls. Detail choices affect how focus and selection edges are expressed.
 Native tooltip and notification surfaces preserve Omarchy's semantic treatment;
 Accent uses the generated accent for their borders and notification countdowns.
+The Glass Blur preset makes the core bar, popup, menu, and launcher surfaces
+`0.72` alpha and emits a scoped Hyprland layer-blur rule for the native
+`omarchy-menu` and related shell namespaces, so the shell can show the desktop
+behind it without changing application-window opacity policy.
 
 ### Bar
 
 Bar controls are:
 
-- **Bar surface:** Native, Dark, Light, Accent.
-- **Density:** Native, Compact, Comfortable.
-- **Attention color:** Semantic, Accent.
-- **Bar form:** Continuous, Docked.
-- **Docked visibility:** Native transparency, Show islands.
+- **Preset:** Default, Float Compact, Float Expanded, Islands, Dock, Minimal.
+- **Size:** Default, Compact, Comfortable. This is applied after a bar preset
+  so each preset can be tuned without changing its structure.
+- **Pane:** Preset default, Opaque, Metal, Glass (real compositor blur), and
+  Clear. Preset default keeps the selected recipe's own pane; Opaque maximizes
+  contrast; Metal uses a near-opaque dark neutral pane for a restrained solid
+  finish; Glass uses a translucent layer with scoped Hyprland backdrop blur;
+  Clear keeps the pane mostly transparent without blur for wallpaper visibility
+  and lower GPU cost.
+- **Advanced size:** Expand the size control to inspect the resolved pixel
+  footprint and set a custom value. The minimum is the smallest usable
+  footprint for the selected preset; Dock and vertical Islands include their
+  structural cross-axis padding in that displayed value. Reset returns to the
+  selected named size mode.
+- **Workspaces:** Default (Omarchy-compatible), Numbers, Japanese Kanji (一–五),
+  Roman numerals, Letters, Dots, or Custom glyphs. Custom mode accepts up to
+  five labels (one for each primary workspace), with up to four Unicode
+  characters per label.
+  Switching remains native Hyprland behavior; only the presentation changes.
 
-The Bar Lab now stages a declarative `BarSpec v2` behind these compatibility
-fields. Presets compose topology (`continuous`, `floating`, `sections`,
-`islands`, `dock`, `split`, `minimal`, `notch`, and `rail`) with surface and
-geometry primitives. Continuous/minimal choices compile to the native Quattro
-reader; other shapes are consumed by Omagen's additive decoration adapter while
-native widget placement remains untouched. Layout and widget ordering remain
-separate user-owned state and are not generated by a theme-only change.
-
-Theme-bound bar profiles are additive by default. The generated
-`omagen.bar.json` profile describes the form and behavior while Quattro keeps
-native widget ownership. If a future profile explicitly owns the layout or a
-replacement bar, the backend snapshots the user's `shell.json` and restores it
-when the profile leaves; user configuration is never stored inside the theme.
-
-Omagen preserves Quattro's native left, center, and right widget arrangement.
-It does not take ownership of widget placement, ordering, transparency, or
-bar input. Docked is an additive Omagen-owned surface beneath the native
-widgets when the native bar is opaque. Native transparency keeps that additive
-decoration transparent, preserving the existing behavior. Show islands is an
-explicit opt-in that keeps the three Docked surfaces visible over a transparent
-native bar; native widgets, layout, and input remain Omarchy-owned. If the active
-shell does not expose the geometry hooks required for the three section
-surfaces, Omagen falls back to the normal continuous form.
+The Bar Lab stages a declarative `BarSpec v2` behind these focused controls.
+Additional topology, attention, region, and behavior controls remain reserved
+for a later iteration. Layout, widget ordering, and bar input remain native
+Quattro responsibilities and are not changed by these focused controls.
 
 ## Generated assets
 

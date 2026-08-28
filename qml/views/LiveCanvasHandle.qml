@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components" as Components
 
 // A small, monitor-bound affordance for reopening the Live Canvas controls.
 // It intentionally has no keyboard focus and only occupies its visible handle
@@ -12,6 +13,8 @@ Item {
 
     property bool active: false
     property string monitorName: ""
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
 
     signal reopenRequested()
 
@@ -45,6 +48,15 @@ Item {
                     color: Util.alpha(Color.popups.background, 0.94)
                     border.width: 1
                     border.color: Color.popups.border
+
+                    Components.SignalGlitch {
+                        anchors.fill: parent
+                        z: 10
+                        enabled: root.glitchEnabled
+                        triggerEpoch: root.glitchEpoch
+                        accentColor: Color.accent
+                        secondaryColor: Color.foreground
+                    }
 
                     Text {
                         anchors.centerIn: parent

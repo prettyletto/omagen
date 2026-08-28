@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import qs.Commons
+import qs.Ui
 
 // Primitive BarSpec controls shared by the Bar Lab. Presets compose these
 // values; this editor only changes the declarative surface/geometry document
@@ -22,7 +23,8 @@ Item {
         var target = next
         for (var index = 0; index < path.length - 1; index++)
             target = target[path[index]] || (target[path[index]] = ({}))
-        target[path[path.length - 1]] = Number(value)
+		var field = path[path.length - 1]
+		target[field] = field === "alignment" ? String(value) : Number(value)
         root.specEdited(next)
     }
 
@@ -58,11 +60,42 @@ Item {
 
         Text { Layout.fillWidth: true; text: "GEOMETRY"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
 
+        BarChoiceGroup {
+            Layout.fillWidth: true
+            title: "Placement"
+            subtitle: "The preview rotates the same geometry and growth rules"
+            options: [
+                { key: "top", title: "Top" }, { key: "bottom", title: "Bottom" },
+                { key: "left", title: "Left" }, { key: "right", title: "Right" }
+            ]
+            selectedKey: String(root.spec.position || "top")
+            onChoiceSelected: {
+                var next = root.copySpec()
+                next.position = key
+                root.specEdited(next)
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             spacing: Style.space(6)
             ShellRangeField { Layout.fillWidth: true; label: "Radius"; value: root.spec.geometry && root.spec.geometry.radius !== undefined ? String(root.spec.geometry.radius) : "0"; fallback: 0; maximum: 40; step: 1; decimals: 0; suffix: " px"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.edit(["geometry", "radius"], value); onResetRequested: root.edit(["geometry", "radius"], fallback) }
             ShellRangeField { Layout.fillWidth: true; label: "Edge offset"; value: root.spec.geometry && root.spec.geometry.edge_offset !== undefined ? String(root.spec.geometry.edge_offset) : "0"; fallback: 0; maximum: 48; step: 1; decimals: 0; suffix: " px"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.edit(["geometry", "edge_offset"], value); onResetRequested: root.edit(["geometry", "edge_offset"], fallback) }
+        }
+
+        BarChoiceGroup {
+            Layout.fillWidth: true
+            title: "Dock growth"
+            subtitle: root.spec.position === "left" || root.spec.position === "right"
+                ? "Top grows downward · Center grows both ways · Bottom grows upward"
+                : "Left grows rightward · Center grows both ways · Right grows leftward"
+            options: [
+                { key: "start", title: root.spec.position === "left" || root.spec.position === "right" ? "Top" : "Left" },
+                { key: "center", title: "Center" },
+                { key: "end", title: root.spec.position === "left" || root.spec.position === "right" ? "Bottom" : "Right" }
+            ]
+            selectedKey: root.spec.geometry && root.spec.geometry.alignment ? String(root.spec.geometry.alignment) : "center"
+            onChoiceSelected: root.edit(["geometry", "alignment"], key)
         }
 
         RowLayout {

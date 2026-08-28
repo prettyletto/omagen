@@ -48,6 +48,8 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 	desktopStyle := DefaultDesktopStyle()
 	barStyle := DefaultBarStyle()
 	animationsStyle := DefaultAnimationsStyle()
+	lookFeel := LookFeelDocument{}
+	terminalTranslucency := TerminalTranslucency{}
 	extraConfigs := len(styles) > 0
 	for _, style := range styles {
 		switch value := style.(type) {
@@ -59,6 +61,10 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			barStyle = value
 		case AnimationsStyle:
 			animationsStyle = value
+		case LookFeelDocument:
+			lookFeel = value
+		case TerminalTranslucency:
+			terminalTranslucency = value
 		default:
 			return BeginResult{}, fmt.Errorf("invalid style configuration")
 		}
@@ -67,6 +73,16 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 	desktopStyle = NormalizeDesktopStyle(desktopStyle)
 	barStyle = NormalizeBarStyle(barStyle)
 	animationsStyle = NormalizeAnimationsStyle(animationsStyle)
+	if extraConfigs {
+		if lookFeel.Preset == "" {
+			lookFeel = DefaultLookFeelDocument()
+		}
+		lookFeel = NormalizeLookFeelDocument(lookFeel)
+		if terminalTranslucency.Mode == "" {
+			terminalTranslucency = DefaultTerminalTranslucency()
+		}
+		terminalTranslucency = NormalizeTerminalTranslucency(terminalTranslucency)
+	}
 	if extraConfigs {
 		if !shellStyle.Valid() {
 			return BeginResult{}, fmt.Errorf("invalid shell style")
@@ -79,6 +95,12 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 		}
 		if !animationsStyle.Valid() {
 			return BeginResult{}, fmt.Errorf("invalid animations style")
+		}
+		if !lookFeel.Valid() {
+			return BeginResult{}, fmt.Errorf("invalid Look & Feel document")
+		}
+		if !terminalTranslucency.Valid() {
+			return BeginResult{}, fmt.Errorf("invalid terminal translucency")
 		}
 	}
 	return withMutationLock(s.store, func() (BeginResult, error) {
@@ -110,7 +132,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			return BeginResult{}, fmt.Errorf("create session id: %w", err)
 		}
 		now := time.Now().UTC()
-		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, CreatedAt: now}
+		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, CreatedAt: now}
 		var capturedBarSnapshot *barprofile.Snapshot
 		if s.bar != nil {
 			snapshot, snapshotErr := s.bar.Capture(theme)
@@ -138,7 +160,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 				return BeginResult{}, fmt.Errorf("persist user bar snapshot: %w", err)
 			}
 		}
-		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, ExtraConfigs: extraConfigs, BarSnapshot: record.BarSnapshot}, nil
+		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, ExtraConfigs: extraConfigs, BarSnapshot: record.BarSnapshot}, nil
 	})
 }
 

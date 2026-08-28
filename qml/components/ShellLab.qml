@@ -2,74 +2,304 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
+import "Contrast.js" as Contrast
 
-// The Shell engine is an additive editor for the real Quattro shell.toml
-// readers. Quick composition presets remain available, while every explicit
-// field below writes only a section.key override and leaves other Omarchy
-// defaults untouched.
+// Shell owns the visual language of Quickshell surfaces. The first slice is
+// intentionally small: choose a complete look, then reveal native
+// shell.toml tokens only when the user wants to tune it.
 Item {
     id: root
 
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    // Legacy fields remain readable by previews and older sessions. New
+    // writes use preset plus explicit overrides.
+    property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property int activePage: 0
     property string rawMessage: ""
     property bool showAdvanced: false
-    property string lastRecipe: "native"
+    property bool showAdjustments: false
+    property bool showExpertTokens: false
+    property string lastRecipe: "default"
 
     signal styleChanged(var shellStyle)
 
-    readonly property var pages: [
-        { title: "Start", eyebrow: "QUICK SETUP" },
-        { title: "Surfaces", eyebrow: "POPUPS + MENUS" },
-        { title: "States", eyebrow: "CONTROLS" },
-        { title: "Scale", eyebrow: "TYPE + SPACING" },
-        { title: "Feedback", eyebrow: "ALERTS + SECURITY" },
-        { title: "Advanced", eyebrow: "DIRECT READER" }
-    ]
     readonly property var recipes: [
-        { key: "native", title: "Native", eyebrow: "START CLEAN", description: "Keep the active Omarchy theme and user shell defaults." },
-        { key: "comfortable", title: "Comfortable", eyebrow: "ROOM TO BREATHE", description: "Slightly larger type, controls, and popup rows." },
-        { key: "compact", title: "Compact", eyebrow: "MORE ON SCREEN", description: "Tighter spacing and smaller controls for dense workflows." },
-        { key: "contrast", title: "High contrast", eyebrow: "EASIER TO READ", description: "Stronger focus, selection, tooltip, and notification states." }
+        { key: "default", title: "Default", eyebrow: "NATIVE BASELINE", description: "Keep the active Omarchy shell behavior and native surface treatment." },
+        { key: "glass", title: "Glass", eyebrow: "BACKDROP GLASS", description: "Use translucent shell surfaces with compositor backdrop blur behind them." }
     ]
-    readonly property var stateModes: [
-        { key: "native", title: "Native", description: "Keep the theme's control states." },
-        { key: "focus", title: "Clear focus", description: "Make keyboard focus obvious." },
-        { key: "selection", title: "Strong selection", description: "Make selected rows and tabs pop." }
+
+    // These are actual shell.toml values understood by the installed
+    // Quickshell reader. Future visual engines can add more fields here
+    // without changing the preset/override contract.
+    readonly property var advancedFields: [
+        { key: "popups.background-alpha", label: "Popup opacity", description: "Launcher and popup surface alpha." },
+        { key: "menu.background-alpha", label: "Menu opacity", description: "Context and application menu surface alpha." },
+        { key: "launcher.background-alpha", label: "Launcher opacity", description: "Launcher surface alpha." },
+        { key: "tooltip.background-alpha", label: "Tooltip opacity", description: "Tooltip surface alpha." },
+        { key: "notifications.background-alpha", label: "Notification opacity", description: "Notification surface alpha." },
+        { key: "polkit.background-alpha", label: "Security prompt opacity", description: "Authentication prompt surface alpha." },
+        { key: "lock.background-alpha", label: "Lock screen opacity", description: "Lock screen surface alpha." },
+        { key: "spacing.scale", label: "Shell spacing", description: "Global shell spacing multiplier." }
     ]
-    readonly property var densityModes: [
-        { key: "native", title: "Theme default", description: "Let the active theme decide." },
-        { key: "comfortable", title: "Comfortable", description: "More breathing room in shell controls." },
-        { key: "compact", title: "Compact", description: "Fit more rows and controls on screen." }
-    ]
+
+    // These are the user-facing Shell contract. The backend maps the choices
+    // to the native Quickshell shell.toml keys; users do not need to know those
+    // keys to make a meaningful change.
     readonly property var surfaceOptions: [
-        { key: "flat", title: "Flat" }, { key: "layered", title: "Layered" },
-        { key: "contrast", title: "Contrast" }, { key: "accent", title: "Accent" }
+        { key: "flat", title: "Flat", description: "Use the theme's direct surface hierarchy." },
+        { key: "layered", title: "Layered", description: "Separate popups and controls into deeper surfaces." },
+        { key: "contrast", title: "Contrast", description: "Make selected and active shell states easier to read." },
+        { key: "accent", title: "Accent", description: "Use the theme accent for selected shell states." }
     ]
     readonly property var detailOptions: [
-        { key: "native", title: "Default" }, { key: "framed", title: "Framed" },
-        { key: "edge", title: "Edge" }, { key: "focus", title: "Focus" }
+        { key: "native", title: "Default", description: "Keep Quickshell's native border language." },
+        { key: "framed", title: "Framed", description: "Give shell controls and surfaces a complete frame." },
+        { key: "edge", title: "Edge", description: "Use a restrained edge marker for selected states." },
+        { key: "focus", title: "Focus", description: "Reserve stronger borders for the active state." }
     ]
-    readonly property var feedbackOptions: [
-        { key: "native", title: "Native" }, { key: "accent", title: "Accent" }
+    readonly property var tooltipOptions: [
+        { key: "native", title: "Default", description: "Use the theme's tooltip border and feedback." },
+        { key: "accent", title: "Accent", description: "Give tooltips the theme accent border." }
     ]
+    readonly property var notificationOptions: [
+        { key: "native", title: "Default", description: "Use the theme's notification feedback." },
+        { key: "accent", title: "Accent", description: "Use the accent for notification borders and countdowns." }
+    ]
+    readonly property var clarityOptions: [
+        { key: "preset", title: "Preset", description: "Use the selected preset's surface clarity." },
+        { key: "solid", title: "Solid", description: "Keep more of the surface opaque and grounded." },
+        { key: "balanced", title: "Balanced", description: "Use a middle ground between surface and desktop." },
+        { key: "clear", title: "Clear", description: "Reveal more of the desktop behind shell surfaces." }
+    ]
+    readonly property var clarityKeys: [
+        "bar.background-alpha", "popups.background-alpha", "menu.background-alpha",
+        "launcher.background-alpha", "tooltip.background-alpha", "notifications.background-alpha",
+        "polkit.background-alpha", "lock.background-alpha"
+    ]
+    readonly property var surfaceOpacityKeys: [
+        "bar.background-alpha", "popups.background-alpha", "menu.background-alpha", "launcher.background-alpha"
+    ]
+    readonly property var feedbackOpacityKeys: [
+        "tooltip.background-alpha", "notifications.background-alpha", "polkit.background-alpha", "lock.background-alpha"
+    ]
+
+    function presetTokens(key) {
+        if (key === "glass") {
+            return {
+                "bar.background-alpha": "0.72",
+                "popups.background-alpha": "0.72",
+                "menu.background-alpha": "0.72",
+                "launcher.background-alpha": "0.72",
+                "tooltip.background-alpha": "0.88",
+                "notifications.background-alpha": "0.86",
+                "polkit.background-alpha": "0.88",
+                "lock.background-alpha": "0.82"
+            }
+        }
+        return ({})
+    }
+
+    function presetMeaning(key) {
+        if (key === "glass") {
+            return "Layered surfaces; native borders and feedback; 72% bar, popup, menu, and launcher opacity; 88% tooltip and security prompt; 86% notification; 82% lock screen. A scoped Hyprland rule blurs the backdrop behind shell layers only."
+        }
+        return "Flat surfaces; native borders and feedback. No shell alpha values or compositor rules are written, so the active theme and your shell.toml stay in charge."
+    }
+
+    function presetRecipeRows(key) {
+        if (key === "glass") {
+            return [
+                "Surfaces · Layered",
+                "Borders · Native",
+                "Feedback · Native",
+                "Backdrop · Scoped shell blur",
+                "Main surfaces · 72%"
+            ]
+        }
+        return [
+            "Surfaces · Flat",
+            "Borders · Native",
+            "Feedback · Native",
+            "Backdrop · None",
+            "Alpha · Theme default"
+        ]
+    }
+
+    function currentPreset() {
+        var key = String(root.shellStyle.preset || "default")
+        return key === "glass" ? "glass" : "default"
+    }
 
     function overridesCopy() {
         var next = {}
-        for (var key in (root.shellStyle.overrides || {}))
-            next[key] = String(root.shellStyle.overrides[key])
+        var source = root.shellStyle.overrides || ({})
+        for (var key in source)
+            next[key] = String(source[key])
         return next
     }
 
-    function emitStyle(nextOverrides, surface, detail, tooltip, notifications) {
-        root.lastRecipe = ""
-        root.styleChanged({
-            surface: surface === undefined ? (root.shellStyle.surface || "flat") : surface,
-            detail: detail === undefined ? (root.shellStyle.detail || "native") : detail,
-            tooltip: tooltip === undefined ? (root.shellStyle.tooltip || "native") : tooltip,
-            notifications: notifications === undefined ? (root.shellStyle.notifications || "native") : notifications,
-            overrides: nextOverrides
+    function effectiveTokenKeys() {
+        var keys = []
+        var seen = {}
+        var preset = presetTokens(root.currentPreset())
+        var custom = root.shellStyle.overrides || ({})
+        for (var presetKey in preset) {
+            keys.push(presetKey)
+            seen[presetKey] = true
+        }
+        for (var customKey in custom) {
+            if (!seen[customKey])
+                keys.push(customKey)
+        }
+        keys.sort()
+        return keys
+    }
+
+    function tokenValue(key) {
+        var custom = root.shellStyle.overrides || ({})
+        if (custom[key] !== undefined && custom[key] !== null && String(custom[key]) !== "")
+            return String(custom[key])
+        var preset = presetTokens(root.currentPreset())
+        return preset[key] === undefined ? "" : String(preset[key])
+    }
+
+    function tokenSource(key) {
+        var custom = root.shellStyle.overrides || ({})
+        if (custom[key] !== undefined && custom[key] !== null && String(custom[key]) !== "")
+            return "CUSTOM"
+        var preset = presetTokens(root.currentPreset())
+        return preset[key] === undefined ? "NATIVE" : "PRESET"
+    }
+
+    function emitStyle(preset, overrides, styleBase) {
+        var selected = preset === undefined ? root.currentPreset() : preset
+        var source = styleBase || root.shellStyle || ({})
+        var next = {
+            preset: selected,
+            // Keep compatibility values readable by the current preview.
+            surface: source.surface || (selected === "glass" ? "layered" : "flat"),
+            detail: source.detail || "native",
+            tooltip: source.tooltip || "native",
+            notifications: source.notifications || "native",
+            overrides: overrides === undefined ? root.overridesCopy() : overrides
+        }
+        root.lastRecipe = next.preset
+        root.styleChanged(next)
+    }
+
+    function applyPreset(key) {
+        var selected = key === "glass" ? "glass" : "default"
+        root.emitStyle(selected, root.overridesCopy(), {
+            surface: selected === "glass" ? "layered" : "flat",
+            detail: "native",
+            tooltip: "native",
+            notifications: "native"
         })
+    }
+
+    function chooseShell(group, key) {
+        var next = {
+            preset: root.currentPreset(),
+            surface: root.shellStyle.surface || (root.currentPreset() === "glass" ? "layered" : "flat"),
+            detail: root.shellStyle.detail || "native",
+            tooltip: root.shellStyle.tooltip || "native",
+            notifications: root.shellStyle.notifications || "native",
+            overrides: root.overridesCopy()
+        }
+        next[group] = key
+        root.emitStyle(next.preset, next.overrides, next)
+    }
+
+    function clarityValues(key) {
+        if (key === "solid") {
+            return { base: "0.96", tooltip: "0.98", notifications: "0.97", polkit: "0.98" }
+        }
+        if (key === "balanced") {
+            return { base: "0.88", tooltip: "0.92", notifications: "0.90", polkit: "0.93" }
+        }
+        return { base: "0.74", tooltip: "0.84", notifications: "0.80", polkit: "0.86" }
+    }
+
+    function clarityChoice() {
+        var overrides = root.shellStyle.overrides || ({})
+        var hasCustom = false
+        for (var index = 0; index < root.clarityKeys.length; ++index) {
+            if (overrides[root.clarityKeys[index]] !== undefined && overrides[root.clarityKeys[index]] !== null && String(overrides[root.clarityKeys[index]]) !== "") {
+                hasCustom = true
+                break
+            }
+        }
+        if (!hasCustom)
+            return "preset"
+
+        var choices = ["solid", "balanced", "clear"]
+        for (var choiceIndex = 0; choiceIndex < choices.length; ++choiceIndex) {
+            var choice = choices[choiceIndex]
+            var values = root.clarityValues(choice)
+            var matches = true
+            for (var keyIndex = 0; keyIndex < root.clarityKeys.length; ++keyIndex) {
+                var key = root.clarityKeys[keyIndex]
+                var expected = key === "tooltip.background-alpha" ? values.tooltip
+                    : key === "notifications.background-alpha" ? values.notifications
+                    : key === "polkit.background-alpha" ? values.polkit
+                    : values.base
+                if (String(overrides[key] || "") !== expected) {
+                    matches = false
+                    break
+                }
+            }
+            if (matches)
+                return choice
+        }
+        return "custom"
+    }
+
+    function chooseClarity(key) {
+        var next = root.overridesCopy()
+        for (var index = 0; index < root.clarityKeys.length; ++index) {
+            var token = root.clarityKeys[index]
+            if (key === "preset") {
+                delete next[token]
+                continue
+            }
+            var values = root.clarityValues(key)
+            next[token] = token === "tooltip.background-alpha" ? values.tooltip
+                : token === "notifications.background-alpha" ? values.notifications
+                : token === "polkit.background-alpha" ? values.polkit
+                : values.base
+        }
+        root.emitStyle(root.currentPreset(), next)
+    }
+
+    function groupedTokenValue(keys) {
+        for (var index = 0; index < keys.length; ++index) {
+            var value = root.tokenValue(keys[index])
+            if (value !== "")
+                return value
+        }
+        return ""
+    }
+
+    function opacityPercent(keys) {
+        var value = Number(root.groupedTokenValue(keys))
+        return isFinite(value) ? String(Math.round(value * 100)) : ""
+    }
+
+    function setOpacityPercent(keys, percent) {
+        var value = Math.max(0.0, Math.min(1.0, Number(percent) / 100.0))
+        if (!isFinite(value))
+            return
+        var next = root.overridesCopy()
+        var formatted = value.toFixed(2)
+        for (var index = 0; index < keys.length; ++index)
+            next[keys[index]] = formatted
+        root.emitStyle(root.currentPreset(), next)
+    }
+
+    function clearTokenGroup(keys) {
+        var next = root.overridesCopy()
+        for (var index = 0; index < keys.length; ++index)
+            delete next[keys[index]]
+        root.emitStyle(root.currentPreset(), next)
     }
 
     function setOverride(key, value) {
@@ -79,124 +309,16 @@ Item {
             delete next[key]
         else
             next[key] = clean
-        root.emitStyle(next)
+        root.emitStyle(root.currentPreset(), next)
+    }
+
+    function clearToken(key) {
+        root.setOverride(key, "")
     }
 
     function overrideValue(key) {
-        var value = (root.shellStyle.overrides || {})[key]
+        var value = (root.shellStyle.overrides || ({ }))[key]
         return value === undefined || value === null ? "" : String(value)
-    }
-
-    function applyRecipe(key) {
-        var next = {}
-        var surface = "flat"
-        var detail = "native"
-        var tooltip = "native"
-        var notifications = "native"
-        if (key === "comfortable") {
-            next["font.base-size"] = "13"
-            next["spacing.scale"] = "1.08"
-            next["spacing.control-height"] = "32"
-            next["spacing.control-gap"] = "9"
-            next["spacing.popup-row-height"] = "32"
-        } else if (key === "compact") {
-            next["font.base-size"] = "11"
-            next["spacing.scale"] = "0.92"
-            next["spacing.control-height"] = "26"
-            next["spacing.control-gap"] = "6"
-            next["spacing.popup-row-height"] = "26"
-        } else if (key === "contrast") {
-            detail = "focus"
-            tooltip = "accent"
-            notifications = "accent"
-            next["controls.focus-color"] = "accent"
-            next["controls.focus-fill-alpha"] = "0.18"
-            next["controls.focus-border-width"] = "2"
-            next["controls.selected-color"] = "accent"
-            next["controls.selected-fill-alpha"] = "0.22"
-            next["tooltip.border-alpha"] = "1.0"
-            next["notifications.border-alpha"] = "1.0"
-        }
-        root.emitStyle(next, surface, detail, tooltip, notifications)
-        root.lastRecipe = key
-    }
-
-    function toggleAdvanced() {
-        root.showAdvanced = !root.showAdvanced
-    }
-
-    function mergeOverrides(changes, removals) {
-        var next = root.overridesCopy()
-        for (var i = 0; i < removals.length; ++i)
-            delete next[removals[i]]
-        for (var key in changes)
-            next[key] = String(changes[key])
-        root.emitStyle(next)
-    }
-
-    function applyStateMode(key) {
-        var keys = [
-            "controls.focus-color", "controls.focus-fill-alpha", "controls.focus-border-width",
-            "controls.selected-color", "controls.selected-fill-alpha", "controls.selected-border-width"
-        ]
-        var changes = {}
-        if (key === "focus") {
-            changes["controls.focus-color"] = "accent"
-            changes["controls.focus-fill-alpha"] = "0.18"
-            changes["controls.focus-border-width"] = "2"
-        } else if (key === "selection") {
-            changes["controls.selected-color"] = "accent"
-            changes["controls.selected-fill-alpha"] = "0.22"
-            changes["controls.selected-border-width"] = "1"
-        }
-        root.mergeOverrides(changes, keys)
-    }
-
-    function applyDensityMode(key) {
-        var keys = ["font.base-size", "spacing.scale", "spacing.control-height", "spacing.control-gap", "spacing.popup-row-height"]
-        var changes = {}
-        if (key === "comfortable") {
-            changes["font.base-size"] = "13"
-            changes["spacing.scale"] = "1.08"
-            changes["spacing.control-height"] = "32"
-            changes["spacing.control-gap"] = "9"
-            changes["spacing.popup-row-height"] = "32"
-        } else if (key === "compact") {
-            changes["font.base-size"] = "11"
-            changes["spacing.scale"] = "0.92"
-            changes["spacing.control-height"] = "26"
-            changes["spacing.control-gap"] = "6"
-            changes["spacing.popup-row-height"] = "26"
-        }
-        root.mergeOverrides(changes, keys)
-    }
-
-    function recipeSummary(key) {
-        if (key === "comfortable") return "font.base-size 13 · spacing.scale 1.08 · 32px controls · 32px popup rows"
-        if (key === "compact") return "font.base-size 11 · spacing.scale 0.92 · 26px controls · 26px popup rows"
-        if (key === "contrast") return "focus accent · 2px focus edge · stronger selection · accent feedback"
-        if (key === "native") return "No additive overrides · active theme and user shell.toml stay authoritative"
-        return "Custom tweaks · values below are the current staged reader tokens"
-    }
-
-    function optionDescription(key) {
-        var descriptions = {
-            "popups.background-alpha": "Opacity of shared popup cards and bar flyouts.",
-            "popups.border-width": "Border width for popup surfaces; supports a scalar or side list.",
-            "menu.scrim-alpha": "Dim layer behind menu, clipboard, and emoji surfaces.",
-            "launcher.selected-background-alpha": "Selected launcher-row fill without changing launcher layout.",
-            "controls.normal-fill-alpha": "Idle fill for buttons, tabs, dropdowns, and other shared controls.",
-            "controls.focus-border-width": "Keyboard focus border width; keep this visible for accessibility.",
-            "font.base-size": "Root shell type size. This is separate from monitor scale and GTK scaling.",
-            "spacing.scale": "Proportional shell spacing multiplier. Individual tokens below can override it.",
-            "spacing.control-height": "Height of shared shell controls, not application windows.",
-            "tooltip.border-width": "Tooltip border width for the native PanelToolTip reader.",
-            "notifications.countdown": "Notification countdown color; accepts a palette role or hex color.",
-            "lock.background-alpha": "Opacity of the lock input surface; authentication behavior remains native.",
-            "polkit.scrim-alpha": "Dim layer behind the native authentication prompt.",
-            "image-picker.selected-border-alpha": "Selected carousel slice emphasis in the native image picker."
-        }
-        return descriptions[key] || "Native Quattro shell.toml value."
     }
 
     function addRawOverride() {
@@ -208,505 +330,511 @@ Item {
             return
         }
         if (!/^[A-Za-z0-9_-]+$/.test(section) || !/^[A-Za-z0-9_-]+$/.test(key)) {
-            root.rawMessage = "Use letters, numbers, hyphens, or underscores only."
+            root.rawMessage = "Use simple section.key names."
             return
         }
         root.setOverride(section + "." + key, value)
-        root.rawMessage = "Override staged: [" + section + "] " + key
+        root.rawMessage = "Custom token staged."
         rawValueInput.text = ""
-    }
-
-    function clearRawOverride(key) {
-        root.setOverride(key, "")
-        root.rawMessage = "Override removed: " + key
-    }
-
-    function sectionFields(keys) {
-        return keys
     }
 
     implicitHeight: body.implicitHeight
 
     ColumnLayout {
         id: body
-        anchors.left: parent.left
-        anchors.right: parent.right
-        spacing: Style.space(6)
+        width: root.width
+        spacing: Style.space(10)
 
         Text {
             Layout.fillWidth: true
-            text: "SHELL / MAKE IT FEEL RIGHT"
-            color: Color.foreground
-            opacity: 0.5
+            text: "SHELL / CHOOSE A LOOK"
+            color: Color.accent
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             font.bold: true
-            font.letterSpacing: 0.8
+            font.letterSpacing: 1.0
         }
+
         Text {
             Layout.fillWidth: true
-            text: "Start with a direction. Open the detailed controls only when you know what you want to tune."
+            text: "A preset is a complete starting recipe, not a lock. Advanced controls below can replace its surface layers, borders, and feedback details; Reset returns only that control to the selected recipe."
             color: Color.foreground
-            opacity: 0.62
+            opacity: 0.66
             wrapMode: Text.WordWrap
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
         }
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
-            spacing: Style.space(5)
+            columns: 2
+            columnSpacing: Style.space(8)
+            rowSpacing: Style.space(8)
+
             Repeater {
-                model: root.pages
-                delegate: Button {
+                model: root.recipes
+                delegate: DesktopOptionCard {
                     required property var modelData
-                    required property int index
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Style.space(42)
-                    text: modelData.title
-                    fontSize: Style.font.caption
-                    foreground: root.activePage === index ? Color.background : Color.foreground
-                    background: root.activePage === index ? Color.accent : Util.alpha(Color.foreground, 0.045)
-                    accent: Color.accent
-                    bordered: true
-                    tooltipText: modelData.eyebrow
-                    onClicked: root.activePage = index
+                    implicitHeight: Style.space(78)
+                    title: modelData.title
+                    description: modelData.description
+                    selected: root.currentPreset() === modelData.key
+                    onClicked: root.applyPreset(modelData.key)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: Style.space(8)
+                        spacing: Style.space(2)
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: modelData.eyebrow
+                            color: Color.accent
+                            opacity: 0.72
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                        }
+                    }
                 }
             }
         }
 
-        StackLayout {
+        BorderSurface {
             Layout.fillWidth: true
-            currentIndex: root.activePage
-            implicitHeight: root.activePage === 0 ? startPage.implicitHeight
-                : root.activePage === 1 ? surfacesPage.implicitHeight
-                : root.activePage === 2 ? controlsPage.implicitHeight
-                : root.activePage === 3 ? scalePage.implicitHeight
-                : root.activePage === 4 ? feedbackPage.implicitHeight
-                : rawPage.implicitHeight
+            implicitHeight: summaryColumn.implicitHeight + Style.space(18)
+            color: Util.alpha(Color.accent, 0.08)
+            radius: Style.cornerRadius
+            borderSpec: Border.flat(Util.alpha(Color.accent, 0.72), 1)
 
-            Item {
-                id: startPage
-                implicitHeight: startColumn.implicitHeight
+            ColumnLayout {
+                id: summaryColumn
+                anchors.fill: parent
+                anchors.margins: Style.space(9)
+                spacing: Style.space(3)
+                Text {
+                    Layout.fillWidth: true
+                    text: root.currentPreset() === "glass" ? "GLASS PRESET ACTIVE" : "DEFAULT PRESET ACTIVE"
+                    color: Color.accent
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: root.currentPreset() === "glass"
+                        ? root.presetMeaning("glass")
+                        : root.presetMeaning("default")
+                    color: Color.foreground
+                    opacity: 0.64
+                    wrapMode: Text.WordWrap
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Style.space(5)
+                    Repeater {
+                        model: root.presetRecipeRows(root.currentPreset())
+                        delegate: BorderSurface {
+                            required property string modelData
+                            implicitWidth: chipLabel.implicitWidth + Style.space(12)
+                            implicitHeight: chipLabel.implicitHeight + Style.space(6)
+                            color: Util.alpha(Color.foreground, 0.05)
+                            radius: Math.max(Style.space(3), Style.cornerRadius / 3)
+                            borderSpec: Border.flat(Util.alpha(Color.accent, 0.28), 1)
+                            Text {
+                                id: chipLabel
+                                anchors.centerIn: parent
+                                text: modelData
+                                color: Color.foreground
+                                opacity: 0.78
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Button {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Style.space(38)
+            text: root.showAdvanced ? "Hide advanced Shell controls" : "Advanced Shell controls"
+            foreground: Color.foreground
+            background: Util.alpha(Color.foreground, 0.045)
+            accent: Color.accent
+            bordered: true
+            onClicked: root.showAdvanced = !root.showAdvanced
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: root.showAdvanced
+            spacing: Style.space(9)
+
+            Text {
+                Layout.fillWidth: true
+                text: "SHELL ADJUSTMENTS"
+                color: Color.accent
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 1.0
+            }
+            Text {
+                Layout.fillWidth: true
+                text: "Every choice is written through the native shell compiler. Surface, border, tooltip, and notification controls change the recipe fields; clarity and numeric values become explicit shell tokens."
+                color: Color.foreground
+                opacity: 0.62
+                wrapMode: Text.WordWrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "SURFACE CLARITY"
+                color: Color.foreground
+                opacity: 0.52
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 0.8
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.space(7)
+                rowSpacing: Style.space(7)
+
+                Repeater {
+                    model: root.clarityOptions
+                    delegate: DesktopOptionCard {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        compact: true
+                        title: modelData.title
+                        description: modelData.description
+                        selected: root.clarityChoice() === modelData.key
+                        onClicked: root.chooseClarity(modelData.key)
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "SHELL CHARACTER"
+                color: Color.foreground
+                opacity: 0.52
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 0.8
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "These controls are independent of opacity. They are the visible parts of the selected recipe, and you can override any of them without losing the preset's other values."
+                color: Color.foreground
+                opacity: 0.62
+                wrapMode: Text.WordWrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "SURFACE LAYERS"
+                color: Color.foreground
+                opacity: 0.52
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 0.8
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.space(7)
+                rowSpacing: Style.space(7)
+                Repeater {
+                    model: root.surfaceOptions
+                    delegate: DesktopOptionCard {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        compact: true
+                        title: modelData.title
+                        description: modelData.description
+                        selected: (root.shellStyle.surface || (root.currentPreset() === "glass" ? "layered" : "flat")) === modelData.key
+                        onClicked: root.chooseShell("surface", modelData.key)
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "BORDERS + ACTIVE DETAIL"
+                color: Color.foreground
+                opacity: 0.52
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                font.bold: true
+                font.letterSpacing: 0.8
+            }
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.space(7)
+                rowSpacing: Style.space(7)
+                Repeater {
+                    model: root.detailOptions
+                    delegate: DesktopOptionCard {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        compact: true
+                        title: modelData.title
+                        description: modelData.description
+                        selected: (root.shellStyle.detail || "native") === modelData.key
+                        onClicked: root.chooseShell("detail", modelData.key)
+                    }
+                }
+            }
+
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 2
+                columnSpacing: Style.space(7)
+                rowSpacing: Style.space(7)
+
                 ColumnLayout {
-                    id: startColumn
-                    width: parent.width
+                    Layout.fillWidth: true
+                    spacing: Style.space(5)
+                    Text { Layout.fillWidth: true; text: "TOOLTIP DETAIL"; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
+                    Repeater {
+                        model: root.tooltipOptions
+                        delegate: DesktopOptionCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            compact: true
+                            title: modelData.title
+                            description: modelData.description
+                            selected: (root.shellStyle.tooltip || "native") === modelData.key
+                            onClicked: root.chooseShell("tooltip", modelData.key)
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.space(5)
+                    Text { Layout.fillWidth: true; text: "NOTIFICATION DETAIL"; color: Color.foreground; opacity: 0.52; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
+                    Repeater {
+                        model: root.notificationOptions
+                        delegate: DesktopOptionCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            compact: true
+                            title: modelData.title
+                            description: modelData.description
+                            selected: (root.shellStyle.notifications || "native") === modelData.key
+                            onClicked: root.chooseShell("notifications", modelData.key)
+                        }
+                    }
+                }
+            }
+
+            ShellRangeField {
+                Layout.fillWidth: true
+                label: "Surface opacity"
+                description: "Bar, menus, launcher, and popups. Range: 0%–100%; 0% is fully transparent and 100% is fully solid. This is separate from Shell spacing below."
+                value: root.opacityPercent(root.surfaceOpacityKeys)
+                fallback: root.currentPreset() === "glass" ? 72 : 88
+                minimum: 0
+                maximum: 100
+                step: 1
+                decimals: 0
+                suffix: "%"
+                integer: true
+                modified: root.surfaceOpacityKeys.some(function(key) { return root.overrideValue(key) !== "" })
+                onValueEdited: function(value) { root.setOpacityPercent(root.surfaceOpacityKeys, value) }
+                onResetRequested: root.clearTokenGroup(root.surfaceOpacityKeys)
+            }
+
+            ShellRangeField {
+                Layout.fillWidth: true
+                label: "Feedback opacity"
+                description: "Tooltips, notifications, security prompts, and the lock screen. Range: 0%–100%; 0% is fully transparent."
+                value: root.opacityPercent(root.feedbackOpacityKeys)
+                fallback: root.currentPreset() === "glass" ? 87 : 90
+                minimum: 0
+                maximum: 100
+                step: 1
+                decimals: 0
+                suffix: "%"
+                integer: true
+                modified: root.feedbackOpacityKeys.some(function(key) { return root.overrideValue(key) !== "" })
+                onValueEdited: function(value) { root.setOpacityPercent(root.feedbackOpacityKeys, value) }
+                onResetRequested: root.clearTokenGroup(root.feedbackOpacityKeys)
+            }
+
+            ShellRangeField {
+                Layout.fillWidth: true
+                label: "Shell spacing"
+                description: "Scale the room between shell controls and popup rows. Range: 0.80×–1.20×; this is not an opacity control."
+                value: root.overrideValue("spacing.scale")
+                fallback: 1.0
+                minimum: 0.80
+                maximum: 1.20
+                step: 0.01
+                decimals: 2
+                suffix: "×"
+                modified: root.overrideValue("spacing.scale") !== ""
+                onValueEdited: function(value) { root.setOverride("spacing.scale", value) }
+                onResetRequested: root.clearToken("spacing.scale")
+            }
+
+            Button {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(34)
+                text: root.showExpertTokens ? "Hide expert shell tokens" : "Expert shell tokens"
+                foreground: Color.foreground
+                background: Util.alpha(Color.foreground, 0.045)
+                accent: Color.accent
+                bordered: true
+                onClicked: root.showExpertTokens = !root.showExpertTokens
+            }
+
+            BorderSurface {
+                Layout.fillWidth: true
+                visible: root.showExpertTokens
+                implicitHeight: customColumn.implicitHeight + Style.space(18)
+                color: Util.alpha(Color.foreground, 0.025)
+                radius: Style.cornerRadius
+                borderSpec: Border.flat(Util.alpha(Color.foreground, 0.18), 1)
+
+                ColumnLayout {
+                    id: customColumn
+                    anchors.fill: parent
+                    anchors.margins: Style.space(10)
                     spacing: Style.space(7)
 
-                    Text { Layout.fillWidth: true; text: "START HERE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { Layout.fillWidth: true; text: "You do not need to understand shell.toml to make the shell feel different. Pick a direction below, then use the other pages only for refinement."; color: Color.foreground; opacity: 0.68; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
-
-                    GridLayout {
+                    Text {
                         Layout.fillWidth: true
-                        columns: 2
-                        columnSpacing: Style.space(6)
-                        rowSpacing: Style.space(6)
-                        Repeater {
-                            model: root.recipes
-                            delegate: DesktopOptionCard {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                compact: true
-                                title: modelData.title
-                                description: modelData.description
-                                selected: modelData.key === "native" ? Object.keys(root.shellStyle.overrides || {}).length === 0 && root.shellStyle.surface === "flat" && root.shellStyle.detail === "native" : root.lastRecipe === modelData.key
-                                onClicked: root.applyRecipe(modelData.key)
-                            }
-                        }
+                        text: "CUSTOM TOKENS · PRESET VALUES INCLUDED"
+                        color: Color.accent
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "The list shows the effective contract for the selected preset. PRESET values are generated; CUSTOM values override them."
+                        color: Color.foreground
+                        opacity: 0.58
+                        wrapMode: Text.WordWrap
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
                     }
 
-                    BorderSurface {
-                        Layout.fillWidth: true
-                        implicitHeight: summaryColumn.implicitHeight + Style.space(16)
-                        color: Util.alpha(Color.foreground, 0.035)
-                        radius: Math.max(Style.space(5), Style.cornerRadius / 2)
-                        borderSpec: Border.flat(Util.alpha(Color.popups.border, 0.62), 1)
-                        ColumnLayout {
-                            id: summaryColumn
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.verticalCenter: parent.verticalCenter
-                            anchors.leftMargin: Style.space(10)
-                            anchors.rightMargin: Style.space(10)
-                            spacing: Style.space(3)
-                            Text { Layout.fillWidth: true; text: Object.keys(root.shellStyle.overrides || {}).length === 0 ? "NATIVE DEFAULTS ACTIVE" : Object.keys(root.shellStyle.overrides || {}).length + " ADDITIVE TOKENS STAGED"; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                            Text { Layout.fillWidth: true; text: "Nothing is permanent until Test Live / Apply. Clearing a field returns that value to Omarchy."; color: Color.foreground; opacity: 0.62; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                        }
-                    }
-
-                    Text { Layout.fillWidth: true; text: "CURRENT PRESET / TWEAK IT"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { Layout.fillWidth: true; text: root.recipeSummary(root.lastRecipe); color: Color.accent; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Text { Layout.fillWidth: true; text: "These are the few structural values that change the shell's feel most. Sliders stage real Quattro tokens. Palette colours stay owned by the Palette engine."; color: Color.foreground; opacity: 0.62; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
-
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 2
-                        columnSpacing: Style.space(12)
-                        rowSpacing: Style.space(8)
-                        ShellRangeField {
+                    Repeater {
+                        model: root.effectiveTokenKeys()
+                        delegate: RowLayout {
+                            required property string modelData
                             Layout.fillWidth: true
-                            label: "Density"
-                            description: "Overall shell spacing multiplier."
-                            value: root.overrideValue("spacing.scale")
-                            fallback: 1.0
-                            minimum: 0.82
-                            maximum: 1.18
-                            step: 0.01
-                            decimals: 2
-                            suffix: "×"
-                            onValueEdited: function(value) { root.setOverride("spacing.scale", value) }
-                            onResetRequested: root.setOverride("spacing.scale", "")
-                        }
-                        ShellRangeField {
-                            Layout.fillWidth: true
-                            label: "Text size"
-                            description: "Shell base type size, not monitor scale."
-                            value: root.overrideValue("font.base-size")
-                            fallback: 12
-                            minimum: 10
-                            maximum: 16
-                            step: 1
-                            integer: true
-                            suffix: "px"
-                            onValueEdited: function(value) { root.setOverride("font.base-size", value) }
-                            onResetRequested: root.setOverride("font.base-size", "")
-                        }
-                        ShellRangeField {
-                            Layout.fillWidth: true
-                            label: "Control height"
-                            description: "Buttons, tabs, toggles, and shared rows."
-                            value: root.overrideValue("spacing.control-height")
-                            fallback: 28
-                            minimum: 22
-                            maximum: 38
-                            step: 1
-                            integer: true
-                            suffix: "px"
-                            onValueEdited: function(value) { root.setOverride("spacing.control-height", value) }
-                            onResetRequested: root.setOverride("spacing.control-height", "")
-                        }
-                        ShellRangeField {
-                            Layout.fillWidth: true
-                            label: "Surface opacity"
-                            description: "Popup card opacity; 1.0 is fully opaque."
-                            value: root.overrideValue("popups.background-alpha")
-                            fallback: 1.0
-                            minimum: 0.55
-                            maximum: 1.0
-                            step: 0.01
-                            decimals: 2
-                            onValueEdited: function(value) { root.setOverride("popups.background-alpha", value) }
-                            onResetRequested: root.setOverride("popups.background-alpha", "")
-                        }
-                    }
-
-                    Text { Layout.fillWidth: true; text: "Colours follow the active theme palette here. Native shell colour tokens remain available in Advanced when you intentionally want to override shell.toml."; color: Color.foreground; opacity: 0.5; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-
-                    Button { Layout.fillWidth: true; Layout.preferredHeight: Style.space(36); text: root.showAdvanced ? "Hide detailed controls" : "Show detailed controls"; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.toggleAdvanced() }
-                    Text { Layout.fillWidth: true; text: "Tip: Surfaces changes how the shell looks. States changes how it responds. Scale changes density. Feedback changes attention and security surfaces."; color: Color.foreground; opacity: 0.5; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                }
-            }
-
-            Item {
-                id: surfacesPage
-                implicitHeight: surfacesColumn.implicitHeight
-                ColumnLayout {
-                    id: surfacesColumn
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Text { Layout.fillWidth: true; text: "SURFACE COMPOSITION"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "These quick choices shape popup, menu, launcher, and control hierarchy without replacing Quattro's surfaces."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Button { Layout.fillWidth: true; Layout.preferredHeight: Style.space(34); text: root.showAdvanced ? "Hide surface tokens" : "Fine-tune surfaces"; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.toggleAdvanced() }
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 2
-                        columnSpacing: Style.space(5)
-                        rowSpacing: Style.space(5)
-                        Repeater { model: root.surfaceOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Surface · " + modelData.title; description: "Popup, menu, launcher, and control surface hierarchy."; selected: root.shellStyle.surface === modelData.key; onClicked: root.emitStyle(root.overridesCopy(), modelData.key) } }
-                        Repeater { model: root.detailOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Detail · " + modelData.title; description: "Border language for controls, menus, and notifications."; selected: root.shellStyle.detail === modelData.key; onClicked: root.emitStyle(root.overridesCopy(), undefined, modelData.key) } }
-                    }
-
-                    Text { Layout.fillWidth: true; text: "POPUPS + MENU ROWS"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(8); rowSpacing: Style.space(7)
-                        Layout.preferredHeight: root.showAdvanced ? implicitHeight : 0
-                        Layout.minimumHeight: 0
-                        visible: root.showAdvanced
-                        Repeater {
-                            model: [
-                                { key: "popups.background", label: "Popup background", placeholder: "#hex or palette role" },
-                                { key: "popups.background-alpha", label: "Popup background alpha", placeholder: "0.0 – 1.0" },
-                                { key: "popups.border", label: "Popup border", placeholder: "accent, foreground, or #hex" },
-                                { key: "popups.border-width", label: "Popup border width", placeholder: "1 or 0 0 0 2" },
-                                { key: "menu.scrim-alpha", label: "Menu scrim alpha", placeholder: "0.0 – 1.0" },
-                                { key: "menu.selected-background-alpha", label: "Menu selection alpha", placeholder: "0.0 – 1.0" },
-                                { key: "menu.selected-text", label: "Menu selected text", placeholder: "accent or #hex" },
-                                { key: "menu.selected-border-width", label: "Menu selected edge", placeholder: "0 or 0 0 0 3" },
-                                { key: "launcher.scrim-alpha", label: "Launcher scrim alpha", placeholder: "0.0 – 1.0" },
-                                { key: "launcher.selected-background-alpha", label: "Launcher selection alpha", placeholder: "0.0 – 1.0" },
-                                { key: "launcher.selected-text", label: "Launcher selected text", placeholder: "accent or #hex" },
-                                { key: "launcher.selected-border-width", label: "Launcher selected edge", placeholder: "0 or 0 0 0 3" }
-                            ]
-                            delegate: ShellValueField {
-                                required property var modelData
+                            spacing: Style.space(6)
+                            Text {
                                 Layout.fillWidth: true
-                                label: modelData.label
-                                description: root.optionDescription(modelData.key)
-                                value: root.overrideValue(modelData.key)
-                                placeholder: modelData.placeholder
-                                onValueEdited: function(value) { root.setOverride(modelData.key, value) }
-                                onResetRequested: root.setOverride(modelData.key, "")
+                                text: modelData + "  " + root.tokenValue(modelData)
+                                color: Color.foreground
+                                opacity: 0.78
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                text: root.tokenSource(modelData)
+                                color: root.tokenSource(modelData) === "CUSTOM" ? Color.accent : Color.foreground
+                                opacity: root.tokenSource(modelData) === "NATIVE" ? 0.42 : 0.78
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                                font.bold: true
+                            }
+                            Button {
+                                visible: root.tokenSource(modelData) === "CUSTOM"
+                                Layout.preferredWidth: Style.space(42)
+                                Layout.preferredHeight: Style.space(24)
+                                text: "Reset"
+                                fontSize: Style.font.caption
+                                foreground: Color.foreground
+                                background: Util.alpha(Color.foreground, 0.045)
+                                accent: Color.accent
+                                bordered: true
+                                onClicked: root.clearToken(modelData)
                             }
                         }
                     }
-                }
-            }
-
-            Item {
-                id: controlsPage
-                implicitHeight: controlsColumn.implicitHeight
-                ColumnLayout {
-                    id: controlsColumn
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Text { Layout.fillWidth: true; text: "CONTROL STATE CHROME"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "Tune the shared Button, Dropdown, Toggle, tab, slider, and focus-state readers. Keep focus and selected states distinguishable."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Button { Layout.fillWidth: true; Layout.preferredHeight: Style.space(34); text: root.showAdvanced ? "Hide state tokens" : "Fine-tune states"; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.toggleAdvanced() }
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 3
-                        columnSpacing: Style.space(5)
-                        rowSpacing: Style.space(5)
-                        Repeater {
-                            model: root.stateModes
-                            delegate: DesktopOptionCard {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                compact: true
-                                title: modelData.title
-                                description: modelData.description
-                                selected: modelData.key === "native" ? root.overrideValue("controls.focus-color") === "" && root.overrideValue("controls.selected-color") === "" : modelData.key === "focus" ? root.overrideValue("controls.focus-color") !== "" : root.overrideValue("controls.selected-color") !== ""
-                                onClicked: root.applyStateMode(modelData.key)
-                            }
-                        }
-                    }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(8); rowSpacing: Style.space(7)
-                        Layout.preferredHeight: root.showAdvanced ? implicitHeight : 0
-                        Layout.minimumHeight: 0
-                        visible: root.showAdvanced
-                        Repeater {
-                            model: [
-                                { key: "controls.normal-color", label: "Normal color", placeholder: "foreground or #hex" },
-                                { key: "controls.normal-fill-alpha", label: "Normal fill alpha", placeholder: "0.0 – 1.0" },
-                                { key: "controls.hover-cursor-color", label: "Hover / cursor color", placeholder: "foreground or accent" },
-                                { key: "controls.hover-cursor-fill-alpha", label: "Hover / cursor fill", placeholder: "0.0 – 1.0" },
-                                { key: "controls.focus-color", label: "Focus color", placeholder: "accent or #hex" },
-                                { key: "controls.focus-fill-alpha", label: "Focus fill alpha", placeholder: "0.0 – 1.0" },
-                                { key: "controls.selected-color", label: "Selected color", placeholder: "accent or #hex" },
-                                { key: "controls.selected-fill-alpha", label: "Selected fill alpha", placeholder: "0.0 – 1.0" },
-                                { key: "controls.pressed-fill-alpha", label: "Pressed fill alpha", placeholder: "0.0 – 1.0" },
-                                { key: "controls.selection-fill-alpha", label: "Text selection alpha", placeholder: "0.0 – 1.0" },
-                                { key: "controls.normal-border-width", label: "Normal border width", placeholder: "0" },
-                                { key: "controls.hover-cursor-border-width", label: "Hover border width", placeholder: "0" },
-                                { key: "controls.focus-border-width", label: "Focus border width", placeholder: "1" },
-                                { key: "controls.selected-border-width", label: "Selected border width", placeholder: "0 or 1" }
-                            ]
-                            delegate: ShellValueField {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                description: root.optionDescription(modelData.key)
-                                value: root.overrideValue(modelData.key)
-                                placeholder: modelData.placeholder
-                                onValueEdited: function(value) { root.setOverride(modelData.key, value) }
-                                onResetRequested: root.setOverride(modelData.key, "")
-                            }
-                        }
-                    }
-                }
-            }
-
-            Item {
-                id: scalePage
-                implicitHeight: scaleColumn.implicitHeight
-                ColumnLayout {
-                    id: scaleColumn
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Text { Layout.fillWidth: true; text: "TYPE + SPACING SCALE"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "These are shell-wide structural tokens. They change Quickshell density and typography, not Hyprland monitor scale or application font configuration."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Button { Layout.fillWidth: true; Layout.preferredHeight: Style.space(34); text: root.showAdvanced ? "Hide scale tokens" : "Fine-tune type and spacing"; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.toggleAdvanced() }
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: 3
-                        columnSpacing: Style.space(5)
-                        rowSpacing: Style.space(5)
-                        Repeater {
-                            model: root.densityModes
-                            delegate: DesktopOptionCard {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                compact: true
-                                title: modelData.title
-                                description: modelData.description
-                                selected: modelData.key === "native" ? root.overrideValue("spacing.scale") === "" : modelData.key === "comfortable" ? root.overrideValue("spacing.scale") === "1.08" : root.overrideValue("spacing.scale") === "0.92"
-                                onClicked: root.applyDensityMode(modelData.key)
-                            }
-                        }
-                    }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(8); rowSpacing: Style.space(7)
-                        Layout.preferredHeight: root.showAdvanced ? implicitHeight : 0
-                        Layout.minimumHeight: 0
-                        visible: root.showAdvanced
-                        Repeater {
-                            model: [
-                                { key: "font.base-size", label: "Font base size", placeholder: "12" },
-                                { key: "font.caption", label: "Caption size", placeholder: "10" },
-                                { key: "font.body-small", label: "Body small size", placeholder: "11" },
-                                { key: "font.body", label: "Body size", placeholder: "12" },
-                                { key: "font.subtitle", label: "Subtitle size", placeholder: "13" },
-                                { key: "font.title", label: "Title size", placeholder: "14" },
-                                { key: "font.heading", label: "Heading size", placeholder: "16" },
-                                { key: "font.display", label: "Display size", placeholder: "24" },
-                                { key: "font.display-large", label: "Display large size", placeholder: "28" },
-                                { key: "spacing.scale", label: "Spacing scale", placeholder: "1.0" },
-                                { key: "spacing.scale-with-font", label: "Spacing follows font", placeholder: "true / false" },
-                                { key: "spacing.control-height", label: "Control height", placeholder: "28" },
-                                { key: "spacing.control-gap", label: "Control gap", placeholder: "8" },
-                                { key: "spacing.control-padding-x", label: "Control horizontal padding", placeholder: "10" },
-                                { key: "spacing.control-padding-y", label: "Control vertical padding", placeholder: "6" },
-                                { key: "spacing.popup-row-height", label: "Popup row height", placeholder: "28" },
-                                { key: "spacing.row-gap", label: "Row gap", placeholder: "8" },
-                                { key: "spacing.panel-padding", label: "Panel padding", placeholder: "18" },
-                                { key: "spacing.popup-padding", label: "Popup padding", placeholder: "14" }
-                            ]
-                            delegate: ShellValueField {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                description: root.optionDescription(modelData.key)
-                                value: root.overrideValue(modelData.key)
-                                placeholder: modelData.placeholder
-                                onValueEdited: function(value) { root.setOverride(modelData.key, value) }
-                                onResetRequested: root.setOverride(modelData.key, "")
-                            }
-                        }
-                    }
-                    Text { Layout.fillWidth: true; text: "Font family remains a machine preference; use `omarchy font set` so the native shell and applications keep the same fontconfig ownership."; color: Color.foreground; opacity: 0.54; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                }
-            }
-
-            Item {
-                id: feedbackPage
-                implicitHeight: feedbackColumn.implicitHeight
-                ColumnLayout {
-                    id: feedbackColumn
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Text { Layout.fillWidth: true; text: "FEEDBACK + SECURITY SURFACES"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "Tooltip, notification, polkit, lock, and image-picker readers stay native. This page only changes their visual tokens and state emphasis."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Button { Layout.fillWidth: true; Layout.preferredHeight: Style.space(34); text: root.showAdvanced ? "Hide feedback tokens" : "Fine-tune feedback"; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.toggleAdvanced() }
-                    RowLayout {
-                        Layout.fillWidth: true; spacing: Style.space(5)
-                        Repeater { model: root.feedbackOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Tooltip · " + modelData.title; description: "Native tooltip border and surface treatment."; selected: root.shellStyle.tooltip === modelData.key; onClicked: root.emitStyle(root.overridesCopy(), undefined, undefined, modelData.key) } }
-                        Repeater { model: root.feedbackOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Alerts · " + modelData.title; description: "Native notification border and countdown treatment."; selected: root.shellStyle.notifications === modelData.key; onClicked: root.emitStyle(root.overridesCopy(), undefined, undefined, undefined, modelData.key) } }
-                    }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(8); rowSpacing: Style.space(7)
-                        Layout.preferredHeight: root.showAdvanced ? implicitHeight : 0
-                        Layout.minimumHeight: 0
-                        visible: root.showAdvanced
-                        Repeater {
-                            model: [
-                                { key: "tooltip.background-alpha", label: "Tooltip background alpha", placeholder: "0.0 – 1.0" },
-                                { key: "tooltip.border-alpha", label: "Tooltip border alpha", placeholder: "0.0 – 1.0" },
-                                { key: "tooltip.border-width", label: "Tooltip border width", placeholder: "1" },
-                                { key: "notifications.background-alpha", label: "Notification background alpha", placeholder: "0.0 – 1.0" },
-                                { key: "notifications.border-alpha", label: "Notification border alpha", placeholder: "1.0" },
-                                { key: "notifications.border-width", label: "Notification border width", placeholder: "1" },
-                                { key: "notifications.countdown", label: "Notification countdown", placeholder: "accent or #hex" },
-                                { key: "polkit.background-alpha", label: "Polkit background alpha", placeholder: "1.0" },
-                                { key: "polkit.scrim-alpha", label: "Polkit scrim alpha", placeholder: "0.5" },
-                                { key: "polkit.border-alpha", label: "Polkit border alpha", placeholder: "1.0" },
-                                { key: "lock.background-alpha", label: "Lock background alpha", placeholder: "0.8" },
-                                { key: "lock.border-alpha", label: "Lock border alpha", placeholder: "1.0" },
-                                { key: "lock.selection-alpha", label: "Lock selection alpha", placeholder: "0.45" },
-                                { key: "image-picker.scrim-alpha", label: "Image picker scrim alpha", placeholder: "0.5" },
-                                { key: "image-picker.selected-border-alpha", label: "Picker selected border alpha", placeholder: "1.0" },
-                                { key: "image-picker.unselected-border-alpha", label: "Picker idle border alpha", placeholder: "0.28" }
-                            ]
-                            delegate: ShellValueField {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                label: modelData.label
-                                description: root.optionDescription(modelData.key)
-                                value: root.overrideValue(modelData.key)
-                                placeholder: modelData.placeholder
-                                onValueEdited: function(value) { root.setOverride(modelData.key, value) }
-                                onResetRequested: root.setOverride(modelData.key, "")
-                            }
-                        }
-                    }
-                }
-            }
-
-            Item {
-                id: rawPage
-                implicitHeight: rawColumn.implicitHeight
-                ColumnLayout {
-                    id: rawColumn
-                    width: parent.width
-                    spacing: Style.space(6)
-                    Text { Layout.fillWidth: true; text: "ADVANCED SHELL TOKENS"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "For values not promoted into a card yet, add a documented section.key directly. Omagen validates the section and key shape, then the native theme compiler merges it into shell.toml."; color: Color.foreground; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: Style.space(5)
-                        Rectangle {
-                            Layout.preferredWidth: Style.space(120); Layout.preferredHeight: Style.space(34)
-                            color: Util.alpha(Color.background, 0.38); radius: Math.max(Style.space(4), Style.cornerRadius / 2); border.width: 1; border.color: rawSectionInput.activeFocus ? Color.accent : Color.popups.border
-                            TextInput { id: rawSectionInput; anchors.fill: parent; anchors.leftMargin: Style.space(8); anchors.rightMargin: Style.space(8); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: TextInput.AlignVCenter }
-                            Text { visible: rawSectionInput.text === "" && !rawSectionInput.activeFocus; anchors.fill: rawSectionInput; anchors.leftMargin: Style.space(8); color: Color.foreground; opacity: 0.42; text: "section"; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: Text.AlignVCenter }
+                        TextInput {
+                            id: rawSectionInput
+                            Layout.preferredWidth: Style.space(84)
+                            Layout.preferredHeight: Style.space(32)
+                            text: "popups"
+                            color: Color.foreground
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            selectByMouse: true
+                            clip: true
                         }
-                        Rectangle {
-                            Layout.preferredWidth: Style.space(150); Layout.preferredHeight: Style.space(34)
-                            color: Util.alpha(Color.background, 0.38); radius: Math.max(Style.space(4), Style.cornerRadius / 2); border.width: 1; border.color: rawKeyInput.activeFocus ? Color.accent : Color.popups.border
-                            TextInput { id: rawKeyInput; anchors.fill: parent; anchors.leftMargin: Style.space(8); anchors.rightMargin: Style.space(8); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: TextInput.AlignVCenter }
-                            Text { visible: rawKeyInput.text === "" && !rawKeyInput.activeFocus; anchors.fill: rawKeyInput; anchors.leftMargin: Style.space(8); color: Color.foreground; opacity: 0.42; text: "key"; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: Text.AlignVCenter }
+                        TextInput {
+                            id: rawKeyInput
+                            Layout.preferredWidth: Style.space(100)
+                            Layout.preferredHeight: Style.space(32)
+                            text: "background-alpha"
+                            color: Color.foreground
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            selectByMouse: true
+                            clip: true
                         }
-                        Rectangle {
-                            Layout.fillWidth: true; Layout.preferredHeight: Style.space(34)
-                            color: Util.alpha(Color.background, 0.38); radius: Math.max(Style.space(4), Style.cornerRadius / 2); border.width: 1; border.color: rawValueInput.activeFocus ? Color.accent : Color.popups.border
-                            TextInput { id: rawValueInput; anchors.fill: parent; anchors.leftMargin: Style.space(8); anchors.rightMargin: Style.space(8); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: TextInput.AlignVCenter }
-                            Text { visible: rawValueInput.text === "" && !rawValueInput.activeFocus; anchors.fill: rawValueInput; anchors.leftMargin: Style.space(8); color: Color.foreground; opacity: 0.42; text: "value"; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; verticalAlignment: Text.AlignVCenter }
-                        }
-                        Button { Layout.preferredWidth: Style.space(74); Layout.preferredHeight: Style.space(34); text: "Add"; foreground: Color.background; background: Color.accent; accent: Color.accent; bordered: true; onClicked: root.addRawOverride() }
-                    }
-                    Text { Layout.fillWidth: true; text: root.rawMessage; visible: root.rawMessage !== ""; color: Color.accent; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-
-                    Text { Layout.fillWidth: true; text: "STAGED OVERRIDES"; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Repeater {
-                        model: Object.keys(root.shellStyle.overrides || {}).sort()
-                        delegate: BorderSurface {
-                            required property string modelData
+                        TextInput {
+                            id: rawValueInput
                             Layout.fillWidth: true
-                            implicitHeight: Style.space(36)
-                            color: Util.alpha(Color.foreground, 0.035)
-                            radius: Math.max(Style.space(4), Style.cornerRadius / 2)
-                            borderSpec: Border.flat(Util.alpha(Color.popups.border, 0.62), 1)
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: Style.space(8)
-                                anchors.rightMargin: Style.space(5)
-                                Text { Layout.fillWidth: true; text: modelData + " = " + root.overrideValue(modelData); color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
-                                Button { Layout.preferredWidth: Style.space(52); Layout.preferredHeight: Style.space(26); text: "Clear"; fontSize: Style.font.caption; foreground: Color.foreground; background: Util.alpha(Color.foreground, 0.045); accent: Color.accent; bordered: true; onClicked: root.clearRawOverride(modelData) }
-                            }
+                            Layout.preferredHeight: Style.space(32)
+                            color: Color.foreground
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            selectByMouse: true
+                            clip: true
+                            Keys.onReturnPressed: root.addRawOverride()
+                        }
+                        Button {
+                            Layout.preferredWidth: Style.space(48)
+                            Layout.preferredHeight: Style.space(32)
+                            text: "Add"
+                            foreground: Contrast.textFor(Color.accent, Color.background, Color.foreground)
+                            background: Color.accent
+                            accent: Color.accent
+                            bordered: false
+                            onClicked: root.addRawOverride()
                         }
                     }
-                    Text { Layout.fillWidth: true; visible: Object.keys(root.shellStyle.overrides || {}).length === 0; text: "No additive overrides staged. The active theme and user shell.toml remain authoritative."; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                    Text {
+                        Layout.fillWidth: true
+                        visible: root.rawMessage !== ""
+                        text: root.rawMessage
+                        color: Color.accent
+                        opacity: 0.78
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                    }
                 }
             }
         }

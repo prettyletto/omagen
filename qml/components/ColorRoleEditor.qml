@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "../components" as Components
+import "Contrast.js" as Contrast
 
 // A staged semantic-colour editor.  It deliberately owns only the visual
 // editing interaction; the parent owns the palette document and decides when
@@ -393,7 +394,7 @@ FocusScope {
                     Layout.preferredHeight: Style.space(30)
                     text: modelData.hex
                     fontSize: Style.font.caption
-                    foreground: Color.foreground
+                    foreground: Contrast.textFor(modelData.hex, Color.background, Color.foreground)
                     background: modelData.hex
                     bordered: true
                     tooltipText: modelData.label + "  " + modelData.hex

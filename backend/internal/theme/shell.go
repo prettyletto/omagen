@@ -10,6 +10,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/bar"
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
+	"github.com/prettyletto/omagen/backend/internal/runtime"
 )
 
 var generatedShellFiles = []string{
@@ -28,7 +29,7 @@ var generatedShellFiles = []string{
 	"shell.image-picker.toml",
 }
 
-var generatedOmagenFiles = []string{"omagen.bar.toml", "omagen.bar.json", "omagen.bar.spec.json"}
+var generatedOmagenFiles = []string{"omagen.bar.toml", "omagen.bar.json", "omagen.bar.spec.json", "omagen.look-feel.json", "omagen.terminal.json", runtime.ManifestFileName}
 
 type shellSection struct {
 	name string

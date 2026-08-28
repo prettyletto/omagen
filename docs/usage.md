@@ -65,21 +65,67 @@ settings** and move between the four engines:
   for inactive windows).
 - **Shell** controls surface composition, focus/detail language, and tooltip or
   notification feedback surfaces.
-- **Bar** controls the form, surface, density, attention color, and Docked
-  visibility policy while preserving native Quattro layout behavior.
-- Advanced bar profiles can additionally stage split/island/dock/rail form,
-  auto-hide and reveal, hover expansion, and workspace presentation. These are
-  theme-bounded: a profile is applied through the reversible bar adapter, and
-  the user's shell layout is restored with the session.
+- **Bar** exposes a preset, named size modes, and pane treatments (Preset
+  default, Opaque, Metal, Glass, and Clear), plus an expandable advanced size control
+  showing the resolved pixel footprint with a preset-specific usable minimum.
+  Native Quattro layout behavior remains preserved; Glass uses a scoped
+  compositor layer rule rather than a fake QML blur.
 - **Bar Demo** opens an interactive reader surface below the real native bar.
-  It animates the staged BarSpec duration/easing, exercises hover expansion and
-  auto-hide when selected, and shows the requested topology, placement, surface,
-  and geometry. It never replaces the native bar or captures its widget input.
+  It shows the selected preset and size without replacing the native bar or
+  capturing its widget input.
 - **Animations** controls window, workspace, and border motion plus reduced motion.
 
 Every choice is staged in the current session. Use **Test Live composition**
 to apply the selected values to the native runtime owners; these settings then
 become part of the generated preview and applied theme.
+
+### Look & Feel recipes
+
+Look & Feel recipes are named compositions of those same Advanced controls,
+not a parallel styling implementation. The authored catalog contains Glass
+Blur, Focused, Cyberpunk Glitch, Spectral Shift, Phosphor Terminal, Monolith,
+Elastic Orbit, Nature, and Oriental; Omarchy Native remains a protected no-op
+baseline. Oriental is the Kanagawa-inspired recipe: Japanese Kanji workspace
+labels, split glass bar sections, warm frosted windows, and quiet directional
+motion without a screen shader.
+Each recipe also carries its workspace presentation. Cyberpunk retains its
+existing 4 px neon/digital/RGB-tear behavior and changes only to Roman workspace
+labels in revision 6.
+
+Spectral Shift and Phosphor Terminal use finite Hyprland screen shaders. The
+Advanced Animations page exposes effect family, Low/Medium/Strong intensity,
+duration, and event triggers. Effects restore the previously configured screen
+shader and stop redrawing after their event envelope; Reduced Motion disables
+them.
+
+Recipes can be exchanged through the strict versioned JSON manifest contract:
+
+```sh
+omagen look-feel export nature > nature.omagen-recipe.json
+omagen look-feel import nature.omagen-recipe.json
+```
+
+Import currently validates and resolves the recipe without installing hooks or
+executing downloaded code. Community manifests reference bounded built-in
+effect IDs rather than embedding arbitrary shader source.
+
+## Fast and advanced theme paths
+
+Omagen-generated themes have two runtime paths:
+
+- **Fast** writes the native Omarchy theme files, including `colors.toml` and
+  the supported shell settings. It never requires an Omagen runtime bridge.
+- **Advanced** records an `omagen.runtime.json` marker alongside the native
+  files. Omarchy still applies the native files first. The first time Omagen
+  applies an advanced theme without the bridge, it keeps that native result and
+  shows a notification explaining how to enable the complete theme.
+
+Enabling advanced themes is an explicit, user-consented setup action. It
+installs only a user-owned theme-set hook under
+`~/.config/omarchy/hooks/theme-set.d/` and Omagen state under
+`~/.local/state/omagen/`; it does not modify package-owned Omarchy files. A
+theme can always continue to use its native colors and shell behavior without
+the bridge.
 
 ![Window styling extras](../assets/screenshots/extras-window.webp)
 

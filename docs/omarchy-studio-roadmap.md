@@ -654,6 +654,14 @@ Capability groups:
 - [ ] Hooks as explicit executable capabilities.
 - [ ] Privileged/system styling as a separate gated workflow.
 
+Motion Lab V1 is now represented by a versioned `AnimationsStyle` document and
+the existing Advanced Studio animation tab. It covers semantic presets, window
+open/close/move controls, workspace travel and axis, special-workspace motion,
+focus/layer transitions, reusable Bézier/spring curves, and reduced motion. The
+Hyprland writer remains the sole compiler, while legacy compact animation
+documents keep their previous generated output. Live compositor interaction and
+visual proof remain separate from these automated checks.
+
 Every advanced control must expose:
 
 - native owner;

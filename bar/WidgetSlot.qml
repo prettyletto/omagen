@@ -1,0 +1,256 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Effects
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Services.SystemTray
+import qs.Commons
+import qs.Ui
+import "." as Bar
+
+Item {
+    id: slot
+    property var bar: null
+    required property var entry
+    property bool active: true
+    property string region: ""
+    readonly property string moduleName: bar.entryId(entry)
+    readonly property var settings: bar.entrySettings(entry)
+    readonly property string customType: bar.customModuleType(entry)
+    readonly property bool qmlCustom: customType === "qml"
+    readonly property bool commandCustom: customType === "command"
+    readonly property bool compactTray: moduleName === "omarchy.tray"
+        && (bar.topology === "islands"
+            || bar.topology === "dock"
+            || (bar.topology === "floating" && bar.density === "compact")
+            || (bar.topology === "minimal" && bar.vertical))
+    readonly property bool workspacePresentation: moduleName === "omarchy.workspaces"
+        && bar.workspacePresentationActive
+    readonly property bool dragSource: bar.barDragSource === slot
+    readonly property bool panelOpen: bar.activePopout === slot.activeItem
+    // Match the native bar's indicator contract. Panel widgets can supply
+    // a painted extent (clock/weather use a smaller vertical mark); using
+    // the whole slot makes the indicator look like a line through the
+    // icon instead of a pointer to the active module.
+    readonly property real panelIndicatorExtent: {
+        var key = bar.vertical ? "openPanelIndicatorHeight" : "openPanelIndicatorWidth"
+        var hint = activeItem && key in activeItem ? activeItem[key] : undefined
+        if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
+        return Math.max(Style.space(10), Math.round((bar.vertical ? slot.height : slot.width) * 0.55))
+    }
+    // Read the registry map directly so installing, enabling, or removing
+    // a bar plugin invalidates this binding. Calling widgetComponent()
+    // alone would hide that dependency from QML's binding tracker and
+    // could leave a stale component mounted until a full shell restart.
+    readonly property var registryComponent: {
+        var widgets = bar.barWidgetRegistry && bar.barWidgetRegistry.widgets
+            ? bar.barWidgetRegistry.widgets : ({})
+        if (qmlCustom || commandCustom) return null
+        if (compactTray) return compactTrayWidgetComponent
+        if (workspacePresentation) return null
+        var canonical = typeof Util.canonicalWidgetId === "function"
+            ? Util.canonicalWidgetId(moduleName) : moduleName
+        return widgets[canonical] && widgets[canonical].component
+            ? widgets[canonical].component : null
+    }
+    readonly property var activeItem: workspacePresentation ? workspaceLoader.item : qmlCustom ? qmlLoader.item : commandCustom ? commandLoader.item : loader.item
+    // Native vertical ModuleSlot fixes every widget to the rail width;
+    // allowing a widget's horizontal implicit width here clips text and
+    // icons into the fragments seen in the live screenshot.
+    implicitWidth: !slot.active ? 0 : bar.vertical
+        ? bar.barSize
+        : (activeItem && activeItem.visible !== false ? activeItem.implicitWidth : 0)
+    implicitHeight: !slot.active ? 0 : (activeItem && activeItem.visible !== false ? activeItem.implicitHeight : 0)
+    width: implicitWidth
+    height: implicitHeight
+    // Third-party widgets may paint a horizontal label or badge even
+    // after receiving a vertical bar. Keep that drawing contained in its
+    // compact rail slot so it cannot overlap adjacent modules.
+    clip: bar.vertical
+
+    Component.onCompleted: bar.registerModuleSlot(slot)
+    Component.onDestruction: bar.unregisterModuleSlot(slot)
+
+    BorderSurface {
+        visible: slot.dragSource
+        anchors.fill: parent
+        anchors.margins: Style.space(1)
+        color: "transparent"
+        borderSpec: Border.flat(bar.barForeground, 1)
+        radius: Math.min(Style.cornerRadius, height / 2)
+        opacity: bar.transparent ? 0.32 : 0.7
+    }
+
+    Rectangle {
+        visible: bar.barDragSource !== null && bar.barDragTarget === slot
+        color: bar.urgent
+        radius: Math.min(width, height) / 2
+        width: bar.vertical ? slot.width : Style.space(2)
+        height: bar.vertical ? Style.space(2) : slot.height
+        x: bar.vertical ? 0 : (bar.barDragAfter ? slot.width - width : 0)
+        y: bar.vertical ? (bar.barDragAfter ? slot.height - height : 0) : 0
+        z: 20
+    }
+
+    Rectangle {
+        id: openPanelIndicator
+        readonly property int inset: Style.space(2)
+        visible: opacity > 0
+        opacity: slot.panelOpen && !slot.dragSource ? 0.9 : 0
+        color: Color.accent
+        radius: Math.min(width, height) / 2
+        width: bar.vertical ? Style.space(2) : slot.panelIndicatorExtent
+        height: bar.vertical ? slot.panelIndicatorExtent : Style.space(2)
+        x: bar.vertical
+            ? (bar.position === "left" ? parent.width - width - inset : inset)
+            : Math.round((parent.width - width) / 2)
+        y: bar.vertical
+            ? Math.round((parent.height - height) / 2)
+            : (bar.position === "top" ? parent.height - height - inset : inset)
+        z: 50
+
+        Behavior on opacity {
+            NumberAnimation { duration: 120; easing.type: Easing.OutCubic }
+        }
+    }
+
+    Loader {
+        id: loader
+        active: slot.active && !slot.qmlCustom && !slot.commandCustom && !slot.workspacePresentation
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        sourceComponent: slot.registryComponent
+        onLoaded: {
+            if (!item) return
+            if ("bar" in item) item.bar = bar
+            if ("moduleName" in item) item.moduleName = slot.moduleName
+            if ("settings" in item) item.settings = slot.settings
+        }
+    }
+
+    Loader {
+        id: workspaceLoader
+        active: slot.active && slot.workspacePresentation
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        source: Qt.resolvedUrl("../WorkspacePresentation.qml")
+        onLoaded: {
+            if (!item) return
+            if ("bar" in item) item.bar = bar
+            if ("workspaceSpecOverride" in item) item.workspaceSpecOverride = bar.workspaceSpec
+            if ("moduleName" in item) item.moduleName = slot.moduleName
+            if ("settings" in item) item.settings = slot.settings
+        }
+    }
+
+    Loader {
+        id: qmlLoader
+        active: slot.active && slot.qmlCustom
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        source: slot.qmlCustom ? bar.customModuleSource(slot.entry) : ""
+        onLoaded: {
+            if (!item) return
+            if ("bar" in item) item.bar = bar
+            if ("moduleName" in item) item.moduleName = slot.moduleName
+            if ("settings" in item) item.settings = slot.settings
+        }
+    }
+
+    Loader {
+        id: commandLoader
+        active: slot.active && slot.commandCustom
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        sourceComponent: slot.commandCustom ? commandModuleComponent : null
+        onLoaded: if (item) { item.bar = bar; item.entry = slot.entry }
+    }
+
+    Component {
+        id: compactTrayWidgetComponent
+        Bar.CompactTrayWidget {}
+    }
+
+    Component {
+        id: commandModuleComponent
+        Bar.CustomCommandModule { entry: slot.entry; bar: bar }
+    }
+
+    MouseArea {
+        id: modulePointer
+        property bool dragging: false
+        property bool suppressClick: false
+        property real pressedX: 0
+        property real pressedY: 0
+        readonly property real dragThreshold: Style.space(4)
+
+        anchors.fill: parent
+        acceptedButtons: Qt.LeftButton
+        enabled: !slot.compactTray && slot.visible && slot.width > 0 && slot.height > 0
+        propagateComposedEvents: true
+        cursorShape: dragging ? Qt.ClosedHandCursor
+            : (bar.moduleClickTargetAt(slot, mouseX, mouseY) ? Qt.PointingHandCursor : Qt.ArrowCursor)
+
+        onPressed: function(mouse) {
+            dragging = false
+            suppressClick = false
+            pressedX = mouse.x
+            pressedY = mouse.y
+            bar.clearBarDrag()
+        }
+
+        onPositionChanged: function(mouse) {
+            if (!(mouse.buttons & Qt.LeftButton)) return
+            var distance = Math.abs(mouse.x - pressedX) + Math.abs(mouse.y - pressedY)
+            if (!dragging && distance >= dragThreshold) {
+                dragging = true
+                bar.barDragSource = slot
+            }
+            if (!dragging) return
+
+            var scenePoint = slot.mapToItem(null, mouse.x, mouse.y)
+            bar.barDragSceneX = scenePoint.x
+            bar.barDragSceneY = scenePoint.y
+            var drop = bar.nearestDropTarget(scenePoint, slot)
+            bar.barDragTarget = drop ? drop.slot : null
+            bar.barDragAfter = drop ? drop.after : false
+        }
+
+        onReleased: function(mouse) {
+            var wasDragging = dragging
+            var target = bar.barDragTarget
+            var after = bar.barDragAfter
+            dragging = false
+            if (wasDragging) suppressClick = true
+            bar.clearBarDrag()
+            if (wasDragging && target) {
+                bar.dropBarModule(slot, target, after)
+                mouse.accepted = true
+            } else if (!wasDragging) {
+                mouse.accepted = false
+            }
+        }
+
+        onCanceled: {
+            dragging = false
+            suppressClick = false
+            bar.clearBarDrag()
+        }
+
+        onClicked: function(mouse) {
+            if (suppressClick) {
+                suppressClick = false
+                mouse.accepted = true
+                return
+            }
+            if (bar.pressModuleClickTarget(slot, mouse.button, mouse.x, mouse.y)) {
+                mouse.accepted = true
+            } else {
+                mouse.accepted = false
+            }
+        }
+
+    }
+}

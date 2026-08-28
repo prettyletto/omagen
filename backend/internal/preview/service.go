@@ -14,6 +14,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/protocol"
+	"github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
@@ -480,11 +481,11 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		styles.Desktop = session.NormalizeDesktopStyle(styles.Desktop)
 		styles.Bar = session.NormalizeBarStyle(styles.Bar)
 		styles.Animations = session.NormalizeAnimationsStyle(styles.Animations)
-		if err := theme.WriteHyprlandWithAnimations(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations); err != nil {
+		spec := styles.Bar.EffectiveBarSpec()
+		if err := theme.WriteHyprlandWithAnimationsAndShell(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations, styles.Shell.Preset, &spec); err != nil {
 			return fmt.Errorf("rewrite overridden hyprland style: %w", err)
 		}
-		spec := styles.Bar.EffectiveBarSpec()
-		if err := theme.WriteShellWithOverridesAndSpec(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility, styles.Shell.Overrides, &spec); err != nil {
+		if err := theme.WriteShellWithOverridesAndSpec(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility, session.EffectiveShellOverrides(styles.Shell, styles.Bar), &spec); err != nil {
 			return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
 		}
 		if styles.Bar.Profile != nil {
@@ -495,13 +496,26 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		if err := theme.WriteBarSpec(dir, styles.Bar.EffectiveBarSpec()); err != nil {
 			return fmt.Errorf("rewrite bar spec: %w", err)
 		}
+		if styles.LookFeel != nil {
+			if err := theme.WriteLookFeelMetadata(dir, *styles.LookFeel); err != nil {
+				return fmt.Errorf("rewrite Look & Feel metadata: %w", err)
+			}
+		}
+		if styles.Terminal != nil {
+			if err := theme.WriteTerminalTranslucency(dir, *styles.Terminal); err != nil {
+				return fmt.Errorf("rewrite terminal translucency metadata: %w", err)
+			}
+		}
+		if err := runtime.WriteManifest(dir, runtime.AdvancedManifest("shell", "bar", "window", "animations")); err != nil {
+			return fmt.Errorf("write Omagen runtime manifest: %w", err)
+		}
 		return nil
 	}
 	if !rewriteShell {
 		return nil
 	}
 	spec := barStyle.EffectiveBarSpec()
-	if err := theme.WriteShellWithOverridesAndSpec(dir, palette, shellStyle.Surface, shellStyle.Detail, shellStyle.Tooltip, shellStyle.Notifications, barStyle.Surface, barStyle.Density, barStyle.Attention, barStyle.Form, barStyle.Visibility, shellStyle.Overrides, &spec); err != nil {
+	if err := theme.WriteShellWithOverridesAndSpec(dir, palette, shellStyle.Surface, shellStyle.Detail, shellStyle.Tooltip, shellStyle.Notifications, barStyle.Surface, barStyle.Density, barStyle.Attention, barStyle.Form, barStyle.Visibility, session.EffectiveShellOverrides(shellStyle, barStyle), &spec); err != nil {
 		return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
 	}
 	if barStyle.Profile != nil {
@@ -511,6 +525,9 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 	}
 	if err := theme.WriteBarSpec(dir, barStyle.EffectiveBarSpec()); err != nil {
 		return fmt.Errorf("rewrite bar spec: %w", err)
+	}
+	if err := runtime.WriteManifest(dir, runtime.AdvancedManifest("shell", "bar", "window", "animations")); err != nil {
+		return fmt.Errorf("write Omagen runtime manifest: %w", err)
 	}
 	return nil
 }
@@ -673,6 +690,12 @@ func applyStyleOverrides(record *session.Record, styles *StyleOverrides) {
 	record.DesktopStyle = session.NormalizeDesktopStyle(styles.Desktop)
 	record.BarStyle = session.NormalizeBarStyle(styles.Bar)
 	record.AnimationsStyle = session.NormalizeAnimationsStyle(styles.Animations)
+	if styles.LookFeel != nil {
+		record.LookFeel = session.NormalizeLookFeelDocument(*styles.LookFeel)
+	}
+	if styles.Terminal != nil {
+		record.TerminalTranslucency = session.NormalizeTerminalTranslucency(*styles.Terminal)
+	}
 	record.ExtraConfigs = true
 }
 

@@ -29,13 +29,47 @@ native Quattro bar remains the fallback unless a profile explicitly selects a
 replacement plugin.
 
 The Bar Lab also emits `omagen.bar.spec.json`, a versioned `BarSpec v2`
-document. It is the source of truth for bar surface primitives, geometry,
-topology, behaviour, attention, and motion; the compiler records whether the
-spec can stay on the native Quattro reader or needs Omagen's additive
-decoration adapter. Legacy five-field `bar_style` sessions are normalized into
-an effective spec without rewriting their durable record until the user edits
-the bar. Widget placement remains outside this document and stays owned by
+document. Its durable ownership is geometry, topology, behaviour, attention,
+and motion; Shell is the authority for shared bar material and shell-level
+effects. Legacy surface fields remain readable during this migration but are
+not the long-term visual contract. The compiler records whether the spec can
+stay on the native Quattro reader or needs Omagen's additive decoration
+adapter. Widget placement remains outside this document and stays owned by
 Quattro's canonical `shell.json`.
+
+Workspace presentation is an explicit BarSpec field: Default uses Omagen's
+faithful clone of Quattro's normal workspace widget, while Numbers, Japanese
+Kanji (一–五), Roman numerals, Letters, Dots, and bounded Custom glyphs use that
+same Omagen reader.
+Hyprland remains the owner of workspace state and click dispatch in every
+presentation.
+
+## Shell preset contract
+
+Shell appearance now starts with a deliberately small preset contract:
+`default` keeps native Quickshell behavior, while `glass` supplies a
+theme-owned translucent alpha baseline plus a scoped Hyprland layer rule for
+backdrop blur on the native Quickshell surfaces and Omagen Shell Demo. The
+preset is stored separately from `ShellStyle.Overrides`, so changing presets
+never destroys an explicit customization.
+
+Advanced Shell controls are reusable on every preset. Their values are written
+as explicit `section.key` entries in the generated `shell.toml`; the effective
+token list shows whether each value comes from the selected preset, a custom
+override, or the native theme fallback. Shell Glass is a compositor-backed
+effect: `shell.toml` supplies the translucent surface and generated
+`hyprland.lua` supplies the scoped backdrop blur. Cyberpunk Glitch uses the
+same compositor boundary for short, event-triggered whole-desktop shader
+pulses; it is idle between signals and restores the previous screen-shader and
+damage-tracking settings afterward.
+
+Shell owns the visual language shared by shell surfaces, including bar
+material and shell-level effects. Bar owns placement, topology, size,
+visibility, auto-hide, and widget behavior. Hyprland owns Window and Animations
+through the generated `hyprland.lua` artifact. The runtime registry reflects
+that split with Quickshell, Quattro, and native Hyprland contract adapters;
+these adapters validate and report consumption without replacing native shell,
+bar, or compositor ownership.
 
 ## Omarchy plugin contract
 
@@ -83,6 +117,20 @@ flowchart TD
     Backend --> Demo
     Backend --> Apply
 ~~~
+
+Advanced generated themes add one opt-in bridge after native theme selection:
+
+~~~text
+omarchy theme set
+→ native Omarchy applies colors.toml / shell.toml
+→ user-owned theme-set.d/omagen-theme-set hook (only after consent)
+→ installed Omagen backend observes the advanced marker
+~~~
+
+The marker is ignored by native Omarchy, so the fast path remains independent
+of Omagen. The bridge is deliberately user-owned and idempotent; it refuses to
+replace another theme-set hook and exits safely when the Omagen plugin is no
+longer installed.
 
 ## Generation pipeline
 

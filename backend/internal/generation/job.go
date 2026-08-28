@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/prettyletto/omagen/backend/internal/bar"
 	"github.com/prettyletto/omagen/backend/internal/contrast"
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	semanticpalette "github.com/prettyletto/omagen/backend/internal/palette"
+	"github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/theme"
@@ -23,6 +25,8 @@ type job struct {
 	desktopStyle    session.DesktopStyle
 	barStyle        session.BarStyle
 	animationsStyle session.AnimationsStyle
+	lookFeel        session.LookFeelDocument
+	terminal        session.TerminalTranslucency
 }
 
 func (j job) run(
@@ -145,6 +149,7 @@ func (j job) run(
 	}
 
 	var err error
+	var effectiveBarSpec *bar.BarSpec
 	generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
 	if err != nil {
 		return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
@@ -169,6 +174,7 @@ func (j job) run(
 	}
 	if j.shellStyle.Valid() && j.barStyle.Valid() {
 		spec := j.barStyle.EffectiveBarSpec()
+		effectiveBarSpec = &spec
 		if err := theme.WriteShellWithOverridesAndSpec(
 			variantDir,
 			generatedPalette,
@@ -181,7 +187,7 @@ func (j job) run(
 			j.barStyle.Attention,
 			j.barStyle.Form,
 			j.barStyle.Visibility,
-			j.shellStyle.Overrides,
+			session.EffectiveShellOverrides(j.shellStyle, j.barStyle),
 			&spec,
 		); err != nil {
 			return fmt.Errorf("write shell style: %w", err)
@@ -194,10 +200,21 @@ func (j job) run(
 		if err := theme.WriteBarSpec(variantDir, j.barStyle.EffectiveBarSpec()); err != nil {
 			return fmt.Errorf("write bar spec: %w", err)
 		}
+		if err := runtime.WriteManifest(variantDir, runtime.AdvancedManifest("shell", "bar", "window", "animations")); err != nil {
+			return fmt.Errorf("write Omagen runtime manifest: %w", err)
+		}
 	}
 	if j.desktopStyle.Valid() {
-		if err := theme.WriteHyprlandWithAnimations(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Active, j.desktopStyle.Inactive, j.desktopStyle.BorderSpeed, j.animationsStyle); err != nil {
+		if err := theme.WriteHyprlandWithAnimationsAndShell(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Active, j.desktopStyle.Inactive, j.desktopStyle.BorderSpeed, j.animationsStyle, j.shellStyle.Preset, effectiveBarSpec); err != nil {
 			return fmt.Errorf("write hyprland style: %w", err)
+		}
+	}
+	if j.lookFeel.Preset != "" {
+		if err := theme.WriteLookFeelMetadata(variantDir, j.lookFeel); err != nil {
+			return fmt.Errorf("write Look & Feel metadata: %w", err)
+		}
+		if err := theme.WriteTerminalTranslucency(variantDir, j.terminal); err != nil {
+			return fmt.Errorf("write terminal translucency metadata: %w", err)
 		}
 	}
 	extension, err := j.analysis.Extension()
