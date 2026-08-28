@@ -9,6 +9,10 @@ The full Bar is rooted at `OmagenBar.qml` and implemented under `bar/`;
 Quattro fallback and workspace/input ownership. Use the router and the
 relevant horizontal/vertical preset before reading the whole Bar tree.
 
+`NativeBarClone.qml` is vendor/upstream compatibility code. Read
+`docs/architecture/contracts/quattro-native-clone.md` when the task concerns
+that clone; do not normally modify or split it for a preset or host change.
+
 Run focused `backend/internal/bar` and `barprofile` tests plus the package/QML
 gate. Manually check both monitor orientations for layout or interaction
 changes.

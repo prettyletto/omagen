@@ -27,9 +27,10 @@ mutation, Demo, Apply, recovery, and the Studio protocol.
 | --- | --- | --- |
 | Palette | `docs/agents/recipes/palette-engine-change.md` | `backend/internal/imageanalysis`, `palette`, `colorspace`, `contrast` |
 | Generation | `docs/architecture/backend.md` | `backend/internal/generation`, `theme` |
-| Lifecycle/recovery | `docs/agents/recipes/lifecycle-change.md` | `backend/internal/session`, `apply`, `preview`, `cleanup` |
-| QML UI | `docs/agents/recipes/qml-ui-change.md` | `qml/views`, `qml/components`, `qml/app`, `Omagen.qml` |
-| Live Canvas/Studio | `docs/agents/recipes/live-canvas-change.md` | `qml/views/LiveCanvasPanel.qml`, `qml/components/AdvancedStyleEditor.qml`, `backend/internal/studio` |
+| Lifecycle/recovery | `docs/agents/recipes/lifecycle-change.md` | `backend/internal/session`, `apply`, `preview`, `cleanup`, `qml/controllers` |
+| QML UI | `docs/agents/recipes/qml-ui-change.md` | `qml/views`, `qml/components`, `qml/app`, `qml/controllers`, `Omagen.qml` |
+| Live Canvas/Studio | `docs/agents/recipes/live-canvas-change.md` | `qml/views/LiveCanvasPanel.qml`, `qml/components/AdvancedStyleEditor.qml`, `qml/controllers`, `backend/internal/studio` |
+| Style editor | `docs/agents/recipes/style-editor-change.md` | `qml/components/AdvancedStyleEditor.qml`, `qml/features/style-editor`, focused style controls |
 | Bar | `docs/agents/recipes/bar-change.md` | `bar`, `OmagenBar.qml`, `NativeBarClone.qml`, `backend/internal/bar`, `barprofile` |
 | Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/components/LookFeelControls.qml` |
 | Runtime | `docs/agents/recipes/runtime-adapter-change.md` | `backend/internal/runtime`, `bin/studio-theme-set` |
@@ -58,8 +59,11 @@ Read callers and callees only when the change crosses a documented seam.
 - Backend commands are adapters over domain packages; command parsing belongs
   under `backend/internal/cli`, while transaction behavior belongs in its
   domain package.
-- `qml/services` owns process mechanics/gateways; views should not spawn the
+- `qml/gateways` owns bounded backend command seams and `qml/services` owns the
+  compatibility façade plus settings/image helpers; views should not spawn the
   backend directly.
+- `qml/controllers` owns feature busy/pending state and asynchronous
+  Preview/Demo/Apply sequencing; `Omagen.qml` remains the composition root.
 - `Omagen.qml` is the application composition root. Keep domain state and
   rendering in the nearest bounded QML file when extracting code.
 - `OmagenBarWidget.qml` is launcher/status integration. Full bar composition

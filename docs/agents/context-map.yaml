@@ -11,6 +11,9 @@ domains:
       - backend/internal/apply
       - backend/internal/cleanup
       - backend/internal/fsutil
+      - qml/controllers/ApplyController.qml
+      - qml/controllers/DemoController.qml
+      - qml/controllers/PreviewController.qml
     tests:
       - backend/internal/session/*_test.go
       - backend/internal/preview/*_test.go
@@ -68,24 +71,26 @@ domains:
     docs:
       - docs/architecture/frontend.md
       - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
     source:
       - Omagen.qml
       - qml/views
       - qml/components
       - qml/app
       - qml/features
+      - qml/controllers
       - qml/gateways
       - qml/services
       - qml/state
     tests:
       - scripts/v1-check.sh
-      - qmllint (when installed)
     dependencies:
       - backend/internal/cli
       - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
     avoid:
       - backend/internal/palette
-      - backend/internal/session internals
+      - backend/internal/session
       - bar
       - docs/plans
   live-canvas:
@@ -93,9 +98,12 @@ domains:
       - docs/agents/recipes/live-canvas-change.md
       - docs/architecture/frontend.md
       - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
     source:
       - qml/views/LiveCanvasPanel.qml
       - qml/features/live-canvas
+      - qml/controllers/PreviewController.qml
+      - qml/controllers/DemoController.qml
       - qml/components/AdvancedStyleEditor.qml
       - qml/components/LookFeelControls.qml
       - backend/internal/studio
@@ -109,13 +117,14 @@ domains:
       - backend/internal/cli
       - backend/internal/session
     avoid:
-      - backend/internal/palette internals
-      - bar implementation
+      - backend/internal/palette
+      - bar
       - docs/plans
   studio:
     docs:
       - docs/architecture/frontend.md
       - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
       - docs/architecture/contracts/engine.md
       - docs/agents/recipes/live-canvas-change.md
     source:
@@ -133,13 +142,38 @@ domains:
       - backend/internal/cli
       - backend/internal/session
     avoid:
-      - backend/internal/palette internals
-      - bar implementation
+      - backend/internal/palette
+      - bar
+      - docs/plans
+  style-editor:
+    docs:
+      - docs/agents/recipes/style-editor-change.md
+      - docs/architecture/contracts/style-editor.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/frontend.md
+    source:
+      - qml/components/AdvancedStyleEditor.qml
+      - qml/features/style-editor
+      - qml/components/ShellLab.qml
+      - qml/components/BarRegionControls.qml
+      - qml/components/BarSpecControls.qml
+      - qml/components/BarWorkspaceControls.qml
+    tests:
+      - scripts/v1-check.sh
+    dependencies:
+      - qml/views/LiveCanvasPanel.qml
+      - backend/internal/barprofile
+    avoid:
+      - qml/controllers
+      - backend/internal/palette
+      - backend/internal/apply
+      - bar
       - docs/plans
   bar:
     docs:
       - docs/architecture/product-boundaries.md
       - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/contracts/quattro-native-clone.md
     source:
       - bar
       - OmagenBar.qml
@@ -157,10 +191,58 @@ domains:
       - manifest.json
       - bar-manifest.json
       - install.sh
+      - scripts/check-context-integrity.py
     avoid:
       - backend/internal/palette
       - backend/internal/apply
       - qml/views/LiveCanvasPanel.qml
+      - docs/plans
+  bar-host:
+    docs:
+      - docs/agents/recipes/bar-change.md
+      - docs/architecture/product-boundaries.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/contracts/quattro-native-clone.md
+    source:
+      - OmagenBar.qml
+      - OmagenBarWidget.qml
+      - BarModel.js
+      - WorkspacePresentation.qml
+      - bar/*.qml
+    tests:
+      - scripts/v1-check.sh
+      - backend/internal/bar/*_test.go
+    dependencies:
+      - backend/internal/barprofile
+      - bar-manifest.json
+    avoid:
+      - bar/presets
+      - NativeBarClone.qml
+      - qml/views/LiveCanvasPanel.qml
+      - backend/internal/palette
+      - backend/internal/apply
+      - docs/plans
+  bar-preset:
+    docs:
+      - docs/agents/recipes/bar-change.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/product-boundaries.md
+    source:
+      - bar/presets
+      - bar/BarPresetRouter.qml
+      - backend/internal/barprofile
+    tests:
+      - backend/internal/bar/*_test.go
+      - backend/internal/barprofile/*_test.go
+      - scripts/v1-check.sh
+    dependencies:
+      - BarModel.js
+      - bar/AGENTS.md
+    avoid:
+      - OmagenBar.qml
+      - NativeBarClone.qml
+      - backend/internal/session
+      - backend/internal/palette
       - docs/plans
   look-feel:
     docs:
@@ -178,7 +260,7 @@ domains:
       - backend/internal/session
       - backend/internal/bar
     avoid:
-      - backend/internal/palette internals
+      - backend/internal/palette
       - NativeBarClone.qml
       - docs/plans
   runtime:
@@ -240,5 +322,5 @@ domains:
       - bin/omagen
       - bin/omagen-studio
     avoid:
-      - backend/internal/palette internals
+      - backend/internal/palette
       - docs/plans
