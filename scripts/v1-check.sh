@@ -27,6 +27,9 @@ section "Repository"
 [[ -d "$BACKEND" ]] || fail "backend directory missing"
 [[ -f "$BACKEND/go.mod" ]] || fail "backend/go.mod missing"
 
+section "Architecture routing"
+"$ROOT/scripts/architecture-check.sh"
+
 section "Go tests"
 (cd "$BACKEND" && go test ./...)
 
@@ -116,6 +119,16 @@ required=(
     "bin/omagen"
     "bin/omagen-studio"
     "qml/services/BackendService.qml"
+    "qml/gateways/BackendCommand.qml"
+    "qml/gateways/SessionGateway.qml"
+    "qml/gateways/GenerationGateway.qml"
+    "qml/gateways/PreviewGateway.qml"
+    "qml/gateways/ApplyGateway.qml"
+    "qml/gateways/DemoGateway.qml"
+    "qml/gateways/LookFeelGateway.qml"
+    "qml/gateways/RuntimeGateway.qml"
+    "qml/gateways/ProtocolGateway.qml"
+    "qml/gateways/ConfigurationArgs.js"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"
     "qml/views/AdvancedRuntimeSetupWindow.qml"

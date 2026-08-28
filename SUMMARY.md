@@ -8,4 +8,6 @@
   - [Demo workspace](docs/demo.md)
   - [Recovery and safety](docs/recovery.md)
   - [Development](docs/development.md)
-  - [Architecture](docs/architecture.md)
+  - [Architecture](docs/architecture/README.md)
+  - [Agent navigation](docs/agents/README.md)
+  - [Studio protocol](docs/architecture/contracts/studio-protocol.md)
