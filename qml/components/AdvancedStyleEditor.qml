@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "Contrast.js" as Contrast
+import "../features/style-editor" as StyleEditor
 
 // Live Canvas editor for the four native composition documents.  The
 // choices remain staged in the session until the parent sends them through
@@ -31,41 +32,6 @@ Item {
         { title: "Shell", key: "shell", eyebrow: "QUICKSHELL" },
         { title: "Bar", key: "bar", eyebrow: "QUATTRO BAR" },
         { title: "Animations", key: "animations", eyebrow: "HYPRLAND" }
-    ]
-    readonly property var borderOptions: [
-        { key: "solid", title: "Solid" }, { key: "split_top", title: "Split top" },
-        { key: "split_bottom", title: "Split bottom" }, { key: "blend", title: "Accent blend" },
-        { key: "neon", title: "Neon" }, { key: "spin", title: "Spinning" }
-    ]
-    readonly property var shapeOptions: [
-        { key: "native", title: "Default" }, { key: "subtle", title: "Subtle" },
-        { key: "soft", title: "Soft" }, { key: "rounded", title: "Rounded" }, { key: "pill", title: "Pill" }
-    ]
-    readonly property var spacingOptions: [
-        { key: "native", title: "Default" }, { key: "compact", title: "Compact" }, { key: "airy", title: "Airy" }
-    ]
-    readonly property var depthOptions: [
-        { key: "native", title: "Default" }, { key: "flat", title: "Flat" }, { key: "shadow", title: "Shadow" }
-    ]
-    readonly property var inactiveOptions: [
-        { key: "native", title: "Native" }, { key: "shadow", title: "Soft dim" }, { key: "shadow_only", title: "Shadow · Preserve transparency" },
-        { key: "frosted_light", title: "Frosted · Light" }, { key: "frosted_balanced", title: "Frosted · Balanced" },
-        { key: "frosted_rich", title: "Frosted · Rich" }
-    ]
-    readonly property var activeOptions: [
-        { key: "native", title: "Native" }, { key: "frosted_light", title: "Frosted · Light" },
-        { key: "frosted_balanced", title: "Frosted · Balanced" }, { key: "frosted_rich", title: "Frosted · Rich" }
-    ]
-    readonly property var animationOptions: [
-        { key: "native", title: "Native" }, { key: "smooth", title: "Smooth" },
-        { key: "snappy", title: "Precision" }, { key: "digital", title: "Digital" },
-        { key: "spring", title: "Spring" }, { key: "minimal", title: "Minimal" }, { key: "none", title: "Off" }
-    ]
-    readonly property var workspaceAnimationOptions: [
-        { key: "native", title: "Native" }, { key: "fade", title: "Fade" }, { key: "slide", title: "Slide" }, { key: "slidefade", title: "Slide + fade" }, { key: "none", title: "Off" }
-    ]
-    readonly property var borderAnimationOptions: [
-        { key: "native", title: "Native" }, { key: "static", title: "Static" }, { key: "spin", title: "Spin" }
     ]
     readonly property var surfaceOptions: [
         { key: "flat", title: "Flat" }, { key: "layered", title: "Layered" },
@@ -139,78 +105,7 @@ Item {
         { key: "dock", title: "Dock" }, { key: "split", title: "Split" },
         { key: "minimal", title: "Minimal" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
     ]
-    property int stagedBorderSize: root.desktopStyle.borderSize !== undefined ? Number(root.desktopStyle.borderSize) : -1
-    property int stagedBorderSpeed: Number(root.desktopStyle.borderSpeed || 36)
-    property bool borderSizeEditing: false
-    property bool speedEditing: false
     property bool barSizeAdvancedExpanded: false
-
-    function borderSliderPosition() {
-        if (root.stagedBorderSize < 0) return 0
-        if (root.stagedBorderSize === 0) return 1
-        return Math.max(2, Math.min(13, 1 + root.stagedBorderSize / 2))
-    }
-
-    function borderSizeFromSlider(position) {
-        var snapped = Math.round(position)
-        if (snapped <= 0) return -1
-        if (snapped === 1) return 0
-        return Math.min(24, (snapped - 1) * 2)
-    }
-
-    function beginBorderSizeEdit() {
-        root.borderSizeEditing = true
-        borderSizeInput.text = root.stagedBorderSize > 0 ? String(root.stagedBorderSize) : "2"
-        Qt.callLater(function() { borderSizeInput.forceActiveFocus(); borderSizeInput.selectAll() })
-    }
-
-    function commitBorderSizeEdit() {
-        if (!root.borderSizeEditing) return
-        var value = Number(borderSizeInput.text)
-        root.borderSizeEditing = false
-        if (!isFinite(value)) return
-        root.chooseDesktop("borderSize", Math.max(-1, Math.min(24, Math.round(value))))
-    }
-
-    function beginSpeedEdit() {
-        root.speedEditing = true
-        speedInput.text = (root.stagedBorderSpeed / 10).toFixed(1)
-        Qt.callLater(function() { speedInput.forceActiveFocus(); speedInput.selectAll() })
-    }
-
-    function commitSpeedEdit() {
-        if (!root.speedEditing) return
-        var seconds = Number(speedInput.text)
-        root.speedEditing = false
-        if (!isFinite(seconds)) return
-        root.chooseDesktop("borderSpeed", Math.max(10, Math.min(100, Math.round(seconds * 10))))
-    }
-
-    onDesktopStyleChanged: {
-        if (!borderSlider.dragging)
-            root.stagedBorderSize = root.desktopStyle.borderSize !== undefined ? Number(root.desktopStyle.borderSize) : -1
-        if (!speedSlider.dragging)
-            root.stagedBorderSpeed = Number(root.desktopStyle.borderSpeed || 36)
-    }
-
-    function chooseDesktop(group, key) {
-        var next = {
-            borderStyle: root.desktopStyle.borderStyle || "solid",
-            borderSize: root.desktopStyle.borderSize !== undefined ? Number(root.desktopStyle.borderSize) : -1,
-            borderSizeMode: root.desktopStyle.borderSizeMode || root.desktopStyle.border_size_mode || (root.desktopStyle.borderSize === 0 ? "none" : root.desktopStyle.borderSize > 0 ? "fixed" : "default"),
-            borderSpeed: Number(root.desktopStyle.borderSpeed || 36),
-            shape: root.desktopStyle.shape || "native",
-            spacing: root.desktopStyle.spacing || "native",
-            depth: root.desktopStyle.depth || "native",
-            activeStyle: root.desktopStyle.activeStyle || root.desktopStyle.active_style || "native",
-            inactiveStyle: root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native"
-        }
-        next[group] = key
-        if (group === "borderSize") {
-            next.borderSizeMode = key < 0 ? "default" : key === 0 ? "none" : "fixed"
-        }
-        root.stylesChanged(root.shellStyle, next, root.barStyle, root.animationsStyle)
-    }
 
     function chooseShell(group, key) {
         var next = {
@@ -676,139 +571,7 @@ Item {
         return descriptions
     }
 
-    readonly property var motionPresetOptions: [
-        { key: "native", title: "Native", description: "Keep the current Quattro motion baseline." },
-        { key: "snappy", title: "Precision", description: "Near-full-size window entrances, immediate focus, and fade-led workspace changes." },
-        { key: "smooth", title: "Floating Flow", description: "Deeper soft window entrances, gliding workspaces, and a long glass-like settle." },
-        { key: "spring", title: "Spring", description: "Spring curves for window movement and settling." },
-        { key: "cinematic", title: "Cinematic", description: "Slower entrances with fade-led layer motion." },
-        { key: "minimal", title: "Minimal", description: "Fade-led motion with no bounce or travel." },
-        { key: "cyberpunk", title: "Cyberpunk Glitch", description: "Digital window deformation, mechanical focus, spatial workspace cuts, and a 1250 ms event-driven RGB tear." }
-    ]
-
-    function motionBase() {
-        var a = root.animationsStyle || ({})
-        var glitch = a.glitch || "none"
-        if (glitch === "flicker") glitch = "medium"
-		var rawEffect = a.screenEffect || a.screen_effect || null
-		var screenEffect = rawEffect ? {
-			id: rawEffect.id || "none", strength: rawEffect.strength || "medium",
-			durationMs: Number(rawEffect.durationMs !== undefined ? rawEffect.durationMs : rawEffect.duration_ms || 0),
-			triggers: (rawEffect.triggers || []).slice(), coalesce: rawEffect.coalesce !== false
-		} : null
-        return {
-            version: Number(a.version || 1), preset: a.preset || "native",
-            window: a.window || "native", windowOpen: a.windowOpen || a.window_open || "popin", windowClose: a.windowClose || a.window_close || "popin", windowMove: a.windowMove || a.window_move || "native",
-            windowAmount: Number(a.windowAmount !== undefined ? a.windowAmount : a.window_amount || 87), windowOpacity: Number(a.windowOpacity !== undefined ? a.windowOpacity : a.window_opacity !== undefined ? a.window_opacity : 100), windowSpeed: Number(a.windowSpeed !== undefined ? a.windowSpeed : a.window_speed || 4),
-            workspace: a.workspace || "native", workspaceAxis: a.workspaceAxis || a.workspace_axis || "horizontal", workspaceTravel: Number(a.workspaceTravel !== undefined ? a.workspaceTravel : a.workspace_travel || 18),
-            specialWorkspace: a.specialWorkspace || a.special_workspace || "inherit", focus: a.focus || "native", layers: a.layers || "native", curve: a.curve || "bezier",
-			border: a.border || "native", borderSpeed: Number(a.borderSpeed || a.border_speed || 36), glitch: glitch, screenEffect: screenEffect, reducedMotion: a.reducedMotion === true || a.reduced_motion === true
-        }
-    }
-
-	function effectiveScreenEffect() {
-		var current = root.motionBase()
-		if (current.screenEffect)
-			return current.screenEffect
-		if (current.glitch !== "none")
-			return { id: "rgb-tear", strength: current.glitch, durationMs: 1250, triggers: ["window-open", "window-close", "workspace", "panel", "notification", "urgent"], coalesce: true }
-		return { id: "none", strength: "medium", durationMs: 0, triggers: [], coalesce: true }
-	}
-
-	function defaultEffect(id, strength) {
-		if (id === "spectral-shift")
-			return { id: id, strength: strength || "medium", durationMs: 500, triggers: ["window-open", "window-close", "workspace", "panel"], coalesce: true }
-		if (id === "phosphor-scan")
-			return { id: id, strength: strength || "medium", durationMs: 850, triggers: ["window-open", "window-close", "workspace", "panel", "notification", "urgent"], coalesce: true }
-		return { id: "rgb-tear", strength: strength || "medium", durationMs: 1250, triggers: ["window-open", "window-close", "workspace", "panel", "notification", "urgent"], coalesce: true }
-	}
-
-	function chooseScreenEffect(id) {
-		var next = root.motionBase()
-		var current = root.effectiveScreenEffect()
-		next.preset = "custom"
-		if (id === "none") { next.glitch = "none"; next.screenEffect = null }
-		else if (id === "rgb-tear") { next.glitch = current.strength || "medium"; next.screenEffect = null }
-		else { next.glitch = "none"; next.screenEffect = root.defaultEffect(id, current.strength) }
-		root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-	}
-
-	function chooseEffectStrength(strength) {
-		var next = root.motionBase()
-		var effect = root.effectiveScreenEffect()
-		next.preset = "custom"
-		if (effect.id === "rgb-tear") { next.glitch = strength; next.screenEffect = null }
-		else if (effect.id !== "none") { effect.strength = strength; next.glitch = "none"; next.screenEffect = effect }
-		root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-	}
-
-	function editEffectDuration(value) {
-		var next = root.motionBase()
-		var effect = root.effectiveScreenEffect()
-		if (effect.id === "none") return
-		effect.durationMs = Math.max(100, Math.min(5000, Math.round(Number(value))))
-		next.preset = "custom"; next.glitch = "none"; next.screenEffect = effect
-		root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-	}
-
-	function toggleEffectTrigger(trigger) {
-		var next = root.motionBase()
-		var effect = root.effectiveScreenEffect()
-		if (effect.id === "none") return
-		var index = effect.triggers.indexOf(trigger)
-		if (index >= 0) effect.triggers.splice(index, 1); else effect.triggers.push(trigger)
-		next.preset = "custom"; next.glitch = "none"; next.screenEffect = effect
-		root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-	}
-
-    function chooseMotionPreset(name) {
-        var next = motionBase()
-        next.preset = name
-        next.window = "native"; next.windowOpen = "popin"; next.windowClose = "popin"; next.windowMove = "native"; next.windowAmount = 87; next.windowOpacity = 100; next.windowSpeed = 4
-		next.workspace = "native"; next.workspaceAxis = "horizontal"; next.workspaceTravel = 18; next.specialWorkspace = "inherit"; next.focus = "native"; next.layers = "native"; next.curve = "bezier"; next.glitch = "none"; next.screenEffect = null
-        if (name === "snappy") { next.window = "snappy"; next.workspace = "fade"; next.windowMove = "quick"; next.windowAmount = 97; next.windowSpeed = 1; next.workspaceTravel = 5; next.focus = "quick"; next.layers = "fade"; next.curve = "precision" }
-        else if (name === "smooth") { next.window = "smooth"; next.workspace = "slidefade"; next.windowMove = "smooth"; next.windowAmount = 82; next.windowSpeed = 4; next.workspaceTravel = 22; next.specialWorkspace = "fade"; next.focus = "smooth"; next.layers = "fade"; next.curve = "glass" }
-        else if (name === "spring") { next.window = "spring"; next.workspace = "slidefade"; next.windowMove = "spring"; next.curve = "spring"; next.workspaceTravel = 18; next.focus = "smooth"; next.layers = "fade" }
-        else if (name === "cinematic") { next.window = "cinematic"; next.windowClose = "gnomed"; next.workspace = "slidefade"; next.windowAmount = 76; next.windowSpeed = 5; next.workspaceTravel = 28; next.specialWorkspace = "slide"; next.focus = "smooth"; next.layers = "slide" }
-        else if (name === "minimal") { next.window = "minimal"; next.windowOpen = "fade"; next.windowClose = "fade"; next.windowMove = "none"; next.workspace = "fade"; next.windowAmount = 100; next.windowSpeed = 1; next.workspaceTravel = 5; next.focus = "quick"; next.layers = "fade"; next.curve = "precision" }
-        else if (name === "cyberpunk") { next.window = "digital"; next.windowOpen = "gnomed"; next.windowClose = "slide"; next.windowMove = "digital"; next.workspace = "slide"; next.windowAmount = 94; next.windowOpacity = 82; next.windowSpeed = 2; next.workspaceTravel = 12; next.specialWorkspace = "slidevert"; next.focus = "digital"; next.layers = "slide"; next.curve = "digital"; next.border = "static"; next.glitch = "medium" }
-		if (next.reducedMotion) { next.window = "none"; next.workspace = "none"; next.border = "static"; next.glitch = "none"; next.screenEffect = null }
-        root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-    }
-
-    function chooseAnimations(group, key) {
-        var next = motionBase()
-        if (group === "specialWorkspace") group = "specialWorkspace"
-        next[group] = key
-        next.preset = "custom"
-		if (next.reducedMotion) { next.window = "none"; next.workspace = "none"; next.border = "static"; next.glitch = "none"; next.screenEffect = null }
-        root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-    }
-
-    function editMotionNumber(group, value) {
-        var next = motionBase()
-        next.preset = "custom"
-        next[group] = Number(value)
-        root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, next)
-    }
-
-    function chooseActive(key) {
-        var next = { borderStyle: root.desktopStyle.borderStyle || "solid", borderSize: root.desktopStyle.borderSize !== undefined ? Number(root.desktopStyle.borderSize) : -1, borderSizeMode: root.desktopStyle.borderSizeMode || "default", borderSpeed: Number(root.desktopStyle.borderSpeed || 36), shape: root.desktopStyle.shape || "native", spacing: root.desktopStyle.spacing || "native", depth: root.desktopStyle.depth || "native", activeStyle: key, inactiveStyle: root.desktopStyle.inactiveStyle || "native" }
-        root.stylesChanged(root.shellStyle, next, root.barStyle, root.animationsStyle)
-    }
-
     function description(section, group, key) {
-        if (section === "window") {
-            if (group === "borderStyle") return "Hyprland border treatment around the focused window."
-            if (group === "borderSize") return "Hyprland border thickness. Default inherits the theme; None removes the border."
-            if (group === "shape") return "Window corner rounding owned by Hyprland."
-            if (group === "spacing") return "Hyprland gaps between panes and the screen edge."
-            if (group === "depth") return "Compositor shadow treatment around windows."
-            if (key === "blur" || key.indexOf("frosted_") === 0) return "Frosted backdrop blurs what is behind a translucent window surface. It does not blur opaque application text or controls."
-            if (key === "shadow") return "Soft dim keeps inactive windows readable while making the focused window clearer."
-            if (key === "shadow_only") return "Adds a transparent inactive compositor shadow while preserving Omarchy and application opacity."
-            return "Native inactive-window treatment from the active Hyprland configuration."
-        }
         if (section === "shell") {
             if (group === "surface") return "Quickshell popup, menu, launcher, and control surface hierarchy."
             if (group === "detail") return "Quickshell border language for controls, menus, and notifications."
@@ -833,42 +596,6 @@ Item {
 
     function optionDescription(section, group, key) {
         var descriptions = {
-            window: {
-                borderStyle: {
-                    solid: "A single accent border around the focused window.",
-                    split_top: "An accent border with a stronger top edge for the focused window.",
-                    split_bottom: "An accent border with a stronger bottom edge for the focused window.",
-                    blend: "A softer border that blends the accent into the window surface.",
-                    neon: "A high-contrast accent border for a more luminous focused window.",
-                    spin: "An animated accent border treatment for the focused window."
-                },
-                shape: {
-                    native: "Use the active theme's normal window corner radius.",
-                    subtle: "Use a small 2 px corner radius on windows.",
-                    soft: "Use a gentle 4 px corner radius on windows.",
-                    rounded: "Use a clearly rounded 8 px corner radius on windows.",
-                    pill: "Use a very rounded 16 px corner radius on windows."
-                },
-                spacing: {
-                    native: "Keep the active theme's normal gaps between windows.",
-                    compact: "Reduce gaps between windows for a tighter layout.",
-                    airy: "Increase gaps between windows for a more open layout."
-                },
-                depth: {
-                    native: "Keep the active theme's normal compositor shadow treatment.",
-                    flat: "Reduce compositor shadows for a flatter window surface.",
-                    shadow: "Emphasise compositor shadows to separate windows from the desktop."
-                },
-                inactiveStyle: {
-                    native: "Keep inactive windows using the active Hyprland treatment.",
-                    shadow: "Dim inactive windows without adding background blur.",
-                    shadow_only: "Add a transparent compositor shadow without overriding inactive opacity or dimming content.",
-                    blur: "Legacy Backdrop blur setting; it becomes the Balanced frosted backdrop profile.",
-                    frosted_light: "A light glass treatment: subtle dimming and low-cost background blur.",
-                    frosted_balanced: "Recommended glass treatment: visible background blur without a shadow-heavy dim.",
-                    frosted_rich: "A stronger glass treatment with a larger, multipass blur and higher GPU cost."
-                }
-            },
             shell: {
                 surface: {
                     flat: "Use a flat Quickshell popup and menu surface.",
@@ -984,190 +711,20 @@ Item {
         StackLayout {
             Layout.fillWidth: true
             currentIndex: root.activeTab
-            implicitHeight: root.activeTab === 0 ? windowColumn.implicitHeight : root.activeTab === 1 ? shellPage.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationColumn.implicitHeight
+            implicitHeight: root.activeTab === 0 ? windowPage.implicitHeight : root.activeTab === 1 ? shellPage.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationPage.implicitHeight
 
             Item {
-                implicitHeight: windowColumn.implicitHeight
-                ColumnLayout {
-                    id: windowColumn
+                id: windowPage
+                implicitHeight: windowEditor.implicitHeight
+
+                StyleEditor.WindowEditor {
+                    id: windowEditor
                     width: parent.width
-                    spacing: Style.space(5)
-                    Text { Layout.fillWidth: true; text: "HYPRLAND WINDOW EFFECTS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { Layout.fillWidth: true; text: "Window appearance is written to hyprland.lua for the compositor."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Text { Layout.fillWidth: true; text: "BORDER STYLE"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.borderOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("window", "borderStyle", modelData.key); selected: root.desktopStyle.borderStyle === modelData.key; onClicked: root.chooseDesktop("borderStyle", modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "BORDER THICKNESS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: Style.space(8)
-                        Text { text: "BORDER"; color: root.foregroundColor; opacity: 0.62; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                        PanelSlider {
-                            id: borderSlider
-                            Layout.fillWidth: true
-                            minimum: 0
-                            maximum: 13
-                            step: 1
-                            integer: true
-                            value: root.borderSliderPosition()
-                            tickCount: 14
-                            trackColor: Util.alpha(root.foregroundColor, 0.2)
-                            fillColor: root.accentColor
-                            knobColor: root.accentColor
-                            tickColor: root.backgroundColor
-                            onMoved: root.stagedBorderSize = root.borderSizeFromSlider(value)
-                            onReleased: root.chooseDesktop("borderSize", root.borderSizeFromSlider(value))
-                        }
-                        Item {
-                            Layout.preferredWidth: Style.space(70)
-                            Layout.preferredHeight: Style.space(32)
-
-                            Text {
-                                anchors.fill: parent
-                                visible: !root.borderSizeEditing
-                                text: root.stagedBorderSize < 0 ? "Default" : root.stagedBorderSize === 0 ? "None" : root.stagedBorderSize + " px"
-                                color: root.accentColor
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                                horizontalAlignment: Text.AlignRight
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                visible: !root.borderSizeEditing
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.beginBorderSizeEdit()
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                visible: root.borderSizeEditing
-                                radius: Style.space(5)
-                                color: Util.alpha(root.backgroundColor, 0.48)
-                                border.width: 1
-                                border.color: borderSizeInput.activeFocus ? root.accentColor : Color.popups.border
-                            }
-                            TextInput {
-                                id: borderSizeInput
-                                anchors.fill: parent
-                                anchors.leftMargin: Style.space(6)
-                                anchors.rightMargin: Style.space(6)
-                                visible: root.borderSizeEditing
-                                color: root.foregroundColor
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                horizontalAlignment: TextInput.AlignRight
-                                verticalAlignment: TextInput.AlignVCenter
-                                selectByMouse: true
-                                inputMethodHints: Qt.ImhFormattedNumbersOnly
-                                Keys.onReturnPressed: root.commitBorderSizeEdit()
-                                Keys.onEnterPressed: root.commitBorderSizeEdit()
-                                Keys.onEscapePressed: root.borderSizeEditing = false
-                                onEditingFinished: root.commitBorderSizeEdit()
-                            }
-                        }
-                    }
-                    Text { Layout.fillWidth: true; visible: root.desktopStyle.borderStyle === "spin"; text: "SPIN SPEED"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; visible: root.desktopStyle.borderStyle === "spin"; text: "Controls the full gradient cycle. Lower seconds move faster."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    RowLayout {
-                        visible: root.desktopStyle.borderStyle === "spin"
-                        Layout.fillWidth: true
-                        spacing: Style.space(8)
-                        Text { text: "SPEED"; color: root.foregroundColor; opacity: 0.62; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                        PanelSlider {
-                            id: speedSlider
-                            Layout.fillWidth: true
-                            minimum: 10
-                            maximum: 100
-                            step: 1
-                            integer: true
-                            value: root.stagedBorderSpeed
-                            tickCount: 10
-                            trackColor: Util.alpha(root.foregroundColor, 0.2)
-                            fillColor: root.accentColor
-                            knobColor: root.accentColor
-                            tickColor: root.backgroundColor
-                            onMoved: root.stagedBorderSpeed = Math.round(value)
-                            onReleased: root.chooseDesktop("borderSpeed", Math.round(value))
-                        }
-                        Item {
-                            Layout.preferredWidth: Style.space(70)
-                            Layout.preferredHeight: Style.space(32)
-
-                            Text {
-                                anchors.fill: parent
-                                visible: !root.speedEditing
-                                text: (root.stagedBorderSpeed / 10).toFixed(1) + " s"
-                                color: root.accentColor
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                font.bold: true
-                                horizontalAlignment: Text.AlignRight
-                                verticalAlignment: Text.AlignVCenter
-                            }
-                            MouseArea {
-                                anchors.fill: parent
-                                visible: !root.speedEditing
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.beginSpeedEdit()
-                            }
-                            Rectangle {
-                                anchors.fill: parent
-                                visible: root.speedEditing
-                                radius: Style.space(5)
-                                color: Util.alpha(root.backgroundColor, 0.48)
-                                border.width: 1
-                                border.color: speedInput.activeFocus ? root.accentColor : Color.popups.border
-                            }
-                            TextInput {
-                                id: speedInput
-                                anchors.fill: parent
-                                anchors.leftMargin: Style.space(6)
-                                anchors.rightMargin: Style.space(6)
-                                visible: root.speedEditing
-                                color: root.foregroundColor
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.caption
-                                horizontalAlignment: TextInput.AlignRight
-                                verticalAlignment: TextInput.AlignVCenter
-                                selectByMouse: true
-                                inputMethodHints: Qt.ImhFormattedNumbersOnly
-                                Keys.onReturnPressed: root.commitSpeedEdit()
-                                Keys.onEnterPressed: root.commitSpeedEdit()
-                                Keys.onEscapePressed: root.speedEditing = false
-                                onEditingFinished: root.commitSpeedEdit()
-                            }
-                        }
-                    }
-                    Text { Layout.fillWidth: true; text: "SHAPE"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.shapeOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("window", "shape", modelData.key); selected: root.desktopStyle.shape === modelData.key; onClicked: root.chooseDesktop("shape", modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "SPACING"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.spacingOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("window", "spacing", modelData.key); selected: root.desktopStyle.spacing === modelData.key; onClicked: root.chooseDesktop("spacing", modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "DEPTH"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.depthOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("window", "depth", modelData.key); selected: root.desktopStyle.depth === modelData.key; onClicked: root.chooseDesktop("depth", modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "ACTIVE WINDOWS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "Active and inactive opacity/dim choices are independent. Hyprland uses one shared blur kernel, so the focused window's frosted choice sets the blur strength when active glass is enabled."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.activeOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Focused-window opacity and backdrop treatment."; selected: (root.desktopStyle.activeStyle || "native") === modelData.key; onClicked: root.chooseActive(modelData.key) } }
-                    }
-                    Text { Layout.fillWidth: true; text: "INACTIVE WINDOWS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: root.description("window", "inactiveStyle", root.desktopStyle.inactiveStyle || "native"); color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    GridLayout {
-                        Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5)
-                        Repeater { model: root.inactiveOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("window", "inactiveStyle", modelData.key); selected: (root.desktopStyle.inactiveStyle || "native") === modelData.key || (modelData.key === "frosted_balanced" && root.desktopStyle.inactiveStyle === "blur"); onClicked: root.chooseDesktop("inactiveStyle", modelData.key) } }
-                    }
+                    desktopStyle: root.desktopStyle
+                    foregroundColor: root.foregroundColor
+                    backgroundColor: root.backgroundColor
+                    accentColor: root.accentColor
+                    onStyleEdited: root.stylesChanged(root.shellStyle, desktopStyle, root.barStyle, root.animationsStyle)
                 }
             }
 
@@ -1346,58 +903,17 @@ Item {
             }
 
             Item {
-                implicitHeight: animationColumn.implicitHeight
-                ColumnLayout {
-                    id: animationColumn
+                id: animationPage
+                implicitHeight: animationsEditor.implicitHeight
+
+                StyleEditor.AnimationsEditor {
+                    id: animationsEditor
                     width: parent.width
-                    spacing: Style.space(8)
-                    Text { Layout.fillWidth: true; text: "MOTION LAB"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.8 }
-                    Text { Layout.fillWidth: true; text: "A semantic compositor recipe. Owner: Hyprland. Fallback: Native. These controls stage a MotionSpec; Test Live still applies the real Hyprland theme transaction, and Demo remains an explicit separate action. Continuous loops and experimental effects are intentionally outside this first slice."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(3); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "MOTION STYLE"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.motionPresetOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: modelData.description; selected: root.animationsStyle.preset === modelData.key; onClicked: root.chooseMotionPreset(modelData.key) } } }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "WINDOWS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    Text { Layout.fillWidth: true; text: "Open and close have separate character: opening can be expressive while closing stays decisive."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                    GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "popin", title: "Open · Pop" }, { key: "slide", title: "Open · Slide" }, { key: "gnomed", title: "Open · Gnome" }, { key: "fade", title: "Open · Fade" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Hyprland window entrance style."; selected: root.animationsStyle.windowOpen === modelData.key; onClicked: root.chooseAnimations("windowOpen", modelData.key) } } }
-                    GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "popin", title: "Close · Pop" }, { key: "slide", title: "Close · Slide" }, { key: "gnomed", title: "Close · Gnome" }, { key: "fade", title: "Close · Fade" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Hyprland window exit style."; selected: root.animationsStyle.windowClose === modelData.key; onClicked: root.chooseAnimations("windowClose", modelData.key) } } }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "native", title: "Move · Native" }, { key: "smooth", title: "Move · Smooth" }, { key: "quick", title: "Move · Precision" }, { key: "digital", title: "Move · Digital" }, { key: "spring", title: "Move · Spring" }, { key: "none", title: "Move · Off" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Tiled rearrangement, dragging, and resize response."; selected: root.animationsStyle.windowMove === modelData.key; onClicked: root.chooseAnimations("windowMove", modelData.key) } } }
-                    ShellRangeField { Layout.fillWidth: true; label: "Window starting scale"; description: "Pop-in styles start at this percentage of the final size."; value: String(root.animationsStyle.windowAmount || 87); fallback: 87; minimum: 60; maximum: 100; step: 1; decimals: 0; suffix: "%"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("windowAmount", value); onResetRequested: root.editMotionNumber("windowAmount", fallback) }
-                    ShellRangeField { Layout.fillWidth: true; label: "Window entrance opacity"; description: "Start only the opening window at this opacity, then release it to the user's normal opacity. Cyberpunk uses 82%."; value: String(root.animationsStyle.windowOpacity !== undefined ? root.animationsStyle.windowOpacity : 100); fallback: 100; minimum: 60; maximum: 100; step: 1; decimals: 0; suffix: "%"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("windowOpacity", value); onResetRequested: root.editMotionNumber("windowOpacity", fallback) }
-                    ShellRangeField { Layout.fillWidth: true; label: "Window response"; description: "Hyprland animation duration scale; higher values feel slower."; value: String(root.animationsStyle.windowSpeed || 4); fallback: 4; minimum: 1; maximum: 10; step: 1; decimals: 0; suffix: " ds"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("windowSpeed", value); onResetRequested: root.editMotionNumber("windowSpeed", fallback) }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "WORKSPACES"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.workspaceAnimationOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Workspace switching transition owned by Hyprland."; selected: root.animationsStyle.workspace === modelData.key; onClicked: root.chooseAnimations("workspace", modelData.key) } } }
-                    GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "horizontal", title: "Horizontal" }, { key: "vertical", title: "Vertical" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Direction for slide and slide-fade travel."; selected: root.animationsStyle.workspaceAxis === modelData.key; onClicked: root.chooseAnimations("workspaceAxis", modelData.key) } } }
-                    ShellRangeField { Layout.fillWidth: true; label: "Workspace travel"; description: "Percentage of the screen used by slide and slide-fade transitions."; value: String(root.animationsStyle.workspaceTravel || 18); fallback: 18; minimum: 5; maximum: 100; step: 1; decimals: 0; suffix: "%"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("workspaceTravel", value); onResetRequested: root.editMotionNumber("workspaceTravel", fallback) }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "FOCUS / SHELL"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "native", title: "Focus · Native" }, { key: "quick", title: "Focus · Quick" }, { key: "smooth", title: "Focus · Smooth" }, { key: "digital", title: "Focus · Digital" }, { key: "none", title: "Focus · Off" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: modelData.key === "digital" ? "A mechanical neon border, shadow, and dim response without retriggering the desktop shader." : "Focus fade, dim, and shadow transitions."; selected: root.animationsStyle.focus === modelData.key; onClicked: root.chooseAnimations("focus", modelData.key) } } }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "inherit", title: "Special · Native" }, { key: "fade", title: "Special · Fade" }, { key: "slide", title: "Special · Slide" }, { key: "slidevert", title: "Special · Vertical" }, { key: "slidefade", title: "Special · Slide + fade" }, { key: "none", title: "Special · Off" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Scratchpad / special workspace transition."; selected: root.animationsStyle.specialWorkspace === modelData.key; onClicked: root.chooseAnimations("specialWorkspace", modelData.key) } } }
-                    GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "native", title: "Layers · Native" }, { key: "fade", title: "Layers · Fade" }, { key: "slide", title: "Layers · Slide" }, { key: "none", title: "Layers · Off" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Hyprland layer/shell entrance and exit motion."; selected: root.animationsStyle.layers === modelData.key; onClicked: root.chooseAnimations("layers", modelData.key) } } }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "BORDER MOTION"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.borderAnimationOptions; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Animated focus-border treatment."; selected: root.animationsStyle.border === modelData.key; onClicked: root.chooseAnimations("border", modelData.key) } } }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-					Text { Layout.fillWidth: true; text: "SCREEN EFFECT"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-					Text { Layout.fillWidth: true; text: "Finite Hyprland screen shaders. They activate only around selected events, restore the previous shader afterward, and remain idle between signals."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-					GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [
-						{ key: "none", title: "Effect · Off", description: "Keep the whole desktop stable." },
-						{ key: "rgb-tear", title: "RGB Tear", description: "Cyberpunk horizontal tearing and chromatic separation." },
-						{ key: "spectral-shift", title: "Spectral Shift", description: "Smooth diagonal prism refraction without tearing." },
-						{ key: "phosphor-scan", title: "Phosphor Scan", description: "CRT scanlines, a sync sweep, and restrained phosphor lift." }
-					]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: modelData.description; selected: root.effectiveScreenEffect().id === modelData.key; onClicked: root.chooseScreenEffect(modelData.key) } } }
-					GridLayout { Layout.fillWidth: true; visible: root.effectiveScreenEffect().id !== "none"; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "low", title: "Low" }, { key: "medium", title: "Medium" }, { key: "strong", title: "Strong" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: "Strength · " + modelData.title; description: "Bounded shader intensity."; selected: root.effectiveScreenEffect().strength === modelData.key; onClicked: root.chooseEffectStrength(modelData.key) } } }
-					ShellRangeField { Layout.fillWidth: true; visible: root.effectiveScreenEffect().id !== "none"; label: "Signal duration"; description: "How long the finite screen effect remains active after an event."; value: String(root.effectiveScreenEffect().durationMs || 500); fallback: root.effectiveScreenEffect().id === "rgb-tear" ? 1250 : root.effectiveScreenEffect().id === "phosphor-scan" ? 850 : 500; minimum: 100; maximum: 5000; step: 50; decimals: 0; suffix: " ms"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editEffectDuration(value); onResetRequested: root.editEffectDuration(fallback) }
-					Text { Layout.fillWidth: true; visible: root.effectiveScreenEffect().id !== "none"; text: "TRIGGERS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-					GridLayout { Layout.fillWidth: true; visible: root.effectiveScreenEffect().id !== "none"; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [
-						{ key: "window-open", title: "Window open" }, { key: "window-close", title: "Window close" }, { key: "workspace", title: "Workspace" },
-						{ key: "panel", title: "Panel" }, { key: "notification", title: "Notification" }, { key: "urgent", title: "Urgent" }
-					]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Trigger this finite signal."; selected: root.effectiveScreenEffect().triggers.indexOf(modelData.key) >= 0; onClicked: root.toggleEffectTrigger(modelData.key) } } }
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
-                    Text { Layout.fillWidth: true; text: "TIMING & ACCESSIBILITY"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-                    GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "bezier", title: "Balanced curve" }, { key: "glass", title: "Glass curve" }, { key: "precision", title: "Precision curve" }, { key: "digital", title: "Digital curve" }, { key: "spring", title: "Spring curve" }]; delegate: DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Reusable curve family for the selected compositor motion."; selected: root.animationsStyle.curve === modelData.key; onClicked: root.chooseAnimations("curve", modelData.key) } } }
-                    DesktopOptionCard { Layout.fillWidth: true; compact: true; title: root.animationsStyle.reducedMotion === true ? "Reduced motion · On" : "Reduced motion · Off"; description: "Disable compositor motion while keeping surfaces and layout unchanged."; selected: root.animationsStyle.reducedMotion === true; onClicked: root.chooseAnimations("reducedMotion", !(root.animationsStyle.reducedMotion === true)) }
+                    animationsStyle: root.animationsStyle
+                    foregroundColor: root.foregroundColor
+                    backgroundColor: root.backgroundColor
+                    accentColor: root.accentColor
+                    onStyleEdited: root.stylesChanged(root.shellStyle, root.desktopStyle, root.barStyle, animationsStyle)
                 }
             }
         }

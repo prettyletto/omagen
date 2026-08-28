@@ -11,11 +11,14 @@ frontend, backend, lifecycle, or contract document relevant to the task.
 | Go packages and CLI | [backend](backend.md) |
 | Durable lifecycle | [lifecycle](lifecycle.md) |
 | QML ↔ Go | [qml-backend contract](contracts/qml-backend.md) |
+| QML controllers | [QML controller contract](contracts/qml-controllers.md) |
 | Engine/session/Apply | [engine contract](contracts/engine.md) |
 | Studio history | [Studio protocol](contracts/studio-protocol.md) |
 | Runtime | [runtime contract](contracts/runtime.md) |
 | Look & Feel | [Look & Feel contract](contracts/look-feel.md) |
+| Style editor | [Style editor contract](contracts/style-editor.md) |
 | Bar | [BarSpec contract](contracts/bar-spec.md) |
+| Native Quattro clone | [Quattro clone contract](contracts/quattro-native-clone.md) |
 
 Omagen is a Quickshell plugin with a QML presentation layer and a bundled Go
 backend. Quickshell owns the visible plugin lifecycle; the backend owns the
