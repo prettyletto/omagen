@@ -2,8 +2,11 @@
 
 Read `docs/architecture/frontend.md`,
 `docs/architecture/contracts/qml-backend.md`,
+`docs/architecture/contracts/qml-controllers.md`,
 `docs/architecture/contracts/engine.md`, and the target parts of
-`LiveCanvasPanel.qml`, `AdvancedStyleEditor.qml`, and `backend/internal/studio`.
+`LiveCanvasPanel.qml`, `AdvancedStyleEditor.qml`,
+`qml/controllers/PreviewController.qml`, `qml/controllers/DemoController.qml`,
+and `backend/internal/studio`.
 
 Keep editor state, preview requests, Demo, and Apply as separate concerns.
 Normally edit the Live Canvas view/components plus the narrow gateway seam; do

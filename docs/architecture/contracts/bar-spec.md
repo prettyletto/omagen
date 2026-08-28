@@ -15,3 +15,7 @@ contracts; Bar QML renders them and owns local interaction/layout only.
 For the horizontal/vertical preset relationship, start with
 `bar/BarPresetRouter.qml`, the relevant file under `bar/presets/`, and
 `bar/AGENTS.md`.
+
+`NativeBarClone.qml` is a maintained Quattro compatibility fork, documented in
+[`quattro-native-clone.md`](quattro-native-clone.md). Do not decompose it as
+part of ordinary Bar preset or host work.
