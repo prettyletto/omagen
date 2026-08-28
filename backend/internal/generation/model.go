@@ -53,6 +53,8 @@ type Configuration struct {
 	DesktopStyle    session.DesktopStyle
 	BarStyle        session.BarStyle
 	AnimationsStyle session.AnimationsStyle
+	LookFeel        session.LookFeelDocument
+	Terminal        session.TerminalTranslucency
 }
 
 type VariantResult struct {

@@ -1,6 +1,7 @@
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "Contrast.js" as Contrast
 
 // A compact, shell-native inspector group.  Bar choices are presented as
 // controls inside one semantic surface instead of a flat grid of unrelated
@@ -14,6 +15,10 @@ BorderSurface {
     property var options: []
     property var optionDescriptions: ({})
     property int columns: 2
+    property string selectedTitleOverride: ""
+    property color foregroundColor: Color.foreground
+    property color backgroundColor: Color.background
+    property color accentColor: Color.accent
 
     signal choiceSelected(string key)
 
@@ -27,11 +32,12 @@ BorderSurface {
     // BorderSurface can negotiate a zero height while the parent panel is
     // resizing, which makes titles and controls paint on top of one another.
     implicitHeight: Style.space(20) + root.headerHeight + root.gap + root.optionsHeight
-    color: Util.alpha(Color.foreground, 0.035)
+    color: Util.alpha(root.foregroundColor, 0.035)
     radius: Math.max(Style.space(6), Style.cornerRadius / 2)
     borderSpec: Border.flat(Util.alpha(Color.popups.border, 0.72), 1)
 
     function selectedTitle() {
+        if (root.selectedTitleOverride !== "") return root.selectedTitleOverride
         for (var index = 0; index < root.options.length; index++) {
             if (root.options[index].key === root.selectedKey)
                 return root.options[index].title
@@ -56,7 +62,7 @@ BorderSurface {
             anchors.top: parent.top
             height: Style.space(15)
             text: root.title.toUpperCase()
-            color: Color.foreground
+            color: root.foregroundColor
             opacity: 0.76
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -72,7 +78,7 @@ BorderSurface {
             width: Math.min(Style.space(110), parent.width * 0.32)
             height: Style.space(15)
             text: root.selectedTitle()
-            color: Color.accent
+            color: root.accentColor
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
             font.bold: true
@@ -87,7 +93,7 @@ BorderSurface {
             anchors.topMargin: Style.space(16)
             height: Style.space(15)
             text: root.subtitle
-            color: Color.foreground
+            color: root.foregroundColor
             opacity: 0.5
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -117,10 +123,15 @@ BorderSurface {
                 height: root.buttonHeight
                 text: modelData.title
                 fontSize: Style.font.caption
-                foreground: Color.foreground
-                background: Util.alpha(Color.foreground, 0.025)
-                accent: Color.accent
-                selected: root.selectedKey === modelData.key
+                foreground: root.selectedKey === modelData.key
+                    ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
+                    : root.foregroundColor
+                background: root.selectedKey === modelData.key
+                    ? root.accentColor : Util.alpha(root.foregroundColor, 0.025)
+                accent: root.accentColor
+                // Paint the selected state explicitly so native shell tokens
+                // cannot force a light label onto a dark staged accent.
+                selected: false
                 bordered: true
                 focusable: true
                 tooltipText: root.optionDescriptions[modelData.key] || ""

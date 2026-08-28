@@ -5,6 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="$ROOT/backend"
 BIN="$ROOT/bin/omagen"
 MANIFEST="$ROOT/manifest.json"
+BAR_MANIFEST="$ROOT/bar-manifest.json"
 
 fail() {
     printf '\nFAIL: %s\n' "$*" >&2
@@ -62,6 +63,7 @@ PY
 
 section "Manifest"
 [[ -f "$MANIFEST" ]] || fail "manifest.json missing"
+[[ -f "$BAR_MANIFEST" ]] || fail "bar-manifest.json missing"
 python3 - "$MANIFEST" "$BIN" <<'PY'
 import json
 import subprocess
@@ -79,6 +81,20 @@ binary = json.loads(subprocess.check_output([sys.argv[2], "ping"], text=True))
 if manifest.get("version") != binary.get("version"):
     raise SystemExit(f"manifest version {manifest.get('version')!r} does not match binary version {binary.get('version')!r}")
 PY
+python3 - "$BAR_MANIFEST" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    manifest = json.load(stream)
+
+if manifest.get("id") != "pretty.omagen.bar":
+    raise SystemExit(f"unexpected bar plugin id: {manifest.get('id')!r}")
+if manifest.get("kinds") != ["bar"]:
+    raise SystemExit(f"bar manifest kinds must be ['bar']: {manifest.get('kinds')!r}")
+if manifest.get("entryPoints", {}).get("bar") != "OmagenBar.qml":
+    raise SystemExit("bar manifest must point at OmagenBar.qml")
+PY
 
 section "Omarchy plugin validator"
 if command -v omarchy >/dev/null 2>&1; then
@@ -91,19 +107,26 @@ section "Required plugin files"
 required=(
     "Omagen.qml"
     "OmagenBarWidget.qml"
+    "OmagenBar.qml"
+    "NativeBarClone.qml"
+    "WorkspacePresentation.qml"
+    "BarModel.js"
     "manifest.json"
+    "bar-manifest.json"
     "bin/omagen"
     "bin/omagen-studio"
     "qml/services/BackendService.qml"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"
+    "qml/views/AdvancedRuntimeSetupWindow.qml"
     "qml/views/LiveCanvasPanel.qml"
     "qml/views/ShellDemoPanel.qml"
     "qml/views/BarDemoPanel.qml"
     "qml/components/ShellLab.qml"
     "qml/components/ShellValueField.qml"
     "qml/components/ShellRangeField.qml"
-    "qml/components/ShellColorField.qml"
+    "qml/components/BarRegionControls.qml"
+    "qml/components/BarWorkspaceControls.qml"
 )
 for relative in "${required[@]}"; do
     [[ -e "$ROOT/$relative" ]] || fail "missing required file: $relative"

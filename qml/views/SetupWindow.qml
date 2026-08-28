@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components" as Components
 
 PanelWindow {
     id: root
@@ -15,6 +16,8 @@ PanelWindow {
     property string sourceImage: ""
     property string workflowMode: "fast"
     property string errorMessage: ""
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
     property int cursorIndex: 0
     readonly property int actionCount: sourceImage === ""
         ? (sessionActive ? 2 : 1)
@@ -77,6 +80,15 @@ PanelWindow {
         border.width: Math.max(1, Style.space(1))
         border.color: Color.popups.border
         z: 1
+
+        Components.SignalGlitch {
+            anchors.fill: parent
+            z: 10
+            enabled: root.glitchEnabled
+            triggerEpoch: root.glitchEpoch
+            accentColor: Color.accent
+            secondaryColor: Color.foreground
+        }
 
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
 

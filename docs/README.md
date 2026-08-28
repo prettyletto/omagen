@@ -8,6 +8,9 @@ the focused guides for styling, Demo, recovery, or development.
   apply a theme.
 - [Styling and palette settings](styling.md) — harmony, contrast, Window,
   Shell, and Bar choices.
+- [Look & Feel implementation roadmap](look-and-feel-roadmap.md) — complete
+  presets, per-engine customization, terminal translucency, rollout, and
+  validation contracts.
 - [Demo workspace](demo.md) — temporary workspaces, application capabilities,
   fallbacks, and preview capture.
 - [Recovery and safety](recovery.md) — temporary sessions, Cancel, Apply,

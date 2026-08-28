@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Effects
 import qs.Commons
+import "Contrast.js" as Contrast
 
 Item {
     id: root
@@ -13,8 +14,8 @@ Item {
     property bool configurationPreview: false
     property int activeSection: 0
     property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: -1, borderSizeMode: "default", shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
-    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
+    property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", colors: ({}), profile: null, spec: null })
     property bool selected: false
     property bool focused: false
     property bool hovered: false
@@ -45,6 +46,7 @@ Item {
     readonly property real cardRadius: Math.max(18, Math.min(24, root.width / 22))
     readonly property string activeBorderStyle: root.configurationPreview ? (root.desktopStyle.borderStyle || "solid") : root.borderStyle
     readonly property string inactiveWindowStyle: root.configurationPreview ? (root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native") : "native"
+    readonly property string shellPreset: String(root.shellStyle.preset || "default")
     readonly property bool frostedInactivePreview: inactiveWindowStyle === "blur" || inactiveWindowStyle.indexOf("frosted_") === 0
     readonly property real previewBorderWidth: !root.configurationPreview || Number(root.desktopStyle.borderSize) < 0
         ? 2 : Number(root.desktopStyle.borderSize)
@@ -79,6 +81,7 @@ Item {
     readonly property bool separatedBar: ["sections", "islands", "split", "notch"].indexOf(root.barTopology) >= 0
 
     function shellPopupSurface() {
+        if (root.shellPreset === "glass") return root.bg
         var surface = root.shellStyle.surface || "flat"
         if (surface === "layered") return root.darkBg
         if (surface === "contrast") return root.lighterBg
@@ -87,6 +90,7 @@ Item {
     }
 
     function shellControlSurface() {
+        if (root.shellPreset === "glass") return root.lighterBg
         var surface = root.shellStyle.surface || "flat"
         if (surface === "contrast") return root.darkBg
         if (surface === "accent") return root.lighterBg
@@ -99,6 +103,7 @@ Item {
     }
 
     function barSurface() {
+        if (root.barStyle.colors && root.barStyle.colors.background) return root.barStyle.colors.background
         var role = root.barSpec.surface && root.barSpec.surface.role ? root.barSpec.surface.role : root.barStyle.surface
         if (role === "background") return root.bg
         if (role === "selection") return root.selection
@@ -112,8 +117,14 @@ Item {
     }
 
     function barForeground() {
+        if (root.barStyle.colors && root.barStyle.colors.text) return root.barStyle.colors.text
         var role = root.barSpec.surface && root.barSpec.surface.role ? root.barSpec.surface.role : root.barStyle.surface
         return role === "light" || role === "accent" ? root.bg : root.fg
+    }
+
+    function barActive() {
+        if (root.barStyle.colors && root.barStyle.colors.active) return root.barStyle.colors.active
+        return root.barStyle.attention === "accent" ? root.accent : root.red
     }
 
     function barBorderColor() {
@@ -308,9 +319,9 @@ Item {
                             width: root.barStyle.density === "comfortable" ? 24 : root.barStyle.density === "compact" ? 15 : 19
                             height: parent.parent.height - (root.barStyle.density === "compact" ? 8 : 10)
                             radius: Math.min(5, height / 3)
-                            color: modelData === "1" ? Util.alpha(root.accent, 0.28) : "transparent"
+                            color: modelData === "1" ? Util.alpha(root.barActive(), 0.28) : "transparent"
                             border.width: modelData === "1" ? 1 : 0
-                            border.color: root.accent
+                            border.color: root.barActive()
                             Text { anchors.centerIn: parent; text: modelData; color: modelData === "1" ? root.barForeground() : root.muted; font.family: Style.font.family; font.pixelSize: 8 }
                         }
                     }
@@ -346,7 +357,7 @@ Item {
                     Text { text: "NET"; color: root.barForeground(); opacity: 0.7; font.family: Style.font.family; font.pixelSize: 7; font.bold: true }
                     Rectangle {
                         width: 6; height: 6; radius: 3
-                        color: root.barStyle.attention === "accent" ? root.accent : root.red
+                        color: root.barActive()
                     }
                     Text { text: "10:42"; color: root.barForeground(); font.family: Style.font.family; font.pixelSize: 8; font.bold: true }
                 }
@@ -757,10 +768,10 @@ Item {
                 anchors.centerIn: mockWindow
                 width: Math.min(mockWindow.width * 0.68, 390 * root.uiScale)
                 height: Math.min(mockWindow.height * 0.78, 360 * root.uiScale)
-                radius: root.shellStyle.surface === "flat" ? 8 : 14
-                color: root.shellPopupSurface()
-                border.width: root.shellStyle.detail === "framed" ? 2 : 1
-                border.color: root.shellStyle.detail === "focus" || root.shellStyle.surface === "accent"
+                radius: root.shellPreset === "glass" ? 14 : root.shellStyle.surface === "flat" ? 8 : 14
+                color: root.shellPreset === "glass" ? Util.alpha(root.shellPopupSurface(), 0.76) : root.shellPopupSurface()
+                border.width: root.shellPreset === "glass" ? 1 : root.shellStyle.detail === "framed" ? 2 : 1
+                border.color: root.shellPreset === "glass" || root.shellStyle.detail === "focus" || root.shellStyle.surface === "accent"
                     ? root.accent : Util.alpha(root.fg, 0.34)
                 z: 4
 
@@ -868,7 +879,7 @@ Item {
                     id: selectedBadge
                     anchors.centerIn: parent
                     text: "✓  SELECTED"
-                    color: Color.background
+                    color: Contrast.textFor(Color.foreground, root.bg, root.fg)
                     font.family: Style.font.family
                     font.pixelSize: 9
                     font.bold: true

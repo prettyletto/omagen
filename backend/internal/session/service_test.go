@@ -61,6 +61,30 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 }
 
+func TestServiceBeginPersistsLookFeelAndTerminalIntent(t *testing.T) {
+	s := testStore(t)
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	lookFeel := LookFeelDocument{SchemaVersion: 1, Preset: "glass-blur", PresetRevision: 1, Customized: map[string]bool{"window": false, "shell": false, "bar": true, "animations": false, "terminal": false}}
+	terminal := TerminalTranslucency{SchemaVersion: 1, Mode: "preset", Opacity: 0.82, CellMode: "background"}
+	begin, err := NewService(s, fake).Begin(DefaultShellStyle(), DefaultDesktopStyle(), DefaultBarStyle(), DefaultAnimationsStyle(), lookFeel, terminal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.Load(begin.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.LookFeel.Preset != "glass-blur" || !record.LookFeel.Customized["bar"] {
+		t.Fatalf("Look & Feel metadata was not persisted: %#v", record.LookFeel)
+	}
+	if record.TerminalTranslucency.Mode != "preset" || record.TerminalTranslucency.Opacity != 0.82 {
+		t.Fatalf("terminal intent was not persisted: %#v", record.TerminalTranslucency)
+	}
+	if err := NewService(s, fake).Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestServiceRestoresThemeBoundBarSnapshot(t *testing.T) {
 	root := t.TempDir()
 	config := filepath.Join(root, "shell.json")

@@ -15,7 +15,9 @@ Item {
         bool extraConfigs,
         var desktopStyle,
         var barStyle,
-        var animationsStyle
+        var animationsStyle,
+        var lookFeel,
+        var terminalTranslucency
     )
     signal sessionBeginFailed(string message)
     signal sessionCancelled(string sessionId)
@@ -24,6 +26,16 @@ Item {
     signal sessionResumeCheckFailed(string message)
     signal backendReady()
     signal backendUnavailable(string message)
+    signal lookFeelCatalogLoaded(var catalog)
+    signal lookFeelCatalogFailed(string message)
+    signal lookFeelResolved(var composition)
+    signal lookFeelResolveFailed(string message)
+    signal runtimeStatusLoaded(var status)
+    signal runtimeStatusFailed(string message)
+    signal runtimeInstalled(string hookPath)
+    signal runtimeInstallFailed(string message)
+    signal runtimePromptDismissed()
+    signal runtimePromptDismissFailed(string message)
     signal sessionRecovered()
     signal sessionRecoverFailed(string message)
     signal generationCompleted(string sessionId, string generationId)
@@ -51,7 +63,7 @@ Item {
     signal protocolNavigationCompleted(string sessionId, var navigation)
     signal protocolNavigationFailed(string sessionId, string message)
 
-    function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle) {
+    function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency) {
         if (!shellStyle)
             return;
         args.push("--shell-style", shellStyle.surface, shellStyle.detail, shellStyle.tooltip, shellStyle.notifications,
@@ -59,7 +71,8 @@ Item {
                   desktopStyle.borderSizeMode || desktopStyle.border_size_mode || "default",
                   desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
                   "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility,
-                  "--window-active-style", desktopStyle.activeStyle || desktopStyle.active_style || "native");
+                  "--window-active-style", desktopStyle.activeStyle || desktopStyle.active_style || "native",
+                  "--shell-preset", shellStyle.preset || "default");
         if (shellStyle.overrides && Object.keys(shellStyle.overrides).length > 0)
             args.push("--shell-overrides-json", JSON.stringify(shellStyle.overrides));
         if (barStyle.profile)
@@ -68,11 +81,25 @@ Item {
             args.push("--bar-spec-json", JSON.stringify(barStyle.spec));
         if (animationsStyle)
             args.push("--animations-json", JSON.stringify(animationsStyle));
+        if (lookFeel)
+            args.push("--look-feel-json", JSON.stringify({
+                schema_version: Number(lookFeel.schemaVersion !== undefined ? lookFeel.schemaVersion : lookFeel.schema_version || 1),
+                preset: lookFeel.preset || "omarchy-native",
+                preset_revision: Number(lookFeel.presetRevision !== undefined ? lookFeel.presetRevision : lookFeel.preset_revision || 1),
+                customized: lookFeel.customized || ({})
+            }));
+        if (terminalTranslucency)
+            args.push("--terminal-json", JSON.stringify({
+                schema_version: Number(terminalTranslucency.schemaVersion !== undefined ? terminalTranslucency.schemaVersion : terminalTranslucency.schema_version || 1),
+                mode: terminalTranslucency.mode || "preserve",
+                opacity: Number(terminalTranslucency.opacity !== undefined ? terminalTranslucency.opacity : 1),
+                cell_mode: terminalTranslucency.cellMode || terminalTranslucency.cell_mode || "background"
+            }));
     }
 
-    function beginSession(shellStyle, desktopStyle, barStyle, animationsStyle) {
+    function beginSession(shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency) {
         const args = [root.executable, "session", "begin"];
-        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle);
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency);
         sessionBeginProcess.exec(args);
     }
 
@@ -86,12 +113,17 @@ Item {
     }
     function checkResumeSession() { resumeProcess.exec([root.executable, "session", "resume"]); }
     function checkBackend() { pingProcess.exec([root.executable, "ping"]); }
+    function listLookFeel() { lookFeelCatalogProcess.exec([root.executable, "look-feel", "list"]); }
+    function resolveLookFeel(preset) { lookFeelResolveProcess.exec([root.executable, "look-feel", "resolve", preset]); }
+    function checkRuntime() { runtimeStatusProcess.exec([root.executable, "runtime", "status"]); }
+    function installRuntime() { runtimeInstallProcess.exec([root.executable, "runtime", "install"]); }
+    function dismissRuntimePrompt() { runtimePromptDismissProcess.exec([root.executable, "runtime", "dismiss"]); }
     function recoverSession() { recoverProcess.exec([root.executable, "session", "recover"]); }
 
-    function generateTheme(sessionId, imagePath, shellStyle, desktopStyle, barStyle, animationsStyle) {
+    function generateTheme(sessionId, imagePath, shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency) {
         generationProcess.sessionId = sessionId;
         const args = [root.executable, "generate", sessionId, imagePath];
-        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle);
+        appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency);
         generationProcess.exec(args);
     }
     function describeGeneration(sessionId, generationId) {
@@ -109,8 +141,11 @@ Item {
         const desktop = styles.desktop || ({});
         const bar = styles.bar || ({});
         const animations = styles.animations || ({});
+        const lookFeel = styles.look_feel || styles.lookFeel || null;
+        const terminal = styles.terminal || styles.terminalTranslucency || null;
         return {
             shell: {
+                preset: shell.preset || "default",
                 surface: shell.surface || "flat",
                 detail: shell.detail || "native",
                 tooltip: shell.tooltip || "native",
@@ -134,15 +169,47 @@ Item {
                 attention: bar.attention || "semantic",
                 form: bar.form || "continuous",
                 visibility: bar.visibility || "native",
-                profile: bar.profile || null
+                profile: bar.profile || null,
+                spec: bar.spec || null
             },
+            // Test Live must receive the same complete animation document that
+            // generation and Apply receive. Dropping a field here makes a
+            // control look editable while previewing a different result.
             animations: {
+                version: Number(animations.version || 1),
+                preset: animations.preset || "native",
                 window: animations.window || "native",
+                window_open: animations.windowOpen || animations.window_open || "popin",
+                window_close: animations.windowClose || animations.window_close || "popin",
+                window_move: animations.windowMove || animations.window_move || "native",
+                window_amount: Number(animations.windowAmount !== undefined ? animations.windowAmount : animations.window_amount !== undefined ? animations.window_amount : 87),
+                window_opacity: Number(animations.windowOpacity !== undefined ? animations.windowOpacity : animations.window_opacity !== undefined ? animations.window_opacity : 100),
+                window_speed: Number(animations.windowSpeed !== undefined ? animations.windowSpeed : animations.window_speed !== undefined ? animations.window_speed : 4),
                 workspace: animations.workspace || "native",
+                workspace_axis: animations.workspaceAxis || animations.workspace_axis || "horizontal",
+                workspace_travel: Number(animations.workspaceTravel !== undefined ? animations.workspaceTravel : animations.workspace_travel !== undefined ? animations.workspace_travel : 18),
+                special_workspace: animations.specialWorkspace || animations.special_workspace || "inherit",
+                focus: animations.focus || "native",
+                layers: animations.layers || "native",
+                curve: animations.curve || "bezier",
                 border: animations.border || "native",
                 border_speed: Number(animations.borderSpeed !== undefined ? animations.borderSpeed : animations.border_speed || 36),
+                glitch: animations.glitch || "none",
+				screen_effect: animations.screenEffect || animations.screen_effect || null,
                 reduced_motion: animations.reducedMotion === true || animations.reduced_motion === true
-            }
+            },
+            look_feel: lookFeel ? {
+                schema_version: Number(lookFeel.schemaVersion !== undefined ? lookFeel.schemaVersion : lookFeel.schema_version || 1),
+                preset: lookFeel.preset || "omarchy-native",
+                preset_revision: Number(lookFeel.presetRevision !== undefined ? lookFeel.presetRevision : lookFeel.preset_revision || 1),
+                customized: lookFeel.customized || ({})
+            } : null,
+            terminal: terminal ? {
+                schema_version: Number(terminal.schemaVersion !== undefined ? terminal.schemaVersion : terminal.schema_version || 1),
+                mode: terminal.mode || "preserve",
+                opacity: Number(terminal.opacity !== undefined ? terminal.opacity : 1),
+                cell_mode: terminal.cellMode || terminal.cell_mode || "background"
+            } : null
         };
     }
 
@@ -198,6 +265,107 @@ Item {
                 return;
             }
             root.backendReady();
+        }
+    }
+
+    Process {
+        id: lookFeelCatalogProcess
+        stdout: BoundedOutputParser { id: lookFeelCatalogStdout }
+        stderr: BoundedOutputParser { id: lookFeelCatalogStderr }
+        onStarted: root.resetOutputs(lookFeelCatalogStdout, lookFeelCatalogStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                root.lookFeelCatalogFailed(lookFeelCatalogStderr.text.trim() || "Failed to load Look & Feel presets")
+                return
+            }
+            try {
+                const result = JSON.parse(lookFeelCatalogStdout.text)
+                if (!Array.isArray(result)) {
+                    root.lookFeelCatalogFailed("Backend returned an invalid Look & Feel catalog")
+                    return
+                }
+                root.lookFeelCatalogLoaded(result)
+            } catch (error) {
+                root.lookFeelCatalogFailed("Backend returned invalid Look & Feel catalog JSON")
+            }
+        }
+    }
+
+    Process {
+        id: lookFeelResolveProcess
+        stdout: BoundedOutputParser { id: lookFeelResolveStdout }
+        stderr: BoundedOutputParser { id: lookFeelResolveStderr }
+        onStarted: root.resetOutputs(lookFeelResolveStdout, lookFeelResolveStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                root.lookFeelResolveFailed(lookFeelResolveStderr.text.trim() || "Failed to resolve Look & Feel preset")
+                return
+            }
+            try {
+                const result = JSON.parse(lookFeelResolveStdout.text)
+                if (!result || !result.preset || !result.window || !result.shell || !result.bar || !result.animations || !result.terminal) {
+                    root.lookFeelResolveFailed("Backend returned an incomplete Look & Feel preset")
+                    return
+                }
+                root.lookFeelResolved(result)
+            } catch (error) {
+                root.lookFeelResolveFailed("Backend returned invalid Look & Feel preset JSON")
+            }
+        }
+    }
+
+    Process {
+        id: runtimeStatusProcess
+        stdout: BoundedOutputParser { id: runtimeStatusStdout }
+        stderr: BoundedOutputParser { id: runtimeStatusStderr }
+        onStarted: root.resetOutputs(runtimeStatusStdout, runtimeStatusStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                root.runtimeStatusFailed(runtimeStatusStderr.text.trim() || "Failed to inspect Omagen Advanced Runtime")
+                return
+            }
+            try {
+                root.runtimeStatusLoaded(JSON.parse(runtimeStatusStdout.text))
+            } catch (error) {
+                root.runtimeStatusFailed("Backend returned invalid runtime status JSON")
+            }
+        }
+    }
+
+    Process {
+        id: runtimeInstallProcess
+        stdout: BoundedOutputParser { id: runtimeInstallStdout }
+        stderr: BoundedOutputParser { id: runtimeInstallStderr }
+        onStarted: root.resetOutputs(runtimeInstallStdout, runtimeInstallStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                root.runtimeInstallFailed(runtimeInstallStderr.text.trim() || "Failed to install Omagen Advanced Runtime")
+                return
+            }
+            try {
+                const result = JSON.parse(runtimeInstallStdout.text)
+                if (result.installed !== true || !result.hook_path) {
+                    root.runtimeInstallFailed("Backend returned incomplete runtime installation data")
+                    return
+                }
+                root.runtimeInstalled(result.hook_path)
+            } catch (error) {
+                root.runtimeInstallFailed("Backend returned invalid runtime installation JSON")
+            }
+        }
+    }
+
+    Process {
+        id: runtimePromptDismissProcess
+        stdout: BoundedOutputParser { id: runtimePromptDismissStdout }
+        stderr: BoundedOutputParser { id: runtimePromptDismissStderr }
+        onStarted: root.resetOutputs(runtimePromptDismissStdout, runtimePromptDismissStderr)
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode !== 0) {
+                root.runtimePromptDismissFailed(runtimePromptDismissStderr.text.trim() || "Failed to save Omagen runtime setup choice")
+                return
+            }
+            root.runtimePromptDismissed()
         }
     }
 
@@ -274,7 +442,9 @@ Item {
                     result.extra_configs === true,
                     result.desktop_style || ({ border_style: "solid", border_size: -1, border_size_mode: "default", border_speed: 36, shape: "native", spacing: "native", depth: "native", active_style: "native", inactive_style: "native" }),
                     result.bar_style || ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null }),
-                    result.animations_style || ({ window: "native", workspace: "native", border: "native", border_speed: 36, reduced_motion: false })
+                    result.animations_style || ({ window: "native", workspace: "native", border: "native", border_speed: 36, reduced_motion: false }),
+                    result.look_feel || ({ schema_version: 1, preset: "omarchy-native", preset_revision: 1, customized: ({}) }),
+                    result.terminal_translucency || ({ schema_version: 1, mode: "preserve", opacity: 1, cell_mode: "background" })
                 );
             } catch (error) {
                 root.sessionBeginFailed("Backend returned invalid JSON");

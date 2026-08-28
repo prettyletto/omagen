@@ -1,5 +1,8 @@
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Wayland
 
 import "qml/services" as Services
 import "qml/state" as State
@@ -8,6 +11,10 @@ import "qml/views" as Views
 Item {
     id: root
 
+    // Injected by Omarchy's single shell host. This lets the additive overlay
+    // observe the native notification service without replacing it or opening
+    // a competing NotificationServer.
+    property var shell: null
     property bool opened: false
     property bool sessionBusy: false
     property bool cancelBusy: false
@@ -16,6 +23,13 @@ Item {
     property bool settingsOpen: false
     property string settingsReturnRoute: "setup"
     property bool settingsBusy: false
+    property bool runtimeSetupOpen: false
+    property bool runtimeSetupBusy: false
+    property bool runtimeSetupInstalled: false
+    property bool runtimePromptPending: false
+    property bool runtimeSetupFirstRun: false
+    property string runtimeSetupTheme: ""
+    property string runtimeSetupMessage: ""
     property bool generationBusy: false
     property bool describeBusy: false
     property bool regenerationPending: false
@@ -50,11 +64,46 @@ Item {
     property string sourceImage: ""
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
-    property var shellStyle: ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
+    property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
-    property var animationsStyle: ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false })
+    property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
+    property var lookFeel: ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) })
+    property var lookFeelRecipe: null
+    property var lookFeelCatalog: []
+    property bool lookFeelBusy: false
+    property bool lookFeelResolveApplies: true
+    property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property string errorMessage: ""
+    property int shellGlitchEpoch: 0
+    property string shellGlitchTrigger: ""
+    property double lastShellGlitchAt: 0
+    readonly property var signalAnimationsStyle: session.active
+        ? root.animationsStyle
+        : (root.resumableSession && root.resumableSession.animations_style
+            ? root.normalizeAnimationsStyle(root.resumableSession.animations_style) : null)
+    readonly property bool cyberpunkSignalActive: root.signalAnimationsStyle !== null
+        && root.signalAnimationsStyle.glitch !== "none"
+        && root.signalAnimationsStyle.reducedMotion !== true
+    readonly property var notificationService: root.shell
+        && typeof root.shell.firstPartyServiceFor === "function"
+        ? root.shell.firstPartyServiceFor("omarchy.notifications") : null
+    readonly property var notificationPopupModel: root.notificationService
+        && "popupModel" in root.notificationService
+        ? root.notificationService.popupModel : null
+    property bool notificationSignalVisible: false
+    property string lastNotificationSignalKey: ""
+    property int notificationSignalEpoch: 0
+    readonly property string homePath: String(Quickshell.env("HOME") || "")
+    readonly property string stateHomePath: {
+        const configured = String(Quickshell.env("XDG_STATE_HOME") || "")
+        return configured !== "" ? configured : root.homePath + "/.local/state"
+    }
+    readonly property string currentStatePath: root.stateHomePath + "/omarchy/current"
+    readonly property string currentBackgroundLink: root.currentStatePath + "/background"
+    property string observedBackgroundPath: ""
+    property bool backgroundSignalVisible: false
+    property int backgroundSignalEpoch: 0
 
     readonly property var variants: [
         { variant: "source", label: "Source" },
@@ -76,8 +125,162 @@ Item {
             .replace("file://", "")
     )
 
+    function triggerShellGlitch(eventName) {
+        if (!root.cyberpunkSignalActive)
+            return
+        const now = Date.now()
+        // Opening a window also changes focus. Combine that event pair into a
+        // single, deliberately slow signal instead of visual noise.
+        if (now - root.lastShellGlitchAt < 520)
+            return
+        root.lastShellGlitchAt = now
+        root.shellGlitchTrigger = eventName
+        root.shellGlitchEpoch += 1
+    }
+
+    function triggerNotificationGlitch() {
+        if (root.notificationPopupModel === null)
+            return
+        // The native service keeps one fullscreen layer mapped while any toast
+        // is visible, so a second toast does not emit another layer.opened.
+        // This tiny empty-input bridge maps briefly for every inserted row
+        // under a fresh namespace epoch;
+        // the Cyberpunk Hyprland reader recognizes its namespace and owns the
+        // desktop pulse. Other generated readers simply ignore the layer.
+        if (root.cyberpunkSignalActive)
+            root.triggerShellGlitch("notification")
+        if (root.notificationSignalVisible) {
+            root.notificationSignalVisible = false
+            notificationSignalReopenTimer.restart()
+            return
+        }
+        root.notificationSignalEpoch += 1
+        root.notificationSignalVisible = true
+        notificationSignalTimer.restart()
+    }
+
+    function resolveCurrentBackground() {
+        if (!backgroundResolveProcess.running)
+            backgroundResolveProcess.running = true
+    }
+
+    function observeCurrentBackground(path) {
+        const resolved = String(path || "").trim()
+        if (resolved === "")
+            return
+        // Loading the plugin establishes a baseline. Only a later wallpaper
+        // change is an event, so login/reload never creates a false pulse.
+        if (root.observedBackgroundPath === "") {
+            root.observedBackgroundPath = resolved
+            return
+        }
+        if (resolved === root.observedBackgroundPath)
+            return
+        root.observedBackgroundPath = resolved
+        root.triggerShellGlitch("background")
+        if (root.backgroundSignalVisible) {
+            root.backgroundSignalVisible = false
+            backgroundSignalReopenTimer.restart()
+            return
+        }
+        root.backgroundSignalEpoch += 1
+        root.backgroundSignalVisible = true
+        backgroundSignalTimer.restart()
+    }
+
+    Timer {
+        id: notificationSignalTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.notificationSignalVisible = false
+    }
+
+    Timer {
+        id: notificationSignalReopenTimer
+        interval: 16
+        repeat: false
+        onTriggered: {
+            if (root.notificationPopupModel === null)
+                return
+            root.notificationSignalEpoch += 1
+            root.notificationSignalVisible = true
+            notificationSignalTimer.restart()
+        }
+    }
+
+    Timer {
+        id: backgroundSignalTimer
+        interval: 120
+        repeat: false
+        onTriggered: root.backgroundSignalVisible = false
+    }
+
+    Timer {
+        id: backgroundSignalReopenTimer
+        interval: 16
+        repeat: false
+        onTriggered: {
+            root.backgroundSignalEpoch += 1
+            root.backgroundSignalVisible = true
+            backgroundSignalTimer.restart()
+        }
+    }
+
+    // Omarchy changes this symlink before telling its native Background
+    // plugin to transition. Watching the same state directory as the native
+    // bar gives us an event boundary without polling or replacing that owner.
+    FileView {
+        path: root.currentStatePath
+        watchChanges: true
+        printErrors: false
+        onFileChanged: backgroundResolveDebounce.restart()
+    }
+
+    Timer {
+        id: backgroundResolveDebounce
+        interval: 80
+        repeat: false
+        onTriggered: root.resolveCurrentBackground()
+    }
+
+    Process {
+        id: backgroundResolveProcess
+        command: ["readlink", "-f", root.currentBackgroundLink]
+        stdout: StdioCollector {
+            waitForEnd: true
+            onStreamFinished: root.observeCurrentBackground(text)
+        }
+    }
+
+    Component.onCompleted: root.resolveCurrentBackground()
+
+    // ListModel's public change signals vary between Quickshell/Qt builds.
+    // Polling the newest immutable snapshot keeps this additive bridge stable
+    // across those builds and catches a new row while the native layer stays
+    // mapped for an earlier toast.
+    Timer {
+        interval: 80
+        repeat: true
+        running: root.notificationPopupModel !== null
+        onTriggered: {
+            const model = root.notificationPopupModel
+            const count = model ? Number(model.count || 0) : 0
+            const newest = count > 0 ? model.get(0) : null
+            const key = newest
+                ? String(newest.originalId || "") + ":" + String(newest.timestamp || "")
+                : ""
+            if (!key) {
+                root.lastNotificationSignalKey = ""
+            } else if (key !== root.lastNotificationSignalKey) {
+                root.lastNotificationSignalKey = key
+                root.triggerNotificationGlitch()
+            }
+        }
+    }
+
     function normalizeShellStyle(value) {
         value = value || ({})
+        var preset = value.preset || "default"
         var surface = value.surface || "flat"
         var detail = value.detail || "native"
         var tooltip = value.tooltip || "native"
@@ -86,6 +289,7 @@ Item {
         for (var key in (value.overrides || {}))
             overrides[key] = String(value.overrides[key])
         return {
+            preset: preset,
             surface: surface,
             detail: detail,
             tooltip: tooltip,
@@ -112,13 +316,164 @@ Item {
         if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
         return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
     }
-    function normalizeAnimationsStyle(value) { value = value || ({}); var speed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed); if (!isFinite(speed) || speed < 10 || speed > 100) speed = 36; return { window: value.window || "native", workspace: value.workspace || "native", border: value.border || "native", borderSpeed: speed, reducedMotion: value.reducedMotion === true || value.reduced_motion === true } }
-    function normalizeBarStyle(value) { value = value || ({}); return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native", profile: value.profile || null, spec: value.spec || null } }
+    function normalizeAnimationsStyle(value) {
+        value = value || ({})
+        var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
+        if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
+        var windowAmount = Number(value.windowAmount !== undefined ? value.windowAmount : value.window_amount)
+        if (!isFinite(windowAmount) || windowAmount < 60 || windowAmount > 100) windowAmount = 87
+        var windowOpacity = Number(value.windowOpacity !== undefined ? value.windowOpacity : value.window_opacity)
+        if (!isFinite(windowOpacity) || windowOpacity < 60 || windowOpacity > 100) windowOpacity = 100
+        var windowSpeed = Number(value.windowSpeed !== undefined ? value.windowSpeed : value.window_speed)
+        if (!isFinite(windowSpeed) || windowSpeed < 1 || windowSpeed > 10) windowSpeed = 4
+        var workspaceTravel = Number(value.workspaceTravel !== undefined ? value.workspaceTravel : value.workspace_travel)
+        if (!isFinite(workspaceTravel) || workspaceTravel < 5 || workspaceTravel > 100) workspaceTravel = 18
+        var glitch = value.glitch || "none"
+        if (glitch === "flicker") glitch = "medium"
+		var rawEffect = value.screenEffect || value.screen_effect || null
+		var screenEffect = rawEffect ? {
+			id: rawEffect.id || "none",
+			strength: rawEffect.strength || "medium",
+			durationMs: Number(rawEffect.durationMs !== undefined ? rawEffect.durationMs : rawEffect.duration_ms || 0),
+			triggers: rawEffect.triggers || [],
+			coalesce: rawEffect.coalesce !== false
+		} : null
+        return {
+            version: Number(value.version || 1),
+            preset: value.preset || "native",
+            window: value.window || "native",
+            windowOpen: value.windowOpen || value.window_open || "popin",
+            windowClose: value.windowClose || value.window_close || "popin",
+            windowMove: value.windowMove || value.window_move || "native",
+            windowAmount: windowAmount,
+            windowOpacity: windowOpacity,
+            windowSpeed: windowSpeed,
+            workspace: value.workspace || "native",
+            workspaceAxis: value.workspaceAxis || value.workspace_axis || "horizontal",
+            workspaceTravel: workspaceTravel,
+            specialWorkspace: value.specialWorkspace || value.special_workspace || "inherit",
+            focus: value.focus || "native",
+            layers: value.layers || "native",
+            curve: value.curve || "bezier",
+            border: value.border || "native",
+            borderSpeed: borderSpeed,
+            glitch: glitch,
+			screenEffect: screenEffect,
+            reducedMotion: value.reducedMotion === true || value.reduced_motion === true
+        }
+    }
+    function normalizeBarStyle(value) {
+        value = value || ({})
+        return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native", profile: value.profile || null, spec: value.spec || null }
+    }
+    function normalizeTerminalTranslucency(value) {
+        value = value || ({})
+        var opacity = Number(value.opacity !== undefined ? value.opacity : 1)
+        if (!isFinite(opacity) || opacity < 0.5 || opacity > 1)
+            opacity = 1
+        return {
+            schemaVersion: Number(value.schemaVersion !== undefined ? value.schemaVersion : value.schema_version || 1),
+            mode: value.mode || "preserve",
+            opacity: opacity,
+            cellMode: value.cellMode || value.cell_mode || "background"
+        }
+    }
+    function copyLookFeelDocument(value) {
+        value = value || ({})
+        return {
+            schemaVersion: Number(value.schemaVersion !== undefined ? value.schemaVersion : value.schema_version || 1),
+            preset: value.preset || "omarchy-native",
+            presetRevision: Number(value.presetRevision !== undefined ? value.presetRevision : value.preset_revision || 1),
+            customized: value.customized || ({})
+        }
+    }
+    function normalizedLookFeelRecipe(composition) {
+        return {
+            window: root.normalizeDesktopStyle(composition.window),
+            shell: root.normalizeShellStyle(composition.shell),
+            bar: root.normalizeBarStyle(composition.bar),
+            animations: root.normalizeAnimationsStyle(composition.animations),
+            terminal: root.normalizeTerminalTranslucency(composition.terminal)
+        }
+    }
+    function styleJson(value) {
+        return JSON.stringify(value || ({}))
+    }
+    function refreshLookFeelCustomized() {
+        if (!root.lookFeelRecipe)
+            return
+        var next = root.copyLookFeelDocument(root.lookFeel)
+        next.customized = {
+            window: root.styleJson(root.desktopStyle) !== root.styleJson(root.lookFeelRecipe.window),
+            shell: root.styleJson(root.shellStyle) !== root.styleJson(root.lookFeelRecipe.shell),
+            bar: root.styleJson(root.barStyle) !== root.styleJson(root.lookFeelRecipe.bar),
+            animations: root.styleJson(root.animationsStyle) !== root.styleJson(root.lookFeelRecipe.animations),
+            terminal: root.styleJson(root.terminalTranslucency) !== root.styleJson(root.lookFeelRecipe.terminal)
+        }
+        root.lookFeel = next
+    }
+    function applyLookFeelComposition(composition) {
+        var previousCustomized = root.lookFeel.customized || ({})
+        var resolved = root.normalizedLookFeelRecipe(composition)
+        var currentWindow = root.desktopStyle
+        var currentShell = root.shellStyle
+        var currentBar = root.barStyle
+        var currentAnimations = root.animationsStyle
+        var currentTerminal = root.terminalTranslucency
+        root.lookFeelRecipe = resolved
+        root.lookFeel = root.copyLookFeelDocument(composition)
+        root.desktopStyle = previousCustomized.window === true ? currentWindow : resolved.window
+        root.shellStyle = previousCustomized.shell === true ? currentShell : resolved.shell
+        root.barStyle = previousCustomized.bar === true ? currentBar : resolved.bar
+        root.animationsStyle = previousCustomized.animations === true ? currentAnimations : resolved.animations
+        root.terminalTranslucency = previousCustomized.terminal === true ? currentTerminal : resolved.terminal
+        root.refreshLookFeelCustomized()
+    }
+    function requestLookFeelPreset(preset) {
+        if (root.lookFeelBusy || root.previewBusy || root.applyBusy || root.cancelBusy)
+            return
+        root.lookFeelBusy = true
+        root.lookFeelResolveApplies = true
+        root.errorMessage = ""
+        backend.resolveLookFeel(preset)
+    }
+    function loadLookFeelRecipe(preset) {
+        if (!preset || preset === "omarchy-native") {
+            root.lookFeelRecipe = null
+            return
+        }
+        root.lookFeelResolveApplies = false
+        backend.resolveLookFeel(preset)
+    }
+    function resetLookFeelScope(scope) {
+        if (!root.lookFeelRecipe || root.lookFeelBusy)
+            return
+        if (scope === "all") {
+            root.desktopStyle = root.lookFeelRecipe.window
+            root.shellStyle = root.lookFeelRecipe.shell
+            root.barStyle = root.lookFeelRecipe.bar
+            root.animationsStyle = root.lookFeelRecipe.animations
+            root.terminalTranslucency = root.lookFeelRecipe.terminal
+        } else if (scope === "window") {
+            root.desktopStyle = root.lookFeelRecipe.window
+        } else if (scope === "shell") {
+            root.shellStyle = root.lookFeelRecipe.shell
+        } else if (scope === "bar") {
+            root.barStyle = root.lookFeelRecipe.bar
+        } else if (scope === "animations") {
+            root.animationsStyle = root.lookFeelRecipe.animations
+        } else if (scope === "terminal") {
+            root.terminalTranslucency = root.lookFeelRecipe.terminal
+        } else {
+            return
+        }
+        root.refreshLookFeelCustomized()
+    }
 
     function open(payload) {
         let action = "open";
+        let parsed = ({});
         try {
-            let parsed = ({});
             if (typeof payload === "string")
                 parsed = JSON.parse(payload || "{}");
             else if (payload)
@@ -130,6 +485,21 @@ Item {
 
         if (action === "quit") {
             quitSession();
+            return;
+        }
+
+        if (action === "advanced-setup") {
+            root.runtimeSetupOpen = true;
+            root.runtimeSetupBusy = true;
+            root.runtimeSetupMessage = "";
+            root.runtimePromptPending = false;
+            root.runtimeSetupFirstRun = false;
+            root.runtimeSetupTheme = parsed.theme || parsed.theme_name || root.runtimeSetupTheme;
+            root.settingsOpen = false;
+            root.route = "runtime-setup";
+            root.livePanelOpen = false;
+            root.opened = true;
+            backend.checkRuntime();
             return;
         }
 
@@ -156,14 +526,54 @@ Item {
             }
             return;
         }
+        root.runtimePromptPending = true;
+        root.runtimeSetupFirstRun = true;
+        root.runtimeSetupOpen = false;
         route = "loading";
-        backend.checkBackend();
+        backend.checkRuntime();
     }
 
     function close() {
         opened = false;
         settingsOpen = false;
+        runtimeSetupOpen = false;
         livePanelOpen = false;
+    }
+
+    function closeRuntimeSetup() {
+        runtimeSetupOpen = false;
+        runtimeSetupBusy = false;
+        runtimeSetupMessage = "";
+        if (session.active) {
+            route = "workspace";
+            livePanelOpen = liveCanvasActive;
+        } else {
+            route = "setup";
+            livePanelOpen = false;
+        }
+        opened = false;
+    }
+
+    function dismissRuntimeSetup() {
+        const firstRun = runtimeSetupFirstRun;
+        closeRuntimeSetup();
+        if (firstRun)
+            backend.dismissRuntimePrompt();
+    }
+
+    function keepNativeRuntimeSetup() {
+        if (!runtimeSetupFirstRun) {
+            closeRuntimeSetup();
+            return;
+        }
+        runtimeSetupFirstRun = false;
+        runtimePromptPending = false;
+        runtimeSetupOpen = false;
+        runtimeSetupBusy = false;
+        runtimeSetupMessage = "";
+        route = "setup";
+        opened = true;
+        backend.dismissRuntimePrompt();
     }
 
     function reopenLiveCanvasPanel() {
@@ -196,12 +606,28 @@ Item {
         }
         const canvasActive = resumableSession.canvas_active === true;
         const canvasMode = resumableSession.canvas_mode || "full";
+        const resumedVariant = resumableSession.preview_variant || "source";
         session.resume(resumableSession);
         sourceImage = resumableSession.source_image || "";
         shellStyle = normalizeShellStyle(resumableSession.shell_style || resumableSession.desktop_style);
         desktopStyle = normalizeDesktopStyle(resumableSession.desktop_style);
         barStyle = normalizeBarStyle(resumableSession.bar_style);
         animationsStyle = normalizeAnimationsStyle(resumableSession.animations_style);
+        var resumedLookFeel = resumableSession.look_feel || ({});
+        lookFeel = {
+            schemaVersion: Number(resumedLookFeel.schema_version || resumedLookFeel.schemaVersion || 1),
+            preset: resumedLookFeel.preset || "omarchy-native",
+            presetRevision: Number(resumedLookFeel.preset_revision || resumedLookFeel.presetRevision || 1),
+            customized: resumedLookFeel.customized || ({})
+        };
+        var resumedTerminal = resumableSession.terminal_translucency || ({});
+        terminalTranslucency = {
+            schemaVersion: Number(resumedTerminal.schema_version || resumedTerminal.schemaVersion || 1),
+            mode: resumedTerminal.mode || "preserve",
+            opacity: Number(resumedTerminal.opacity !== undefined ? resumedTerminal.opacity : 1),
+            cellMode: resumedTerminal.cell_mode || resumedTerminal.cellMode || "background"
+        };
+        root.loadLookFeelRecipe(lookFeel.preset)
         extraConfigsEnabled = resumableSession.extra_configs === true;
         workflowMode = extraConfigsEnabled ? "in-depth" : "fast";
         liveCanvasMonitor = resumableSession.canvas_monitor || "";
@@ -321,13 +747,13 @@ Item {
             regenerationPending = true;
             opened = true;
             route = "workspace";
-            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null, extraConfigsEnabled ? animationsStyle : null);
+            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null, extraConfigsEnabled ? animationsStyle : null, extraConfigsEnabled ? lookFeel : null, extraConfigsEnabled ? terminalTranslucency : null);
             return;
         }
 
         errorMessage = "";
         sessionBusy = true;
-        backend.beginSession(extraConfigsEnabled ? shellStyle : null, desktopStyle, barStyle, animationsStyle);
+        backend.beginSession(extraConfigsEnabled ? shellStyle : null, desktopStyle, barStyle, animationsStyle, extraConfigsEnabled ? lookFeel : null, extraConfigsEnabled ? terminalTranslucency : null);
     }
 
     function continueFromSetup() {
@@ -336,6 +762,12 @@ Item {
     }
 
     function selectVariant(variant) { if (!previewBusy && !cancelBusy && !demoBusy && !applyBusy) session.selectVariant(variant) }
+
+    function focusedMonitorName() {
+        const monitor = Hyprland.focusedMonitor
+        return monitor ? String(monitor.name || "") : ""
+    }
+
     function enterLiveCanvas(variant) {
         if (!session.workspaceReady || !session.hasPalette(variant) || previewBusy || cancelBusy || demoBusy || applyBusy)
             return;
@@ -354,7 +786,7 @@ Item {
             const overrides = liveCanvasPanel.overridesForVariant(variant);
             pendingColorPreview = Object.keys(overrides).length > 0;
             previewBusy = true;
-            backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
+            backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
             return;
         }
 
@@ -370,7 +802,7 @@ Item {
         const overrides = liveCanvasPanel.overridesForVariant(variant);
         pendingColorPreview = Object.keys(overrides).length > 0;
         previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
+        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
     }
     function refreshProtocol() {
         if (!session.active || session.sessionId === "" || protocolBusy)
@@ -411,21 +843,42 @@ Item {
             root.desktopStyle = root.normalizeDesktopStyle(state.style_overrides.desktop || ({}));
             root.barStyle = root.normalizeBarStyle(state.style_overrides.bar || ({}));
             root.animationsStyle = root.normalizeAnimationsStyle(state.style_overrides.animations || ({}));
+            var protocolLookFeel = state.style_overrides.look_feel || ({});
+            root.lookFeel = {
+                schemaVersion: Number(protocolLookFeel.schema_version || protocolLookFeel.schemaVersion || 1),
+                preset: protocolLookFeel.preset || "omarchy-native",
+                presetRevision: Number(protocolLookFeel.preset_revision || protocolLookFeel.presetRevision || 1),
+                customized: protocolLookFeel.customized || ({})
+            };
+            var protocolTerminal = state.style_overrides.terminal || ({});
+            root.terminalTranslucency = {
+                schemaVersion: Number(protocolTerminal.schema_version || protocolTerminal.schemaVersion || 1),
+                mode: protocolTerminal.mode || "preserve",
+                opacity: Number(protocolTerminal.opacity !== undefined ? protocolTerminal.opacity : 1),
+                cellMode: protocolTerminal.cell_mode || protocolTerminal.cellMode || "background"
+            };
         }
         liveCanvasPanel.setStagedColors(state.color_overrides || {}, state.variant);
     }
 
-    function previewStyles() {
+    function previewStyles(variant) {
         if (!root.extraConfigsEnabled)
             return null;
-        return { shell: root.shellStyle, desktop: root.desktopStyle, bar: root.barStyle, animations: root.animationsStyle };
+        return {
+            shell: liveCanvasPanel.shellStyleForVariant(variant || session.selectedVariant),
+            desktop: root.desktopStyle,
+            bar: root.barStyle,
+            animations: root.animationsStyle,
+            look_feel: root.lookFeel,
+            terminal: root.terminalTranslucency
+        };
     }
 
     function previewCurrentState(variant) {
         const overrides = liveCanvasPanel.overridesForVariant(variant);
         root.pendingColorPreview = Object.keys(overrides).length > 0;
         root.previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles());
+        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
     }
 
     function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle, nextAnimationsStyle) {
@@ -448,7 +901,7 @@ Item {
         livePanelOpen = true;
         opened = false;
         previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, effectiveOverrides, root.previewStyles());
+        backend.applyPreview(session.sessionId, session.generationId, variant, effectiveOverrides, root.previewStyles(variant));
     }
     function suggestedThemeName() {
         let filename = root.sourceImage || ""
@@ -585,6 +1038,7 @@ Item {
         errorMessage = "";
         liveCanvasActive = true;
         livePanelOpen = true;
+        liveCanvasMonitor = root.focusedMonitorName();
         opened = false;
         demoActive = true;
         demoMode = "shell";
@@ -604,6 +1058,7 @@ Item {
         errorMessage = "";
         liveCanvasActive = true;
         livePanelOpen = true;
+        liveCanvasMonitor = root.focusedMonitorName();
         opened = false;
         demoActive = true;
         demoMode = "bar";
@@ -699,10 +1154,14 @@ Item {
         sourceImage = "";
         workflowMode = "fast";
         extraConfigsEnabled = false;
-        shellStyle = ({ surface: "flat", detail: "native", tooltip: "native", notifications: "native" });
+        lookFeelRecipe = null;
+        lookFeelResolveApplies = true;
+        lookFeel = ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) });
+        terminalTranslucency = ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" });
+        shellStyle = ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) });
         desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" });
         barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null });
-        animationsStyle = ({ window: "native", workspace: "native", border: "native", borderSpeed: 36, reducedMotion: false });
+        animationsStyle = root.normalizeAnimationsStyle({ preset: "native" });
         errorMessage = "";
         opened = !shouldClose;
         generationBusy = false;
@@ -776,7 +1235,9 @@ Item {
             backendExtraConfigs,
             backendDesktopStyle,
             backendBarStyle,
-            backendAnimationsStyle
+            backendAnimationsStyle,
+            backendLookFeel,
+            backendTerminalTranslucency
         ) {
             root.sessionBusy = false;
             session.activate(
@@ -786,6 +1247,18 @@ Item {
             root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
             root.barStyle = root.normalizeBarStyle(backendBarStyle);
             root.animationsStyle = root.normalizeAnimationsStyle(backendAnimationsStyle);
+            root.lookFeel = {
+                schemaVersion: Number(backendLookFeel.schema_version || backendLookFeel.schemaVersion || 1),
+                preset: backendLookFeel.preset || "omarchy-native",
+                presetRevision: Number(backendLookFeel.preset_revision || backendLookFeel.presetRevision || 1),
+                customized: backendLookFeel.customized || ({})
+            };
+            root.terminalTranslucency = {
+                schemaVersion: Number(backendTerminalTranslucency.schema_version || backendTerminalTranslucency.schemaVersion || 1),
+                mode: backendTerminalTranslucency.mode || "preserve",
+                opacity: Number(backendTerminalTranslucency.opacity !== undefined ? backendTerminalTranslucency.opacity : 1),
+                cellMode: backendTerminalTranslucency.cell_mode || backendTerminalTranslucency.cellMode || "background"
+            };
             root.extraConfigsEnabled = backendExtraConfigs;
             root.workflowMode = backendExtraConfigs ? "in-depth" : "fast";
             if (root.closeAfterCancel) {
@@ -797,7 +1270,7 @@ Item {
             root.livePanelOpen = true;
             root.opened = false;
             root.generationBusy = true;
-            backend.generateTheme(sessionId, root.sourceImage, null, null, null, null);
+            backend.generateTheme(sessionId, root.sourceImage, null, null, null, null, null, null);
         }
 
         onSessionBeginFailed: function(message) {
@@ -818,11 +1291,83 @@ Item {
             root.errorMessage = message;
         }
 
-        onBackendReady: backend.checkResumeSession()
+        onBackendReady: {
+            backend.listLookFeel()
+            backend.checkResumeSession()
+        }
         onBackendUnavailable: function(message) {
             root.resumableSession = null;
             root.route = "setup";
             root.errorMessage = "Omagen could not start its backend: " + message;
+        }
+        onLookFeelCatalogLoaded: function(catalog) {
+            root.lookFeelCatalog = catalog
+        }
+        onLookFeelCatalogFailed: function(message) {
+            root.lookFeelCatalog = []
+            if (root.extraConfigsEnabled)
+                root.errorMessage = message
+        }
+        onLookFeelResolved: function(composition) {
+            root.lookFeelBusy = false
+            if (root.lookFeelResolveApplies) {
+                root.applyLookFeelComposition(composition)
+            } else {
+                root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
+                root.refreshLookFeelCustomized()
+            }
+        }
+        onLookFeelResolveFailed: function(message) {
+            root.lookFeelBusy = false
+            root.errorMessage = message
+        }
+
+        onRuntimeStatusLoaded: function(status) {
+            root.runtimeSetupBusy = false;
+            root.runtimeSetupInstalled = status && status.installed === true;
+            if (root.runtimePromptPending) {
+                root.runtimePromptPending = false;
+                if (status && status.prompt_required === true) {
+                    root.runtimeSetupOpen = true;
+                    root.runtimeSetupFirstRun = true;
+                    root.route = "runtime-setup";
+                    root.opened = true;
+                    return;
+                }
+                root.runtimeSetupFirstRun = false;
+                root.runtimeSetupOpen = false;
+                root.route = "loading";
+                backend.checkBackend();
+                return;
+            }
+            if (root.runtimeSetupInstalled)
+                root.runtimeSetupMessage = "";
+        }
+        onRuntimeStatusFailed: function(message) {
+            if (root.runtimePromptPending) {
+                root.runtimePromptPending = false;
+                root.runtimeSetupFirstRun = false;
+                root.runtimeSetupOpen = false;
+                root.route = "loading";
+                backend.checkBackend();
+                return;
+            }
+            root.runtimeSetupBusy = false;
+            root.runtimeSetupMessage = message;
+        }
+        onRuntimeInstalled: function(hookPath) {
+            root.runtimeSetupBusy = false;
+            root.runtimeSetupInstalled = true;
+            root.runtimePromptPending = false;
+            root.runtimeSetupFirstRun = false;
+            root.runtimeSetupMessage = "Advanced runtime enabled. Reapply the advanced theme to activate the complete runtime path.";
+        }
+        onRuntimeInstallFailed: function(message) {
+            root.runtimeSetupBusy = false;
+            root.runtimeSetupMessage = message;
+        }
+        onRuntimePromptDismissFailed: function(message) {
+            root.runtimeSetupMessage = message;
         }
 
         onSessionResumeChecked: function(result) {
@@ -1334,6 +1879,8 @@ Item {
 
     Views.SetupWindow {
         active: root.opened && root.route === "setup"
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
         busy: root.sessionBusy
         sessionActive: session.active
         cancelBusy: root.cancelBusy
@@ -1351,8 +1898,92 @@ Item {
         onHideRequested: root.close()
     }
 
+    Views.AdvancedRuntimeSetupWindow {
+        active: root.runtimeSetupOpen
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
+        busy: root.runtimeSetupBusy
+        installed: root.runtimeSetupInstalled
+        themeName: root.runtimeSetupTheme
+        message: root.runtimeSetupMessage
+
+        onInstallRequested: {
+            root.runtimeSetupBusy = true;
+            root.runtimeSetupMessage = "";
+            backend.installRuntime();
+        }
+        onKeepNativeRequested: {
+            root.keepNativeRuntimeSetup();
+        }
+        onHideRequested: {
+            root.dismissRuntimeSetup();
+        }
+    }
+
+    // Quickshell reports compositor events without taking ownership of them.
+    // These raw window/workspace events drive only Omagen's contained QML
+    // signal. Native shell layer events are handled by the generated Hyprland
+    // hook, which owns the whole-desktop event shader.
+    Connections {
+        target: Hyprland
+
+        function onRawEvent(event) {
+            const name = String(event.name || "")
+            if (name === "openwindow" || name === "activewindow" || name === "activewindowv2"
+                    || name === "workspace" || name === "workspacev2")
+                root.triggerShellGlitch(name)
+        }
+    }
+
+    // Empty-input layer bridge for notification arrivals. Native Omarchy owns
+    // the visible notification surface; this surface exists only long enough
+    // to give Hyprland a layer.opened signal for each new toast.
+    Variants {
+        model: root.notificationSignalVisible && root.notificationPopupModel !== null
+            ? Quickshell.screens : []
+
+        delegate: PanelWindow {
+            required property var modelData
+            screen: modelData
+            visible: root.notificationSignalVisible && root.notificationPopupModel !== null
+            color: "transparent"
+            implicitWidth: 1
+            implicitHeight: 1
+            anchors { top: true; left: true }
+            WlrLayershell.namespace: "omagen-notification-signal-" + root.notificationSignalEpoch
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            exclusionMode: ExclusionMode.Ignore
+            mask: Region {}
+        }
+    }
+
+    // Empty-input layer bridge for a real background transition. It is safe
+    // to emit for every theme: only generated effects that subscribe to this
+    // namespace react, while Omarchy remains the wallpaper owner.
+    Variants {
+        model: root.backgroundSignalVisible ? Quickshell.screens : []
+
+        delegate: PanelWindow {
+            required property var modelData
+            screen: modelData
+            visible: root.backgroundSignalVisible
+            color: "transparent"
+            implicitWidth: 1
+            implicitHeight: 1
+            anchors { top: true; left: true }
+            WlrLayershell.namespace: "omagen-background-signal-" + root.backgroundSignalEpoch
+            WlrLayershell.layer: WlrLayer.Overlay
+            WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+            exclusionMode: ExclusionMode.Ignore
+            mask: Region {}
+        }
+    }
+
         Views.RecoveryWindow {
             active: root.opened && root.route === "recovery"
+            glitchEnabled: root.cyberpunkSignalActive
+            glitchEpoch: root.shellGlitchEpoch
             busy: root.recoveryBusy
             generationId: root.resumableSession ? root.resumableSession.generation_id || "" : ""
             previewVariant: root.resumableSession ? root.resumableSession.preview_variant || "" : ""
@@ -1374,10 +2005,19 @@ Item {
         generationBusy: root.generationBusy || root.describeBusy
         workspaceReady: session.workspaceReady
         extraConfigsEnabled: root.extraConfigsEnabled
+        lookFeel: root.lookFeel
+        lookFeelRecipe: root.lookFeelRecipe
+        lookFeelCatalog: root.lookFeelCatalog
+        lookFeelBusy: root.lookFeelBusy
+        terminalTranslucency: root.terminalTranslucency
+        terminalPresetOpacity: root.lookFeelRecipe && root.lookFeelRecipe.terminal
+            ? Number(root.lookFeelRecipe.terminal.opacity || 0.82) : 0.82
         shellStyle: root.shellStyle
         desktopStyle: root.desktopStyle
         barStyle: root.barStyle
         animationsStyle: root.animationsStyle
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
         protocolCanBack: root.protocolCanBack
         protocolCanForward: root.protocolCanForward
         protocolBusy: root.protocolBusy
@@ -1406,6 +2046,13 @@ Item {
             root.desktopStyle = root.normalizeDesktopStyle(desktopStyle)
             root.barStyle = root.normalizeBarStyle(barStyle)
             root.animationsStyle = root.normalizeAnimationsStyle(animationsStyle)
+            root.refreshLookFeelCustomized()
+        }
+        onLookFeelPresetRequested: root.requestLookFeelPreset(preset)
+        onLookFeelResetRequested: root.resetLookFeelScope(scope)
+        onTerminalIntentChanged: function(terminal) {
+            root.terminalTranslucency = root.normalizeTerminalTranslucency(terminal)
+            root.refreshLookFeelCustomized()
         }
         onProtocolBackRequested: root.navigateProtocol("back")
         onProtocolForwardRequested: root.navigateProtocol("forward")
@@ -1419,11 +2066,15 @@ Item {
         active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "shell"
         monitorName: root.liveCanvasMonitor
         shellStyle: root.shellStyle
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
     }
 
     Views.BarDemoPanel {
         id: barDemoPanel
         active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "bar"
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
         monitorName: root.liveCanvasMonitor
         barStyle: root.barStyle
         onCloseRequested: root.stopBarDemo()
@@ -1431,6 +2082,8 @@ Item {
 
     Views.LiveCanvasHandle {
         active: session.active && root.liveCanvasActive && !root.opened && !root.livePanelOpen
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
         monitorName: root.liveCanvasMonitor
         onReopenRequested: root.reopenLiveCanvasPanel()
     }
@@ -1438,6 +2091,8 @@ Item {
     Views.SettingsWindow {
         id: settingsWindow
         active: root.opened && root.route === "settings" && root.settingsOpen
+        glitchEnabled: root.cyberpunkSignalActive
+        glitchEpoch: root.shellGlitchEpoch
         busy: root.settingsBusy
         errorMessage: root.errorMessage
 

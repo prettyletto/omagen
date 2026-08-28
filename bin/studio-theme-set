@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Studio-owned, source-derived Studio driver.
 #
 # This intentionally follows the installed omarchy-theme-set transaction up to
@@ -338,11 +340,53 @@ run_trusted_hooks() {
   fi
 }
 
+run_owned_omagen_hook() {
+  # Studio preview is intentionally no-hook. Permanent Apply is different:
+  # after the native theme files are promoted, activate Omagen's own
+  # consented runtime bridge so advanced Shell/Bar adapters are part of the
+  # same end-to-end path. This is deliberately narrower than omarchy-hook:
+  # arbitrary user hooks remain disabled unless explicitly allowed below.
+  [[ "$MODE" == "apply" ]] || return 0
+
+  local config_home runtime_hook
+  config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+  runtime_hook="${OMAGEN_RUNTIME_HOOK:-$config_home/omarchy/hooks/theme-set.d/omagen-theme-set}"
+  if [[ ! -x "$runtime_hook" ]]; then
+    printf '%s omagen-runtime status=skipped reason=hook-missing path=%s\n' "$MODE" "$runtime_hook"
+    return 0
+  fi
+
+  printf '%s omagen-runtime status=started path=%s\n' "$MODE" "$runtime_hook"
+  if "$runtime_hook" "$THEME_NAME"; then
+    printf '%s omagen-runtime status=success\n' "$MODE"
+  else
+    # Native theme promotion is already committed. Keep Apply successful and
+    # leave a precise post-commit diagnostic for runtime status/recovery.
+    printf '%s omagen-runtime status=failed\n' "$MODE" >&2
+  fi
+}
+
 run_post_commit() {
   if scope_enabled apps || scope_enabled hyprland; then
     run_selected_retints
   fi
   run_trusted_hooks
+}
+
+run_post_commit_async() {
+  local post_commit_log=${OMAGEN_STUDIO_POST_COMMIT_LOG:-}
+
+  # The critical Studio driver log is captured by the Go client. A background
+  # post-commit job must not inherit that pipe: even though the shell launches
+  # the job with &, the client would otherwise wait for the inherited writer
+  # to close before it can return the critical Preview result. Keep diagnostics
+  # in a separate per-operation log and fully detach stdin/stdout/stderr from
+  # the critical transaction.
+  if [[ -n "$post_commit_log" ]] && mkdir -p "$(dirname -- "$post_commit_log")" 2>/dev/null && : >"$post_commit_log"; then
+    (run_post_commit >>"$post_commit_log" 2>&1 </dev/null) &
+  else
+    (run_post_commit >/dev/null 2>&1 </dev/null) &
+  fi
 }
 
 warm_apply_caches() {
@@ -503,13 +547,35 @@ fi
 
 omarchy-theme-set-templates
 
+# Materialize Omagen's terminal opacity intent only after the native templates
+# have produced the staged files and before the directory is promoted. The
+# materializer is deliberately a sibling backend binary so this hook never
+# edits a user's main terminal configuration or the active theme in place.
+if [[ -f "$NEXT_THEME_PATH/omagen.terminal.json" ]]; then
+  TERMINAL_MATERIALIZER="${OMAGEN_THEME_MATERIALIZER_BIN:-$SCRIPT_DIR/omagen}"
+  if [[ ! -x "$TERMINAL_MATERIALIZER" ]]; then
+    printf 'studio-theme-set: terminal intent exists but materializer is unavailable: %s\n' "$TERMINAL_MATERIALIZER" >&2
+    exit 1
+  fi
+  "$TERMINAL_MATERIALIZER" terminal materialize "$NEXT_THEME_PATH"
+fi
+
 OLD_BACKGROUND_SNAPSHOT=""
 if [[ "$THEME_HEADLESS" != "1" && ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]] && scope_enabled background; then
   OLD_BACKGROUND_SNAPSHOT=$(snapshot_current_background)
 fi
 
-rm -rf "$CURRENT_THEME_PATH"
-mv "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+# Exchange the complete directories in one filesystem operation when a theme
+# already exists. Quickshell watches current/theme; deleting it and moving
+# next-theme into place exposes a partial tree and makes every shell plugin
+# rebuild against missing tokens. Keep the old complete tree at next-theme for
+# the next transaction to remove. A first install has no old tree to exchange,
+# so a normal atomic rename is sufficient in that case.
+if [[ -e "$CURRENT_THEME_PATH" ]]; then
+  mv --exchange -T "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+else
+  mv -T "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+fi
 echo "$THEME_NAME" >"$HOME/.local/state/omarchy/current/theme.name"
 
 colors_payload=$([[ -f "$CURRENT_THEME_PATH/colors.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/colors.toml")
@@ -524,6 +590,15 @@ elif ! scope_enabled background || [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1"
   fi
 else
   set_theme_background
+fi
+
+# Omagen's own consented runtime bridge is part of the critical Apply handoff.
+# Run it while the shared theme-set lock is still held so the backend cannot
+# observe a committed theme before Shell/Bar activation has completed. Preview
+# remains explicitly no-hook; arbitrary user hooks stay in the post-commit
+# allowlist below.
+if [[ "$THEME_HEADLESS" != "1" ]]; then
+  run_owned_omagen_hook
 fi
 
 # Release the shared critical section before the Studio-owned allowlist runs.
@@ -541,6 +616,6 @@ if [[ "$THEME_HEADLESS" != "1" ]]; then
   if [[ "$WAIT_MODE" == "full" ]]; then
     run_post_commit
   else
-    run_post_commit &
+    run_post_commit_async
   fi
 fi

@@ -1,0 +1,44 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Effects
+import QtQuick.Layouts
+import Quickshell
+import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Services.SystemTray
+import qs.Commons
+import qs.Ui
+import "." as Bar
+
+Column {
+    id: groupRoot
+    property var bar: null
+    required property string region
+    required property var entries
+    property bool active: true
+    property bool centerSlots: false
+    readonly property string groupRegion: region
+    spacing: 0
+    Repeater {
+        model: active ? entries : []
+        delegate: Item {
+            id: slotFrame
+            required property var modelData
+            width: parent && parent.centerSlots ? parent.width : slot.implicitWidth
+            height: slot.implicitHeight
+
+            // The compact floating rail has an inset narrower than a
+            // barSize-wide widget. Give edge groups a full-width wrapper
+            // and center their real slot inside it; the center group
+            // retains its existing intrinsic-width composition.
+            WidgetSlot {
+                id: slot
+                bar: slotFrame.parent.bar
+                entry: slotFrame.modelData
+                region: slotFrame.parent.groupRegion
+                active: slotFrame.parent.active
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+        }
+    }
+}

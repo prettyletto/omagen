@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
+import "Contrast.js" as Contrast
 
 // A small, scroll-safe numeric control for the common shell tokens. It stages
 // only on release and deliberately does not consume the mouse wheel, so the
@@ -18,8 +19,12 @@ Item {
     property real step: 0.01
     property int decimals: 2
     property string suffix: ""
+    property string resetText: "Reset"
     property bool integer: false
     property bool modified: value !== ""
+    property color foregroundColor: Color.foreground
+    property color backgroundColor: Color.background
+    property color accentColor: Color.accent
     property real draftValue: root.numericValue
     property bool dragging: false
 
@@ -60,7 +65,7 @@ Item {
             Text {
                 Layout.fillWidth: true
                 text: root.label
-                color: Color.foreground
+                color: root.foregroundColor
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
                 font.bold: true
@@ -69,7 +74,7 @@ Item {
 
             Text {
                 text: root.formatValue(root.draftValue) + root.suffix
-                color: root.modified ? Color.accent : Color.foreground
+                color: root.modified ? root.accentColor : root.foregroundColor
                 opacity: root.modified ? 1 : 0.58
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -78,16 +83,17 @@ Item {
 
             Rectangle {
                 visible: root.modified
-                Layout.preferredWidth: Style.space(46)
+                Layout.preferredWidth: Math.max(Style.space(46), resetTextLabel.implicitWidth + Style.space(14))
                 Layout.preferredHeight: Style.space(22)
-                color: Util.alpha(Color.foreground, 0.045)
+                color: Util.alpha(root.foregroundColor, 0.045)
                 border.width: 1
                 border.color: Util.alpha(Color.popups.border, 0.72)
                 radius: Math.max(Style.space(3), Style.cornerRadius / 3)
                 Text {
+                    id: resetTextLabel
                     anchors.fill: parent
-                    text: "Reset"
-                    color: Color.foreground
+                    text: root.resetText
+                    color: root.foregroundColor
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
                     horizontalAlignment: Text.AlignHCenter
@@ -105,7 +111,7 @@ Item {
             visible: root.description !== ""
             Layout.fillWidth: true
             text: root.description
-            color: Color.foreground
+            color: root.foregroundColor
             opacity: 0.52
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -123,7 +129,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 height: Math.max(4, Style.space(5))
                 radius: height / 2
-                color: Util.alpha(Color.foreground, 0.18)
+                color: Util.alpha(root.foregroundColor, 0.18)
             }
 
             Rectangle {
@@ -132,7 +138,7 @@ Item {
                 width: track.width * ((root.draftValue - root.minimum) / Math.max(0.0001, root.maximum - root.minimum))
                 height: track.height
                 radius: height / 2
-                color: Color.accent
+                color: root.accentColor
             }
 
             Rectangle {
@@ -141,9 +147,9 @@ Item {
                 radius: width / 2
                 x: Math.max(0, Math.min(track.width - width, track.width * ((root.draftValue - root.minimum) / Math.max(0.0001, root.maximum - root.minimum)) - width / 2))
                 anchors.verticalCenter: track.verticalCenter
-                color: Color.accent
+                color: root.accentColor
                 border.width: 2
-                border.color: Color.background
+                border.color: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
             }
 
             MouseArea {

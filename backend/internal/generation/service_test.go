@@ -140,10 +140,12 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 		t.Fatal(err)
 	}
 	configuration := &Configuration{
-		ShellStyle:      session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+		ShellStyle:      session.ShellStyle{Preset: session.ShellPresetDefault, Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
 		DesktopStyle:    session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Active: "native", Inactive: "frosted_balanced"},
 		BarStyle:        session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
 		AnimationsStyle: session.DefaultAnimationsStyle(),
+		LookFeel:        session.LookFeelDocument{SchemaVersion: 1, Preset: "glass-blur", PresetRevision: 1, Customized: map[string]bool{"window": false, "shell": false, "bar": false, "animations": false, "terminal": false}},
+		Terminal:        session.TerminalTranslucency{SchemaVersion: 1, Mode: "preset", Opacity: 0.82, CellMode: "background"},
 	}
 
 	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
@@ -166,7 +168,9 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 	}
 	if !updated.ExtraConfigs || !reflect.DeepEqual(updated.ShellStyle, configuration.ShellStyle) ||
 		!reflect.DeepEqual(updated.DesktopStyle, configuration.DesktopStyle) ||
-		!reflect.DeepEqual(updated.BarStyle, configuration.BarStyle) {
+		!reflect.DeepEqual(updated.BarStyle, configuration.BarStyle) ||
+		!reflect.DeepEqual(updated.LookFeel, configuration.LookFeel) ||
+		!reflect.DeepEqual(updated.TerminalTranslucency, configuration.Terminal) {
 		t.Fatalf("configuration not committed: %#v", updated)
 	}
 	sourceDir := filepath.Join(store.SessionDir(record.SessionID), "generations", result.GenerationID, string(Source))
@@ -177,8 +181,16 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 	if !strings.Contains(string(metadata), `form = "docked"`) || !strings.Contains(string(metadata), `visibility = "islands"`) {
 		t.Fatalf("replacement generation did not use updated bar configuration:\n%s", metadata)
 	}
+	for _, name := range []string{"omagen.look-feel.json", "omagen.terminal.json"} {
+		if _, err := os.Stat(filepath.Join(sourceDir, name)); err != nil {
+			t.Fatalf("generated %s missing: %v", name, err)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(sourceDir, "shell.notifications.toml")); err != nil {
 		t.Fatalf("replacement generation did not use updated notification configuration: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sourceDir, "omagen.runtime.json")); err != nil {
+		t.Fatalf("advanced generation did not declare its runtime requirement: %v", err)
 	}
 	active, exists, err := store.LoadActive()
 	if err != nil || !exists || active.SessionID != record.SessionID {

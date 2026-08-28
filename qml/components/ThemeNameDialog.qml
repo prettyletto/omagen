@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui as Ui
+import "Contrast.js" as Contrast
 
 Item {
     id: root
@@ -87,7 +88,7 @@ Item {
                     MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: { root.close(); root.cancelled() } }
                 }
                 Rectangle { width: 130; height: 38; radius: 8; color: Color.accent; opacity: root.busy ? .55 : 1
-                    Text { anchors.centerIn: parent; text: root.busy ? "Applying…" : "Save & Apply"; color: Color.background; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
+                Text { anchors.centerIn: parent; text: root.busy ? "Applying…" : "Save & Apply"; color: Contrast.textFor(Color.accent, Color.background, Color.foreground); font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
                     MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.submit() }
                 }
             }

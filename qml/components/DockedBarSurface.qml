@@ -36,6 +36,7 @@ PanelWindow {
     readonly property var specSurface: specDocument && specDocument.surface ? specDocument.surface : ({})
     readonly property var specGeometry: specDocument && specDocument.geometry ? specDocument.geometry : ({})
     readonly property var specBehavior: specDocument && specDocument.behavior ? specDocument.behavior : ({})
+    readonly property var specRegions: specDocument && specDocument.regions ? specDocument.regions : ({})
     readonly property bool specAdapter: root.specResolved && root.specEngine === "omagen"
     // Any Omagen compile result may carry adapter-only surface/geometry fields,
     // even when its topology is still continuous. Keep the decoration window
@@ -76,15 +77,18 @@ PanelWindow {
     // Native is the backwards-compatible policy: a transparent Quattro bar
     // also hides this decoration. Islands is an explicit additive opt-in and
     // never changes the native bar's widgets, layout, or input ownership.
+    // A staged preset is the source of truth for the preview surface. Do not
+    // let a stale native bar.transparent flag make every newly selected
+    // preset start invisible; only an explicitly transparent spec hides it.
     readonly property bool showSurface: root.specResolved
-        ? root.specOpacity > 0 && (!root.transparent || root.specIslands)
+        ? root.specOpacity > 0 && String(root.specSurface.role || "background") !== "transparent"
         : !root.transparent || root.omagenBarVisibility === "islands"
     readonly property color surface: {
         if (root.specResolved && root.specAdapter) {
             var role = String(root.specSurface.role || "background")
             if (role === "accent") return Color.accent
             if (role === "selection") return Color.selection
-            if (role === "dark") return Color.darkBackground
+            if (role === "dark") return Qt.darker(Color.background, 1.12)
             if (role === "light") return Color.foreground
             if (role === "transparent") return Color.background
             return Color.background
@@ -223,8 +227,10 @@ PanelWindow {
         left: bar && (bar.position === "left" || !bar.vertical)
         right: bar && (bar.position === "right" || !bar.vertical)
     }
-    implicitWidth: bar && bar.vertical ? bar.barSize : 0
-    implicitHeight: bar && !bar.vertical ? bar.barSize : 0
+    // The layer surface must include the edge offset. Otherwise a Floating
+    // rectangle translated away from the edge is clipped at native barSize.
+    implicitWidth: bar && bar.vertical ? bar.barSize + specEdgeOffset : 0
+    implicitHeight: bar && !bar.vertical ? bar.barSize + specEdgeOffset : 0
 
     // Module geometry changes when widgets load, reveal tray content, move, or
     // switch monitors.  A small decoration-only poll avoids reaching into the
@@ -282,9 +288,24 @@ PanelWindow {
             return { x: 0, y: 0, width: 0, height: 0 }
         var margin = root.specOuterMargin
         var offset = root.specEdgeOffset
-        if (root.bar.vertical)
-            return { x: offset, y: margin, width: Math.max(0, root.bar.barSize - offset * 2), height: Math.max(0, root.screen.height - margin * 2) }
-        return { x: margin, y: offset, width: Math.max(0, root.screen.width - margin * 2), height: Math.max(0, root.bar.barSize - offset * 2) }
+        var size = root.bar.barSize
+        // Edge offset is the distance from the screen edge; it must move the
+        // surface, not consume its thickness. Outer margin constrains the
+        // cross-axis length. The previous implementation subtracted the edge
+        // offset from barSize, producing a thin strip for Floating (and a
+        // partially clipped vertical rail).
+        if (root.bar.vertical) {
+            // For a right rail the parent is anchored to the right edge; the
+            // local x coordinate is therefore the same as for a left rail.
+            return { x: offset, y: margin, width: size, height: Math.max(0, root.height - margin * 2) }
+        }
+        var horizontalY = offset
+        return { x: margin, y: horizontalY, width: Math.max(0, root.width - margin * 2), height: size }
+    }
+
+    function regionMode(region) {
+        var value = root.specRegions[region]
+        return value && value.mode ? String(value.mode) : "native"
     }
 
     Repeater {
@@ -292,19 +313,20 @@ PanelWindow {
         delegate: Rectangle {
             required property string modelData
             readonly property bool wholeBar: modelData === "all"
+            readonly property string regionMode: wholeBar ? "native" : root.regionMode(modelData)
             readonly property var bounds: {
                 root.geometryTick
                 return wholeBar ? root.fullBarBounds() : root.sectionBounds(modelData)
             }
 
-            visible: (root.docked || root.fallbackContinuous) && bounds.width > 0 && bounds.height > 0
+            visible: (root.docked || root.fallbackContinuous) && bounds.width > 0 && bounds.height > 0 && regionMode !== "hidden"
             x: bounds.x
             y: bounds.y
             width: bounds.width
             height: bounds.height
             radius: root.islandRadius
-            color: root.showSurface ? Util.alpha(root.surface, root.specResolved ? root.specOpacity : 1) : "transparent"
-            border.width: !root.showSurface || (root.specResolved && root.specSurface.border_role === "none") ? 0 : (root.specSurface.border_width !== undefined ? Math.max(0, Number(root.specSurface.border_width)) : (wholeBar ? 0 : 1))
+            color: root.showSurface ? Util.alpha(root.surface, (root.specResolved ? root.specOpacity : 1) * (regionMode === "quiet" ? 0.42 : 1)) : "transparent"
+            border.width: !root.showSurface || (root.specResolved && root.specSurface.border_role === "none") ? 0 : (regionMode === "island" ? Math.max(1, root.specSurface.border_width !== undefined ? Number(root.specSurface.border_width) : 1) : (root.specSurface.border_width !== undefined ? Math.max(0, Number(root.specSurface.border_width)) : (wholeBar ? 0 : 1)))
             border.color: Util.alpha(root.borderColor, root.borderOpacity)
         }
     }

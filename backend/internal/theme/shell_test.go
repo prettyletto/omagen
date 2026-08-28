@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/prettyletto/omagen/backend/internal/bar"
+	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
 func readShellSection(t *testing.T, dir, section string) string {
@@ -75,6 +76,27 @@ func TestWriteShellEmitsSurfaceAndDetailOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertNoGeneratedOutputs(t, dir)
+}
+
+func TestWriteShellEmitsGlassPresetTokensAsNativeShellValues(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
+	if err := WriteShellWithOverrides(dir, p, "flat", "native", "native", "native", "native", "native", "semantic", "continuous", "native", session.ShellPresetOverrides(session.ShellPresetGlass)); err != nil {
+		t.Fatal(err)
+	}
+	assertRootShell(t, dir, "[bar]\n", "[popups]\n", "[menu]\n", "[launcher]\n", "[tooltip]\n", "[notifications]\n", "[polkit]\n", "[lock]\n")
+	for _, section := range []string{"bar", "popups", "menu", "launcher", "tooltip", "notifications", "polkit", "lock"} {
+		text := readShellSection(t, dir, section)
+		if !strings.Contains(text, `background-alpha = "0.`) {
+			t.Fatalf("glass preset did not emit alpha for %s:\n%s", section, text)
+		}
+	}
+	for _, section := range []string{"bar", "popups", "menu", "launcher"} {
+		text := readShellSection(t, dir, section)
+		if !strings.Contains(text, "background-alpha = \"0.72\"") {
+			t.Fatalf("glass core surface did not emit 0.72 alpha for %s:\n%s", section, text)
+		}
+	}
 }
 
 func TestWriteShellUsesActualAccentForBarSurface(t *testing.T) {

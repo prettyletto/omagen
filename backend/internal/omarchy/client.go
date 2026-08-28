@@ -163,6 +163,7 @@ func (c *Client) ApplyThemePreviewWithOptions(themeName, logPath, retintRun, ret
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
 	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
+	environment = append(environment, "OMAGEN_STUDIO_POST_COMMIT_LOG="+logPath+".post-commit")
 	environment = append(environment, reloadSync.environment()...)
 	pid, _, err := c.runStudioThemeSetUntilCriticalWithPolicy(themeName, logPath, environment, 10*time.Second, retintRun, retintSkip)
 	if err != nil {
@@ -203,6 +204,7 @@ func (c *Client) ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
 	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
+	environment = append(environment, "OMAGEN_STUDIO_POST_COMMIT_LOG="+logPath+".post-commit")
 	// The core theme transaction is committed once the active theme and the
 	// shared theme-set lock are settled. Retint adapters are post-commit work;
 	// waiting for every application helper here can strand the UI if one hangs.
@@ -538,21 +540,23 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	return fmt.Errorf("force restored background through shell IPC: %w", lastErr)
 }
 
-// appendOmarchyEnvironment targets the user-installed Omarchy checkout when
-// one exists. The desktop process may carry OMARCHY_PATH=/usr/share/omarchy
-// even though the running Quickshell instance was launched from the user
-// checkout; using that stale path makes shell IPC report success/failure for
-// the wrong qs instance.
+// appendOmarchyEnvironment follows Omarchy's official OMARCHY_PATH first.
+// A valid user-local checkout remains a fallback for callers launched without
+// the session environment, followed by the packaged system path.
 func appendOmarchyEnvironment(environment []string) []string {
 	path := ""
-	if home, err := os.UserHomeDir(); err == nil {
-		candidate := filepath.Join(home, ".local", "share", "omarchy")
-		if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
-			path = candidate
+	if configured := strings.TrimSpace(os.Getenv("OMARCHY_PATH")); configured != "" {
+		if info, statErr := os.Stat(filepath.Join(configured, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+			path = configured
 		}
 	}
 	if path == "" {
-		path = strings.TrimSpace(os.Getenv("OMARCHY_PATH"))
+		if home, err := os.UserHomeDir(); err == nil {
+			candidate := filepath.Join(home, ".local", "share", "omarchy")
+			if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+				path = candidate
+			}
+		}
 	}
 	if path == "" {
 		candidate := "/usr/share/omarchy"
