@@ -1,16 +1,33 @@
-# Architecture
+# Current architecture
+
+This directory is the canonical description of the current `nightly` source.
+Start with [product boundaries](product-boundaries.md), then choose the
+frontend, backend, lifecycle, or contract document relevant to the task.
+
+| Area | Current document |
+| --- | --- |
+| Product/package ownership | [product-boundaries](product-boundaries.md) |
+| QML composition and UI | [frontend](frontend.md) |
+| Go packages and CLI | [backend](backend.md) |
+| Durable lifecycle | [lifecycle](lifecycle.md) |
+| QML ↔ Go | [qml-backend contract](contracts/qml-backend.md) |
+| Engine/session/Apply | [engine contract](contracts/engine.md) |
+| Studio history | [Studio protocol](contracts/studio-protocol.md) |
+| Runtime | [runtime contract](contracts/runtime.md) |
+| Look & Feel | [Look & Feel contract](contracts/look-feel.md) |
+| Bar | [BarSpec contract](contracts/bar-spec.md) |
 
 Omagen is a Quickshell plugin with a QML presentation layer and a bundled Go
 backend. Quickshell owns the visible plugin lifecycle; the backend owns the
 filesystem, theme, Demo, and recovery operations that must survive UI reloads.
 
 The stable backend ownership and Studio attachment rules are recorded in the
-[engine contract](engine-contract.md). This contract is the boundary for new
+[engine contract](contracts/engine.md). This contract is the boundary for new
 Studio capabilities; it does not replace the existing session or recovery
 engine.
 
 The live operation seam is recorded in the
-[Studio protocol](studio-protocol.md). It persists operation events and
+[Studio protocol](contracts/studio-protocol.md). It persists operation events and
 checkpoints and streams them to observers without taking ownership of native
 desktop rollback.
 
@@ -73,7 +90,7 @@ bar, or compositor ownership.
 
 ## Omarchy plugin contract
 
-The root [manifest.json](../manifest.json) is the package contract:
+The root [manifest.json](../../manifest.json) is the package contract:
 
 | Field | Value |
 | --- | --- |

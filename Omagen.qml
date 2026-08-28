@@ -1,12 +1,13 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
-import Quickshell.Io
 import Quickshell.Wayland
 
 import "qml/services" as Services
 import "qml/state" as State
 import "qml/views" as Views
+import "qml/app" as App
+import "qml/app/StyleDocuments.js" as StyleDocuments
 
 Item {
     id: root
@@ -75,9 +76,6 @@ Item {
     property bool lookFeelResolveApplies: true
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property string errorMessage: ""
-    property int shellGlitchEpoch: 0
-    property string shellGlitchTrigger: ""
-    property double lastShellGlitchAt: 0
     readonly property var signalAnimationsStyle: session.active
         ? root.animationsStyle
         : (root.resumableSession && root.resumableSession.animations_style
@@ -85,15 +83,6 @@ Item {
     readonly property bool cyberpunkSignalActive: root.signalAnimationsStyle !== null
         && root.signalAnimationsStyle.glitch !== "none"
         && root.signalAnimationsStyle.reducedMotion !== true
-    readonly property var notificationService: root.shell
-        && typeof root.shell.firstPartyServiceFor === "function"
-        ? root.shell.firstPartyServiceFor("omarchy.notifications") : null
-    readonly property var notificationPopupModel: root.notificationService
-        && "popupModel" in root.notificationService
-        ? root.notificationService.popupModel : null
-    property bool notificationSignalVisible: false
-    property string lastNotificationSignalKey: ""
-    property int notificationSignalEpoch: 0
     readonly property string homePath: String(Quickshell.env("HOME") || "")
     readonly property string stateHomePath: {
         const configured = String(Quickshell.env("XDG_STATE_HOME") || "")
@@ -101,9 +90,21 @@ Item {
     }
     readonly property string currentStatePath: root.stateHomePath + "/omarchy/current"
     readonly property string currentBackgroundLink: root.currentStatePath + "/background"
-    property string observedBackgroundPath: ""
-    property bool backgroundSignalVisible: false
-    property int backgroundSignalEpoch: 0
+    property alias shellGlitchEpoch: signalBridge.shellGlitchEpoch
+    property alias shellGlitchTrigger: signalBridge.shellGlitchTrigger
+    property alias notificationPopupModel: signalBridge.notificationPopupModel
+    property alias notificationSignalVisible: signalBridge.notificationSignalVisible
+    property alias notificationSignalEpoch: signalBridge.notificationSignalEpoch
+    property alias backgroundSignalVisible: signalBridge.backgroundSignalVisible
+    property alias backgroundSignalEpoch: signalBridge.backgroundSignalEpoch
+
+    App.SignalBridge {
+        id: signalBridge
+        shell: root.shell
+        glitchEnabled: root.cyberpunkSignalActive
+        currentStatePath: root.currentStatePath
+        currentBackgroundLink: root.currentBackgroundLink
+    }
 
     readonly property var variants: [
         { variant: "source", label: "Source" },
@@ -126,278 +127,32 @@ Item {
     )
 
     function triggerShellGlitch(eventName) {
-        if (!root.cyberpunkSignalActive)
-            return
-        const now = Date.now()
-        // Opening a window also changes focus. Combine that event pair into a
-        // single, deliberately slow signal instead of visual noise.
-        if (now - root.lastShellGlitchAt < 520)
-            return
-        root.lastShellGlitchAt = now
-        root.shellGlitchTrigger = eventName
-        root.shellGlitchEpoch += 1
-    }
-
-    function triggerNotificationGlitch() {
-        if (root.notificationPopupModel === null)
-            return
-        // The native service keeps one fullscreen layer mapped while any toast
-        // is visible, so a second toast does not emit another layer.opened.
-        // This tiny empty-input bridge maps briefly for every inserted row
-        // under a fresh namespace epoch;
-        // the Cyberpunk Hyprland reader recognizes its namespace and owns the
-        // desktop pulse. Other generated readers simply ignore the layer.
-        if (root.cyberpunkSignalActive)
-            root.triggerShellGlitch("notification")
-        if (root.notificationSignalVisible) {
-            root.notificationSignalVisible = false
-            notificationSignalReopenTimer.restart()
-            return
-        }
-        root.notificationSignalEpoch += 1
-        root.notificationSignalVisible = true
-        notificationSignalTimer.restart()
-    }
-
-    function resolveCurrentBackground() {
-        if (!backgroundResolveProcess.running)
-            backgroundResolveProcess.running = true
-    }
-
-    function observeCurrentBackground(path) {
-        const resolved = String(path || "").trim()
-        if (resolved === "")
-            return
-        // Loading the plugin establishes a baseline. Only a later wallpaper
-        // change is an event, so login/reload never creates a false pulse.
-        if (root.observedBackgroundPath === "") {
-            root.observedBackgroundPath = resolved
-            return
-        }
-        if (resolved === root.observedBackgroundPath)
-            return
-        root.observedBackgroundPath = resolved
-        root.triggerShellGlitch("background")
-        if (root.backgroundSignalVisible) {
-            root.backgroundSignalVisible = false
-            backgroundSignalReopenTimer.restart()
-            return
-        }
-        root.backgroundSignalEpoch += 1
-        root.backgroundSignalVisible = true
-        backgroundSignalTimer.restart()
-    }
-
-    Timer {
-        id: notificationSignalTimer
-        interval: 120
-        repeat: false
-        onTriggered: root.notificationSignalVisible = false
-    }
-
-    Timer {
-        id: notificationSignalReopenTimer
-        interval: 16
-        repeat: false
-        onTriggered: {
-            if (root.notificationPopupModel === null)
-                return
-            root.notificationSignalEpoch += 1
-            root.notificationSignalVisible = true
-            notificationSignalTimer.restart()
-        }
-    }
-
-    Timer {
-        id: backgroundSignalTimer
-        interval: 120
-        repeat: false
-        onTriggered: root.backgroundSignalVisible = false
-    }
-
-    Timer {
-        id: backgroundSignalReopenTimer
-        interval: 16
-        repeat: false
-        onTriggered: {
-            root.backgroundSignalEpoch += 1
-            root.backgroundSignalVisible = true
-            backgroundSignalTimer.restart()
-        }
-    }
-
-    // Omarchy changes this symlink before telling its native Background
-    // plugin to transition. Watching the same state directory as the native
-    // bar gives us an event boundary without polling or replacing that owner.
-    FileView {
-        path: root.currentStatePath
-        watchChanges: true
-        printErrors: false
-        onFileChanged: backgroundResolveDebounce.restart()
-    }
-
-    Timer {
-        id: backgroundResolveDebounce
-        interval: 80
-        repeat: false
-        onTriggered: root.resolveCurrentBackground()
-    }
-
-    Process {
-        id: backgroundResolveProcess
-        command: ["readlink", "-f", root.currentBackgroundLink]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.observeCurrentBackground(text)
-        }
-    }
-
-    Component.onCompleted: root.resolveCurrentBackground()
-
-    // ListModel's public change signals vary between Quickshell/Qt builds.
-    // Polling the newest immutable snapshot keeps this additive bridge stable
-    // across those builds and catches a new row while the native layer stays
-    // mapped for an earlier toast.
-    Timer {
-        interval: 80
-        repeat: true
-        running: root.notificationPopupModel !== null
-        onTriggered: {
-            const model = root.notificationPopupModel
-            const count = model ? Number(model.count || 0) : 0
-            const newest = count > 0 ? model.get(0) : null
-            const key = newest
-                ? String(newest.originalId || "") + ":" + String(newest.timestamp || "")
-                : ""
-            if (!key) {
-                root.lastNotificationSignalKey = ""
-            } else if (key !== root.lastNotificationSignalKey) {
-                root.lastNotificationSignalKey = key
-                root.triggerNotificationGlitch()
-            }
-        }
+        signalBridge.triggerShellGlitch(eventName)
     }
 
     function normalizeShellStyle(value) {
-        value = value || ({})
-        var preset = value.preset || "default"
-        var surface = value.surface || "flat"
-        var detail = value.detail || "native"
-        var tooltip = value.tooltip || "native"
-        var notifications = value.notifications || "native"
-        var overrides = {}
-        for (var key in (value.overrides || {}))
-            overrides[key] = String(value.overrides[key])
-        return {
-            preset: preset,
-            surface: surface,
-            detail: detail,
-            tooltip: tooltip,
-            notifications: notifications,
-            overrides: overrides
-        }
+        return StyleDocuments.normalizeShellStyle(value)
     }
     function normalizeDesktopStyle(value) {
-        value = value || ({})
-        var border = value.borderStyle || value.border_style || "solid"
-        if (border === "split") border = "split_top"
-        var borderSize = Number(value.borderSize !== undefined ? value.borderSize : value.border_size)
-        var borderSizeMode = value.borderSizeMode || value.border_size_mode || ""
-        if (!isFinite(borderSize)) borderSize = -1
-        if (borderSizeMode === "") {
-            borderSizeMode = borderSize === 0 ? "default" : borderSize < 0 ? "default" : "fixed"
-        }
-        if (borderSizeMode === "default") borderSize = -1
-        else if (borderSizeMode === "none") borderSize = 0
-        else if (borderSizeMode === "fixed") {
-            if (borderSize < 1 || borderSize > 24) { borderSize = -1; borderSizeMode = "default" }
-        } else { borderSize = -1; borderSizeMode = "default" }
-        var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
-        if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
-        return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
+        return StyleDocuments.normalizeDesktopStyle(value)
     }
     function normalizeAnimationsStyle(value) {
-        value = value || ({})
-        var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
-        if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
-        var windowAmount = Number(value.windowAmount !== undefined ? value.windowAmount : value.window_amount)
-        if (!isFinite(windowAmount) || windowAmount < 60 || windowAmount > 100) windowAmount = 87
-        var windowOpacity = Number(value.windowOpacity !== undefined ? value.windowOpacity : value.window_opacity)
-        if (!isFinite(windowOpacity) || windowOpacity < 60 || windowOpacity > 100) windowOpacity = 100
-        var windowSpeed = Number(value.windowSpeed !== undefined ? value.windowSpeed : value.window_speed)
-        if (!isFinite(windowSpeed) || windowSpeed < 1 || windowSpeed > 10) windowSpeed = 4
-        var workspaceTravel = Number(value.workspaceTravel !== undefined ? value.workspaceTravel : value.workspace_travel)
-        if (!isFinite(workspaceTravel) || workspaceTravel < 5 || workspaceTravel > 100) workspaceTravel = 18
-        var glitch = value.glitch || "none"
-        if (glitch === "flicker") glitch = "medium"
-		var rawEffect = value.screenEffect || value.screen_effect || null
-		var screenEffect = rawEffect ? {
-			id: rawEffect.id || "none",
-			strength: rawEffect.strength || "medium",
-			durationMs: Number(rawEffect.durationMs !== undefined ? rawEffect.durationMs : rawEffect.duration_ms || 0),
-			triggers: rawEffect.triggers || [],
-			coalesce: rawEffect.coalesce !== false
-		} : null
-        return {
-            version: Number(value.version || 1),
-            preset: value.preset || "native",
-            window: value.window || "native",
-            windowOpen: value.windowOpen || value.window_open || "popin",
-            windowClose: value.windowClose || value.window_close || "popin",
-            windowMove: value.windowMove || value.window_move || "native",
-            windowAmount: windowAmount,
-            windowOpacity: windowOpacity,
-            windowSpeed: windowSpeed,
-            workspace: value.workspace || "native",
-            workspaceAxis: value.workspaceAxis || value.workspace_axis || "horizontal",
-            workspaceTravel: workspaceTravel,
-            specialWorkspace: value.specialWorkspace || value.special_workspace || "inherit",
-            focus: value.focus || "native",
-            layers: value.layers || "native",
-            curve: value.curve || "bezier",
-            border: value.border || "native",
-            borderSpeed: borderSpeed,
-            glitch: glitch,
-			screenEffect: screenEffect,
-            reducedMotion: value.reducedMotion === true || value.reduced_motion === true
-        }
+        return StyleDocuments.normalizeAnimationsStyle(value)
     }
     function normalizeBarStyle(value) {
-        value = value || ({})
-        return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native", profile: value.profile || null, spec: value.spec || null }
+        return StyleDocuments.normalizeBarStyle(value)
     }
     function normalizeTerminalTranslucency(value) {
-        value = value || ({})
-        var opacity = Number(value.opacity !== undefined ? value.opacity : 1)
-        if (!isFinite(opacity) || opacity < 0.5 || opacity > 1)
-            opacity = 1
-        return {
-            schemaVersion: Number(value.schemaVersion !== undefined ? value.schemaVersion : value.schema_version || 1),
-            mode: value.mode || "preserve",
-            opacity: opacity,
-            cellMode: value.cellMode || value.cell_mode || "background"
-        }
+        return StyleDocuments.normalizeTerminalTranslucency(value)
     }
     function copyLookFeelDocument(value) {
-        value = value || ({})
-        return {
-            schemaVersion: Number(value.schemaVersion !== undefined ? value.schemaVersion : value.schema_version || 1),
-            preset: value.preset || "omarchy-native",
-            presetRevision: Number(value.presetRevision !== undefined ? value.presetRevision : value.preset_revision || 1),
-            customized: value.customized || ({})
-        }
+        return StyleDocuments.copyLookFeelDocument(value)
     }
     function normalizedLookFeelRecipe(composition) {
-        return {
-            window: root.normalizeDesktopStyle(composition.window),
-            shell: root.normalizeShellStyle(composition.shell),
-            bar: root.normalizeBarStyle(composition.bar),
-            animations: root.normalizeAnimationsStyle(composition.animations),
-            terminal: root.normalizeTerminalTranslucency(composition.terminal)
-        }
+        return StyleDocuments.normalizedLookFeelRecipe(composition)
     }
     function styleJson(value) {
-        return JSON.stringify(value || ({}))
+        return StyleDocuments.styleJson(value)
     }
     function refreshLookFeelCustomized() {
         if (!root.lookFeelRecipe)

@@ -1,0 +1,105 @@
+# Omagen agent guide
+
+Omagen is an Omarchy Quattro plugin. QML presents the overlay and bar widget;
+the bundled Go backend owns theme generation, durable sessions, filesystem
+mutation, Demo, Apply, recovery, and the Studio protocol.
+
+## Global invariants
+
+- The backend session record is the authority for baseline, rollback, and
+  interrupted Apply state. QML state is a view and request coordinator.
+- Apply, Cancel, Quit, recovery, preview cleanup, and Demo cleanup must remain
+  ownership-aware and must not remove unrelated user resources.
+- Palette, colorspace, contrast, and six-variant generation semantics are
+  protected contracts. Structural work must not rewrite their algorithms.
+- QML must use the existing Go JSON wire contract; do not casually rename
+  commands, fields, stdout/stderr messages, or exit codes.
+- Omarchy/Quattro owns native shell and widget layout. Omagen's bar, runtime
+  bridge, and shell effects are additive or explicitly opted into.
+- `pretty.omagen` is the overlay/bar-widget plugin; `pretty.omagen.bar` is the
+  full bar plugin. Do not merge their manifests or ownership.
+- User theme files, native `shell.json`, Hyprland state, and backgrounds are
+  not Omagen-owned unless a session transaction recorded exact ownership.
+
+## Bounded contexts
+
+| Context | Start here | Main source |
+| --- | --- | --- |
+| Palette | `docs/agents/recipes/palette-engine-change.md` | `backend/internal/imageanalysis`, `palette`, `colorspace`, `contrast` |
+| Generation | `docs/architecture/backend.md` | `backend/internal/generation`, `theme` |
+| Lifecycle/recovery | `docs/agents/recipes/lifecycle-change.md` | `backend/internal/session`, `apply`, `preview`, `cleanup` |
+| QML UI | `docs/agents/recipes/qml-ui-change.md` | `qml/views`, `qml/components`, `qml/app`, `Omagen.qml` |
+| Live Canvas/Studio | `docs/agents/recipes/live-canvas-change.md` | `qml/views/LiveCanvasPanel.qml`, `qml/components/AdvancedStyleEditor.qml`, `backend/internal/studio` |
+| Bar | `docs/agents/recipes/bar-change.md` | `bar`, `OmagenBar.qml`, `NativeBarClone.qml`, `backend/internal/bar`, `barprofile` |
+| Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/components/LookFeelControls.qml` |
+| Runtime | `docs/agents/recipes/runtime-adapter-change.md` | `backend/internal/runtime`, `bin/studio-theme-set` |
+| Protocol | `docs/agents/recipes/protocol-change.md` | `backend/internal/protocol`, QML protocol calls |
+| Packaging | `docs/agents/recipes/packaging-release.md` | `manifest.json`, `bar-manifest.json`, `install.sh`, `scripts`, `.github` |
+
+Use `scripts/agent-context <domain>` to print the compact route for a task.
+Read callers and callees only when the change crosses a documented seam.
+
+## Documentation routing
+
+- Current architecture lives under `docs/architecture/`.
+- Operational recipes and context routing live under `docs/agents/`.
+- User and contributor guides remain under `docs/` and are indexed by
+  `docs/README.md`.
+- Architectural decisions live under `docs/adr/`.
+- Roadmaps and implementation plans live under `docs/plans/active/` or
+  `docs/plans/archive/`.
+- Do not read `docs/plans/**` unless the task is specifically about planning,
+  roadmap work, or historical implementation context.
+- Do not automatically read every Markdown file, the whole QML tree, or all
+  backend packages. Start with one recipe and expand from dependency evidence.
+
+## Source routing
+
+- Backend commands are adapters over domain packages; command parsing belongs
+  under `backend/internal/cli`, while transaction behavior belongs in its
+  domain package.
+- `qml/services` owns process mechanics/gateways; views should not spawn the
+  backend directly.
+- `Omagen.qml` is the application composition root. Keep domain state and
+  rendering in the nearest bounded QML file when extracting code.
+- `OmagenBarWidget.qml` is launcher/status integration. Full bar composition
+  belongs under `bar/` and the `pretty.omagen.bar` entry point.
+
+## Testing expectations
+
+For Go changes, run from `backend/`:
+
+```sh
+go test ./...
+go test -race ./...
+go vet ./...
+```
+
+For packaging or QML changes, run `GOCACHE=/tmp/omagen-gocache
+./scripts/v1-check.sh`; run `qmllint` when available. For lifecycle, Demo,
+runtime, or bar changes, state any live Omarchy/Hyprland checks that were not
+possible in the current environment. Preserve the bundled backend binary
+provenance check when backend sources change.
+
+## Agent skills
+
+### Issue tracker
+
+This repository tracks work in GitHub Issues for `prettyletto/omagen`. See
+`docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Use the repository's default five-role triage vocabulary. See
+`docs/agents/triage-labels.md`.
+
+### Domain docs
+
+This repository uses domain-routed architecture documents rather than one
+global context file. See `docs/agents/domain.md` and `context-map.yaml`.
+
+## Handoff
+
+Use `docs/agents/handoff-template.md` for a focused handoff. Include the
+bounded context, files changed, contracts preserved, tests run, and manual
+validation still required.

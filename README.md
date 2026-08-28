@@ -185,9 +185,11 @@ Quattro fallback.
 | [Demo workspace](docs/demo.md) | Users | Temporary workspaces, capability resolution, fallbacks, and preview capture. |
 | [Recovery and safety](docs/recovery.md) | Users and maintainers | Sessions, Cancel, Quit, Apply safety, and cleanup boundaries. |
 | [Development](docs/development.md) | Contributors | Local installation, tests, linting, and the V1 validation gate. |
-| [Architecture](docs/architecture.md) | Contributors | The plugin contract, QML/backend boundary, generation pipeline, and lifecycle. |
+| [Architecture](docs/architecture/README.md) | Contributors | The plugin contract, QML/backend boundary, generation pipeline, and lifecycle. |
 
-The [documentation index](docs/README.md) mirrors this table and the
+The [documentation index](docs/README.md) mirrors this table. Contributors
+should also start with the [agent navigation guide](AGENTS.md) and its
+[bounded-context recipes](docs/agents/README.md). The
 [mdBook summary](SUMMARY.md) provides the rendered documentation navigation.
 
 ## Remove

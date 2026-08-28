@@ -270,9 +270,9 @@ Done when:
 - An Omarchy update can be detected as a driver compatibility event.
 - No Studio workflow depends on editing `/usr/share/omarchy/`.
 
-N1 evidence: [`omarchy-theme-pipeline.md`](omarchy-theme-pipeline.md) records
+N1 evidence: [`omarchy-theme-pipeline.md`](../../omarchy-theme-pipeline.md) records
 the installed boundary, and
-[`scripts/omarchy-theme-pipeline-drift.sh`](../scripts/omarchy-theme-pipeline-drift.sh)
+[`scripts/omarchy-theme-pipeline-drift.sh`](../../../scripts/omarchy-theme-pipeline-drift.sh)
 checks the recorded Omarchy version and package-owned script hashes without
 mutating the desktop. Hyprland IPC version was not verified during capture
 because `hyprctl version` timed out; this remains an explicit evidence gap.
