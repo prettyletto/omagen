@@ -15,6 +15,16 @@ must not keep a second baseline, delete session files, infer ownership from
 current UI state, or treat a successful process launch as a completed
 transaction.
 
+The QML operation seam is split by ownership: `ApplyController.qml` coordinates
+the staged Apply sequence, `DemoController.qml` owns frontend Demo resource
+state, `PreviewController.qml` owns preview command state, and
+`GenerationController.qml` owns generate/describe/discard sequencing. The
+adjacent `ProtocolController.qml`, `RuntimeSetupController.qml`, and
+`LookFeelController.qml` own their respective request state without moving
+cross-domain composition out of the root. The backend session record remains
+authoritative for rollback, cleanup, and recovery; controllers only coordinate
+requests and high-level outcomes.
+
 For detailed invariants, read
 [`contracts/engine.md`](contracts/engine.md) and
 [`contracts/studio-protocol.md`](contracts/studio-protocol.md).

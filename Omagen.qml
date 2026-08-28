@@ -7,6 +7,7 @@ import "qml/services" as Services
 import "qml/state" as State
 import "qml/views" as Views
 import "qml/app" as App
+import "qml/controllers" as Controllers
 import "qml/app/StyleDocuments.js" as StyleDocuments
 
 Item {
@@ -24,44 +25,36 @@ Item {
     property bool settingsOpen: false
     property string settingsReturnRoute: "setup"
     property bool settingsBusy: false
-    property bool runtimeSetupOpen: false
-    property bool runtimeSetupBusy: false
-    property bool runtimeSetupInstalled: false
-    property bool runtimePromptPending: false
-    property bool runtimeSetupFirstRun: false
-    property string runtimeSetupTheme: ""
-    property string runtimeSetupMessage: ""
-    property bool generationBusy: false
-    property bool describeBusy: false
-    property bool regenerationPending: false
-    property bool backBusy: false
-    property bool previewBusy: false
-    property bool pendingColorPreview: false
-    property bool applyBusy: false
-    property bool applyRecoveryRequired: false
-    property bool demoBusy: false
-    property bool demoActive: false
-    property string demoMode: "none"
+    property alias runtimeSetupOpen: runtimeSetupController.open
+    property alias runtimeSetupBusy: runtimeSetupController.busy
+    property alias runtimeSetupInstalled: runtimeSetupController.installed
+    property alias runtimePromptPending: runtimeSetupController.promptPending
+    property alias runtimeSetupFirstRun: runtimeSetupController.firstRun
+    property alias runtimeSetupTheme: runtimeSetupController.theme
+    property alias runtimeSetupMessage: runtimeSetupController.message
+    property alias generationBusy: generationController.generating
+    property alias describeBusy: generationController.describing
+    property alias regenerationPending: generationController.regenerationPending
+    property alias backBusy: generationController.returning
+    property alias previewBusy: previewController.busy
+    property alias pendingColorPreview: previewController.pendingColorPreview
+    property alias applyBusy: applyController.busy
+    property alias applyRecoveryRequired: applyController.recoveryRequired
+    property alias demoBusy: demoController.busy
+    property alias demoActive: demoController.active
+    property alias demoMode: demoController.mode
     property bool liveCanvasActive: false
     property bool livePanelOpen: false
-    property string liveCanvasMonitor: ""
-    property bool pendingDemo: false
-    property bool pendingWindowDemo: false
-    property bool pendingApplyAfterDemo: false
-    property bool pendingApplyCapture: false
-    property bool pendingApplyPreview: false
-    property bool pendingApplyCloseDemo: false
-    property bool pendingApplyAbortAfterDemo: false
-    property bool pendingApplyUnlock: false
+    property alias liveCanvasMonitor: demoController.monitor
+    property alias pendingDemo: demoController.pendingDemo
+    property alias pendingWindowDemo: demoController.pendingWindowDemo
     property bool recoveryBusy: false
-    property bool protocolBusy: false
-    property bool protocolCanBack: false
-    property bool protocolCanForward: false
-    property string protocolMessage: ""
+    property alias protocolBusy: protocolController.busy
+    property alias protocolCanBack: protocolController.canBack
+    property alias protocolCanForward: protocolController.canForward
+    property alias protocolMessage: protocolController.message
     property string route: "unknown"
     property var resumableSession: null
-    property string pendingApplyVariant: ""
-    property string pendingApplyName: ""
     property string sourceImage: ""
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
@@ -71,9 +64,8 @@ Item {
     property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
     property var lookFeel: ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) })
     property var lookFeelRecipe: null
-    property var lookFeelCatalog: []
-    property bool lookFeelBusy: false
-    property bool lookFeelResolveApplies: true
+    property alias lookFeelCatalog: lookFeelController.catalog
+    property alias lookFeelBusy: lookFeelController.busy
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property string errorMessage: ""
     readonly property var signalAnimationsStyle: session.active
@@ -185,20 +177,17 @@ Item {
         root.refreshLookFeelCustomized()
     }
     function requestLookFeelPreset(preset) {
-        if (root.lookFeelBusy || root.previewBusy || root.applyBusy || root.cancelBusy)
+        if (!root.lookFeelController.requestPreset(preset))
             return
-        root.lookFeelBusy = true
-        root.lookFeelResolveApplies = true
         root.errorMessage = ""
-        backend.resolveLookFeel(preset)
     }
     function loadLookFeelRecipe(preset) {
         if (!preset || preset === "omarchy-native") {
             root.lookFeelRecipe = null
+            root.lookFeelController.loadRecipe(preset)
             return
         }
-        root.lookFeelResolveApplies = false
-        backend.resolveLookFeel(preset)
+        root.lookFeelController.loadRecipe(preset)
     }
     function resetLookFeelScope(scope) {
         if (!root.lookFeelRecipe || root.lookFeelBusy)
@@ -244,17 +233,11 @@ Item {
         }
 
         if (action === "advanced-setup") {
-            root.runtimeSetupOpen = true;
-            root.runtimeSetupBusy = true;
-            root.runtimeSetupMessage = "";
-            root.runtimePromptPending = false;
-            root.runtimeSetupFirstRun = false;
-            root.runtimeSetupTheme = parsed.theme || parsed.theme_name || root.runtimeSetupTheme;
+            runtimeSetupController.openSetup(parsed.theme || parsed.theme_name || runtimeSetupTheme)
             root.settingsOpen = false;
             root.route = "runtime-setup";
             root.livePanelOpen = false;
             root.opened = true;
-            backend.checkRuntime();
             return;
         }
 
@@ -281,11 +264,8 @@ Item {
             }
             return;
         }
-        root.runtimePromptPending = true;
-        root.runtimeSetupFirstRun = true;
-        root.runtimeSetupOpen = false;
+        runtimeSetupController.probeStartup()
         route = "loading";
-        backend.checkRuntime();
     }
 
     function close() {
@@ -296,9 +276,7 @@ Item {
     }
 
     function closeRuntimeSetup() {
-        runtimeSetupOpen = false;
-        runtimeSetupBusy = false;
-        runtimeSetupMessage = "";
+        runtimeSetupController.closeSetup()
         if (session.active) {
             route = "workspace";
             livePanelOpen = liveCanvasActive;
@@ -310,10 +288,15 @@ Item {
     }
 
     function dismissRuntimeSetup() {
-        const firstRun = runtimeSetupFirstRun;
-        closeRuntimeSetup();
-        if (firstRun)
-            backend.dismissRuntimePrompt();
+        runtimeSetupController.dismiss()
+        if (session.active) {
+            route = "workspace";
+            livePanelOpen = liveCanvasActive;
+        } else {
+            route = "setup";
+            livePanelOpen = false;
+        }
+        opened = false
     }
 
     function keepNativeRuntimeSetup() {
@@ -321,14 +304,9 @@ Item {
             closeRuntimeSetup();
             return;
         }
-        runtimeSetupFirstRun = false;
-        runtimePromptPending = false;
-        runtimeSetupOpen = false;
-        runtimeSetupBusy = false;
-        runtimeSetupMessage = "";
+        runtimeSetupController.keepNative()
         route = "setup";
         opened = true;
-        backend.dismissRuntimePrompt();
     }
 
     function reopenLiveCanvasPanel() {
@@ -385,17 +363,15 @@ Item {
         root.loadLookFeelRecipe(lookFeel.preset)
         extraConfigsEnabled = resumableSession.extra_configs === true;
         workflowMode = extraConfigsEnabled ? "in-depth" : "fast";
-        liveCanvasMonitor = resumableSession.canvas_monitor || "";
+        const resumedMonitor = resumableSession.canvas_monitor || "";
         resumableSession = null;
         route = "workspace";
         // A shell reload destroys this QML object, not the session-owned
         // Demo windows. Rebind to the durable canvas state in place; calling
         // demo open here would classify transiently reloading windows as
         // missing and launch duplicate applications.
-        demoActive = canvasActive;
-        demoMode = canvasActive ? canvasMode : "none";
+        demoController.resume(canvasActive, canvasMode, resumedMonitor);
         liveCanvasActive = true;
-        demoBusy = false;
         livePanelOpen = true;
         opened = false;
     }
@@ -497,12 +473,18 @@ Item {
         if (session.active) {
             errorMessage = "";
             sessionBusy = true;
-            generationBusy = true;
-            describeBusy = false;
-            regenerationPending = true;
             opened = true;
             route = "workspace";
-            backend.generateTheme(session.sessionId, sourceImage, extraConfigsEnabled ? shellStyle : null, extraConfigsEnabled ? desktopStyle : null, extraConfigsEnabled ? barStyle : null, extraConfigsEnabled ? animationsStyle : null, extraConfigsEnabled ? lookFeel : null, extraConfigsEnabled ? terminalTranslucency : null);
+            generationController.generate(
+                sourceImage,
+                extraConfigsEnabled ? shellStyle : null,
+                extraConfigsEnabled ? desktopStyle : null,
+                extraConfigsEnabled ? barStyle : null,
+                extraConfigsEnabled ? animationsStyle : null,
+                extraConfigsEnabled ? lookFeel : null,
+                extraConfigsEnabled ? terminalTranslucency : null,
+                true
+            );
             return;
         }
 
@@ -539,9 +521,7 @@ Item {
         // not create or discard the optional Demo workspace.
         if (demoActive) {
             const overrides = liveCanvasPanel.overridesForVariant(variant);
-            pendingColorPreview = Object.keys(overrides).length > 0;
-            previewBusy = true;
-            backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
+            previewController.start(variant, overrides, root.previewStyles(variant), Object.keys(overrides).length > 0);
             return;
         }
 
@@ -550,44 +530,17 @@ Item {
     function testLive(variant) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
         errorMessage = "";
-        pendingColorPreview = false;
         liveCanvasActive = true;
         livePanelOpen = true;
         opened = false;
         const overrides = liveCanvasPanel.overridesForVariant(variant);
-        pendingColorPreview = Object.keys(overrides).length > 0;
-        previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
+        previewController.start(variant, overrides, root.previewStyles(variant), Object.keys(overrides).length > 0);
     }
     function refreshProtocol() {
-        if (!session.active || session.sessionId === "" || protocolBusy)
-            return;
-        protocolBusy = true;
-        backend.inspectProtocol(session.sessionId);
-    }
-    function updateProtocolAvailability(snapshot) {
-        protocolCanBack = false;
-        protocolCanForward = false;
-        const checkpoints = snapshot && snapshot.checkpoints ? snapshot.checkpoints : [];
-        const currentId = snapshot ? snapshot.current_checkpoint_id || "" : "";
-        for (let i = 0; i < checkpoints.length; i++) {
-            const checkpoint = checkpoints[i];
-            if (checkpoint.id !== currentId)
-                continue;
-            protocolCanBack = (checkpoint.parent_id || "") !== "";
-            protocolCanForward = (checkpoint.children || []).length > 0;
-            return;
-        }
+        protocolController.refresh();
     }
     function navigateProtocol(direction) {
-        if (!session.workspaceReady || protocolBusy || previewBusy || cancelBusy || applyBusy || session.sessionId === "")
-            return;
-        protocolMessage = "";
-        protocolBusy = true;
-        if (direction === "back")
-            backend.navigateProtocolBack(session.sessionId);
-        else
-            backend.navigateProtocolForward(session.sessionId);
+        protocolController.navigate(direction);
     }
     function applyProtocolState(state) {
         if (!state || !state.variant || !session.hasPalette(state.variant))
@@ -630,10 +583,7 @@ Item {
     }
 
     function previewCurrentState(variant) {
-        const overrides = liveCanvasPanel.overridesForVariant(variant);
-        root.pendingColorPreview = Object.keys(overrides).length > 0;
-        root.previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, overrides, root.previewStyles(variant));
+        previewController.previewCurrentState(variant);
     }
 
     function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle, nextAnimationsStyle) {
@@ -651,12 +601,10 @@ Item {
         session.selectVariant(variant);
         errorMessage = "";
         const effectiveOverrides = liveCanvasPanel.overridesForVariant(variant);
-        pendingColorPreview = Object.keys(effectiveOverrides).length > 0;
         liveCanvasActive = true;
         livePanelOpen = true;
         opened = false;
-        previewBusy = true;
-        backend.applyPreview(session.sessionId, session.generationId, variant, effectiveOverrides, root.previewStyles(variant));
+        previewController.start(variant, effectiveOverrides, root.previewStyles(variant), Object.keys(effectiveOverrides).length > 0);
     }
     function suggestedThemeName() {
         let filename = root.sourceImage || ""
@@ -666,198 +614,39 @@ Item {
         return filename.split(/\s+/).map(function(word) { return word.length ? word.charAt(0).toUpperCase() + word.slice(1) : word }).join(" ")
     }
     function applyTheme(variant, name, generateUnlock, capturePreview) {
-        if (!session.workspaceReady || applyBusy || previewBusy || cancelBusy || demoBusy) return
-        errorMessage = ""; applyBusy = true; applyRecoveryRequired = false
-
-        // Apply must commit the exact state visible in Live Canvas. Always
-        // materialize one final preview first so staged colours and advanced
-        // Window/Shell/Bar settings cannot be lost when Test Live was skipped.
-        pendingApplyVariant = variant
-        pendingApplyName = name
-        pendingApplyUnlock = generateUnlock === true
-        pendingApplyCapture = capturePreview === true
-        pendingApplyPreview = true
-        pendingApplyCloseDemo = false
-
-        if (pendingApplyCapture) {
-            pendingApplyAfterDemo = true
-            demoBusy = true
-            opened = false
-            if (root.backendDemoActive()) {
-                root.previewCurrentState(variant)
-            } else {
-                if (demoMode === "bar")
-                    root.stopBarDemo()
-                backend.openDemo(session.sessionId)
-            }
-            return
-        }
-
-        if (root.backendDemoActive()) {
-            pendingApplyAfterDemo = true
-            pendingApplyCloseDemo = true
-            demoBusy = true
-            root.previewCurrentState(variant)
-            return
-        }
-        if (demoMode === "bar")
-            root.stopBarDemo()
-        pendingApplyAfterDemo = false
-        root.previewCurrentState(variant)
-    }
-
-    function resetPendingApply() {
-        pendingApplyAfterDemo = false
-        pendingApplyCapture = false
-        pendingApplyPreview = false
-        pendingApplyCloseDemo = false
-        pendingApplyAbortAfterDemo = false
-        pendingApplyUnlock = false
-        pendingApplyVariant = ""
-        pendingApplyName = ""
-    }
-
-    function failPendingApply(message) {
-        errorMessage = message
-        previewBusy = false
-        pendingApplyCapture = false
-        if (demoActive) {
-            pendingApplyAbortAfterDemo = true
-            demoBusy = true
-            backend.closeDemo(session.sessionId)
-        } else {
-            resetPendingApply()
-            applyBusy = false
-            demoBusy = false
-            opened = true
-        }
+        applyController.apply(variant, name, generateUnlock, capturePreview)
     }
 
     function startDemo(variant) {
-        if (demoActive || demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
-            return;
-
-        errorMessage = "";
-        session.selectVariant(variant);
-        liveCanvasActive = true;
-        pendingDemo = true;
-        demoBusy = true;
-        // Omarchy reloads all Ghostty instances as part of applying a theme.
-        // Create the scene first, then apply the selected preview; this is the
-        // same ordering as opening the four applications manually before
-        // switching a theme.
-        opened = false;
-        backend.openDemo(session.sessionId);
+        demoController.startDemo(variant)
     }
 
     function startWindowDemo() {
-        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
-            return;
-        if (demoMode === "window" && demoActive) {
-            dispatchDemo();
-            return;
-        }
-        if (demoMode === "shell" && demoActive)
-            stopShellDemo();
-        if (demoMode === "bar" && demoActive)
-            stopBarDemo();
-        errorMessage = "";
-        liveCanvasActive = true;
-        livePanelOpen = true;
-        pendingWindowDemo = true;
-        opened = false;
-        if (demoActive) {
-            demoBusy = true;
-            backend.closeDemo(session.sessionId);
-            return;
-        }
-        pendingWindowDemo = false;
-        demoBusy = true;
-        backend.openWindowDemo(session.sessionId);
+        demoController.startWindowDemo()
     }
 
     function startShellDemo() {
-        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
-            return;
-        if (demoMode === "shell" && demoActive) {
-            stopShellDemo();
-            return;
-        }
-        if (demoMode === "bar" && demoActive)
-            stopBarDemo();
-        if (demoActive) {
-            errorMessage = "Stop the current desktop demo before starting Shell Demo.";
-            return;
-        }
-
-        errorMessage = "";
-        liveCanvasActive = true;
-        livePanelOpen = true;
-        liveCanvasMonitor = root.focusedMonitorName();
-        opened = false;
-        demoActive = true;
-        demoMode = "shell";
+        demoController.startShellDemo()
     }
 
     function startBarDemo() {
-        if (demoBusy || previewBusy || cancelBusy || applyBusy || !session.workspaceReady)
-            return;
-        if (demoMode === "bar" && demoActive) {
-            stopBarDemo();
-            return;
-        }
-        if (demoActive) {
-            errorMessage = "Stop the current desktop demo before starting Bar Demo.";
-            return;
-        }
-        errorMessage = "";
-        liveCanvasActive = true;
-        livePanelOpen = true;
-        liveCanvasMonitor = root.focusedMonitorName();
-        opened = false;
-        demoActive = true;
-        demoMode = "bar";
+        demoController.startBarDemo()
     }
 
     function stopBarDemo() {
-        if (demoMode !== "bar")
-            return;
-        demoActive = false;
-        demoMode = "none";
-        livePanelOpen = liveCanvasActive;
+        demoController.stopBarDemo()
     }
 
     function backendDemoActive() {
-        return demoActive && (demoMode === "full" || demoMode === "window");
+        return demoController.backendDemoActive()
     }
 
     function stopShellDemo() {
-        if (demoMode !== "shell")
-            return;
-        demoActive = false;
-        demoMode = "none";
-        livePanelOpen = liveCanvasActive;
+        demoController.stopShellDemo()
     }
 
     function dispatchDemo() {
-        if (!demoActive || demoBusy || cancelBusy)
-            return;
-
-        if (demoMode === "shell") {
-            stopShellDemo();
-            return;
-        }
-        if (demoMode === "bar") {
-            stopBarDemo();
-            return;
-        }
-
-        if (session.sessionId === "")
-            return;
-
-        errorMessage = "";
-        demoBusy = true;
-        backend.closeDemo(session.sessionId);
+        demoController.dispatch()
     }
 
     function cancelSession() {
@@ -867,16 +656,9 @@ Item {
         errorMessage = "";
         cancelBusy = true;
         cancelReturnRoute = route;
-        demoBusy = false;
-        pendingDemo = false;
-        pendingApplyAfterDemo = false;
-        pendingApplyCapture = false;
-        pendingApplyPreview = false;
-        pendingApplyCloseDemo = false;
-        pendingApplyAbortAfterDemo = false;
-        pendingApplyUnlock = false;
+        applyController.cancel();
+        demoController.cancel();
         livePanelOpen = false;
-        liveCanvasMonitor = "";
         liveCanvasActive = false;
         // The backend cancel command closes any demo, recovers an interrupted
         // Apply, restores the original theme/background, and removes the
@@ -894,8 +676,7 @@ Item {
             return;
 
         errorMessage = "";
-        backBusy = true;
-        backend.discardGeneration(session.sessionId, session.generationId);
+        generationController.discard();
     }
 
     function clearSession(closeWhenDone) {
@@ -910,7 +691,6 @@ Item {
         workflowMode = "fast";
         extraConfigsEnabled = false;
         lookFeelRecipe = null;
-        lookFeelResolveApplies = true;
         lookFeel = ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) });
         terminalTranslucency = ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" });
         shellStyle = ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) });
@@ -919,36 +699,18 @@ Item {
         animationsStyle = root.normalizeAnimationsStyle({ preset: "native" });
         errorMessage = "";
         opened = !shouldClose;
-        generationBusy = false;
-        describeBusy = false;
-        regenerationPending = false;
-        backBusy = false;
-        previewBusy = false;
-        pendingColorPreview = false;
-        demoBusy = false;
-        demoActive = false;
-        demoMode = "none";
+        applyController.reset();
+        lookFeelController.reset();
+        generationController.reset();
+        previewController.reset();
+        demoController.reset();
         liveCanvasActive = false;
         livePanelOpen = false;
-        liveCanvasMonitor = "";
-        pendingDemo = false;
-        pendingWindowDemo = false;
-        pendingApplyAfterDemo = false;
-        pendingApplyCapture = false;
-        pendingApplyAbortAfterDemo = false;
-        pendingApplyUnlock = false;
-        pendingApplyVariant = "";
-        pendingApplyName = "";
-        applyBusy = false;
-        applyRecoveryRequired = false;
         route = "setup";
         cancelReturnRoute = "workspace";
         resumableSession = null;
         recoveryBusy = false;
-        protocolBusy = false;
-        protocolCanBack = false;
-        protocolCanForward = false;
-        protocolMessage = "";
+        protocolController.reset();
     }
 
     onOpenedChanged: if (opened && route === "workspace") Qt.callLater(root.refreshProtocol)
@@ -1024,8 +786,7 @@ Item {
             root.liveCanvasActive = true;
             root.livePanelOpen = true;
             root.opened = false;
-            root.generationBusy = true;
-            backend.generateTheme(sessionId, root.sourceImage, null, null, null, null, null, null);
+            generationController.generate(root.sourceImage, null, null, null, null, null, null, false);
         }
 
         onSessionBeginFailed: function(message) {
@@ -1047,7 +808,7 @@ Item {
         }
 
         onBackendReady: {
-            backend.listLookFeel()
+            lookFeelController.list()
             backend.checkResumeSession()
         }
         onBackendUnavailable: function(message) {
@@ -1055,76 +816,6 @@ Item {
             root.route = "setup";
             root.errorMessage = "Omagen could not start its backend: " + message;
         }
-        onLookFeelCatalogLoaded: function(catalog) {
-            root.lookFeelCatalog = catalog
-        }
-        onLookFeelCatalogFailed: function(message) {
-            root.lookFeelCatalog = []
-            if (root.extraConfigsEnabled)
-                root.errorMessage = message
-        }
-        onLookFeelResolved: function(composition) {
-            root.lookFeelBusy = false
-            if (root.lookFeelResolveApplies) {
-                root.applyLookFeelComposition(composition)
-            } else {
-                root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
-                root.refreshLookFeelCustomized()
-            }
-        }
-        onLookFeelResolveFailed: function(message) {
-            root.lookFeelBusy = false
-            root.errorMessage = message
-        }
-
-        onRuntimeStatusLoaded: function(status) {
-            root.runtimeSetupBusy = false;
-            root.runtimeSetupInstalled = status && status.installed === true;
-            if (root.runtimePromptPending) {
-                root.runtimePromptPending = false;
-                if (status && status.prompt_required === true) {
-                    root.runtimeSetupOpen = true;
-                    root.runtimeSetupFirstRun = true;
-                    root.route = "runtime-setup";
-                    root.opened = true;
-                    return;
-                }
-                root.runtimeSetupFirstRun = false;
-                root.runtimeSetupOpen = false;
-                root.route = "loading";
-                backend.checkBackend();
-                return;
-            }
-            if (root.runtimeSetupInstalled)
-                root.runtimeSetupMessage = "";
-        }
-        onRuntimeStatusFailed: function(message) {
-            if (root.runtimePromptPending) {
-                root.runtimePromptPending = false;
-                root.runtimeSetupFirstRun = false;
-                root.runtimeSetupOpen = false;
-                root.route = "loading";
-                backend.checkBackend();
-                return;
-            }
-            root.runtimeSetupBusy = false;
-            root.runtimeSetupMessage = message;
-        }
-        onRuntimeInstalled: function(hookPath) {
-            root.runtimeSetupBusy = false;
-            root.runtimeSetupInstalled = true;
-            root.runtimePromptPending = false;
-            root.runtimeSetupFirstRun = false;
-            root.runtimeSetupMessage = "Advanced runtime enabled. Reapply the advanced theme to activate the complete runtime path.";
-        }
-        onRuntimeInstallFailed: function(message) {
-            root.runtimeSetupBusy = false;
-            root.runtimeSetupMessage = message;
-        }
-        onRuntimePromptDismissFailed: function(message) {
-            root.runtimeSetupMessage = message;
-        }
-
         onSessionResumeChecked: function(result) {
             if (!result || result.active !== true) {
                 root.resumableSession = null;
@@ -1186,125 +877,183 @@ Item {
             root.route = root.cancelReturnRoute;
         }
 
-        onGenerationCompleted: function(sessionId, generationId) {
-            if (root.closeAfterCancel || root.cancelBusy || !session.active || sessionId !== session.sessionId)
-                return;
-            root.generationBusy = false;
-            root.describeBusy = true;
-            backend.describeGeneration(session.sessionId, generationId);
-        }
-        onGenerationFailed: function(sessionId, message) {
-            if (root.cancelBusy || !session.active || sessionId !== session.sessionId)
-                return;
-            root.generationBusy=false;
-            root.sessionBusy=false;
-            if (root.regenerationPending) {
-                root.regenerationPending=false;
-                root.liveCanvasActive = true;
-                root.livePanelOpen = true;
-                root.opened = false;
-                root.route="workspace";
+    }
+
+    Controllers.LookFeelController {
+        id: lookFeelController
+        backend: backend
+        extraConfigsEnabled: root.extraConfigsEnabled
+        previewBusy: previewController.busy
+        applyBusy: applyController.busy
+        cancelBusy: root.cancelBusy
+
+        onResolved: function(composition, applies) {
+            if (applies)
+                root.applyLookFeelComposition(composition)
+            else {
+                root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
+                root.refreshLookFeelCustomized()
             }
-            root.errorMessage=message;
         }
-        onGenerationDescribed: function(sessionId, generationId, variants) {
-            if (root.closeAfterCancel || root.cancelBusy || !session.active || sessionId !== session.sessionId)
-                return;
-            root.describeBusy=false;
-            root.sessionBusy=false;
-            root.regenerationPending=false;
-            session.setGeneration(generationId, variants);
-            root.liveCanvasActive = true;
-            root.livePanelOpen = true;
-            root.opened = false;
-            root.route = "workspace";
+        onErrorRaised: root.errorMessage = message
+    }
+
+    Controllers.ProtocolController {
+        id: protocolController
+        backend: backend
+        session: session
+        workspaceReady: session.workspaceReady
+        previewBusy: previewController.busy
+        cancelBusy: root.cancelBusy
+        applyBusy: applyController.busy
+    }
+
+    Connections {
+        target: protocolController
+
+        function onNavigationCompleted(navigation) {
+            root.applyProtocolState(navigation.state)
+            root.refreshProtocol()
+        }
+    }
+
+    Controllers.GenerationController {
+        id: generationController
+        backend: backend
+        session: session
+        cancelBusy: root.cancelBusy
+        closeAfterCancel: root.closeAfterCancel
+    }
+
+    Connections {
+        target: generationController
+
+        function onFailed(sessionId, message, wasRegeneration) {
+            root.sessionBusy = false
+            if (wasRegeneration) {
+                root.liveCanvasActive = true
+                root.livePanelOpen = true
+                root.opened = false
+                root.route = "workspace"
+            }
+            root.errorMessage = message
+        }
+
+        function onDescribed(sessionId, generationId, variants, wasRegeneration) {
+            root.sessionBusy = false
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+            root.opened = false
+            root.route = "workspace"
             // Continue is the first user action in the session. Make that
             // action land in the real desktop with Source already applied;
             // the user should not need a second click just to enter the
             // default direction.
-            root.enterLiveCanvas("source");
-            root.refreshProtocol();
+            root.enterLiveCanvas("source")
+            root.refreshProtocol()
         }
-        onGenerationDescribeFailed: function(sessionId, message) {
-            if (root.cancelBusy || !session.active || sessionId !== session.sessionId)
-                return;
-            root.describeBusy=false;
-            root.sessionBusy=false;
-            if (root.regenerationPending) {
-                root.regenerationPending=false;
-                root.liveCanvasActive = true;
-                root.livePanelOpen = true;
-                root.opened = false;
-                root.route="workspace";
-            }
-            root.errorMessage=message;
+
+        function onDiscarded(sessionId, generationId) {
+            root.liveCanvasActive = false
+            root.demoController.markClosed()
+            root.livePanelOpen = false
+            liveCanvasPanel.clearColorSession()
+            session.clearGeneration()
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+            root.opened = false
+            root.route = "workspace"
         }
-        onGenerationDiscarded: function(sessionId, generationId) {
-            if (!session.active || sessionId !== session.sessionId || generationId !== session.generationId)
-                return;
-            root.backBusy = false;
-            root.regenerationPending = false;
-            root.liveCanvasActive = false;
-            root.demoActive = false;
-            root.demoMode = "none";
-            root.livePanelOpen = false;
-            liveCanvasPanel.clearColorSession();
-            session.clearGeneration();
-            root.liveCanvasActive = true;
-            root.livePanelOpen = true;
-            root.opened = false;
-            root.route = "workspace";
+
+        function onDiscardFailed(sessionId, message) {
+            root.errorMessage = message
+            root.opened = true
+            root.route = "workspace"
         }
-        onGenerationDiscardFailed: function(sessionId, message) {
-            if (!session.active || sessionId !== session.sessionId)
-                return;
-            root.backBusy = false;
-            root.errorMessage = message;
-            root.opened = true;
-            root.route = "workspace";
+    }
+
+    Controllers.RuntimeSetupController {
+        id: runtimeSetupController
+        backend: backend
+
+        onPromptRequired: {
+            root.route = "runtime-setup"
+            root.opened = true
         }
-        onPreviewApplied: function(sessionId, generationId, variant, themeName) {
+        onContinueToBackend: {
+            root.route = "loading"
+            backend.checkBackend()
+        }
+        onErrorRaised: root.errorMessage = message
+    }
+
+    Controllers.DemoController {
+        id: demoController
+        backend: backend
+        session: session
+        previewController: previewController
+        focusedMonitorName: function() { return root.focusedMonitorName() }
+        applyActive: applyController.active
+        workspaceReady: session.workspaceReady
+        previewBusy: previewController.busy
+        applyBusy: applyController.busy
+        cancelBusy: root.cancelBusy
+        liveCanvasActive: root.liveCanvasActive
+        closeAfterCancel: root.closeAfterCancel
+
+        onActivateCanvasRequested: {
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+        }
+        onHideApplicationRequested: root.opened = false
+        onStopped: root.livePanelOpen = root.liveCanvasActive
+        onErrorRaised: root.errorMessage = message
+    }
+
+    Controllers.ApplyController {
+        id: applyController
+        backend: backend
+        session: session
+        previewController: previewController
+        demoController: demoController
+        workspaceReady: session.workspaceReady
+        previewBusy: previewController.busy
+        demoBusy: root.demoBusy
+        cancelBusy: root.cancelBusy
+        demoActive: root.demoActive
+        demoMode: root.demoMode
+        closeAfterCancel: root.closeAfterCancel
+
+        onErrorRaised: function(message) {
+            root.errorMessage = message
+        }
+        onHideApplication: root.opened = false
+        onShowApplication: root.opened = true
+        onDemoBusyRequested: function(busy) {
+            root.demoBusy = busy
+        }
+        onStopBarDemoRequested: root.stopBarDemo()
+        onCompleted: root.clearSession(true)
+    }
+
+    Controllers.PreviewController {
+        id: previewController
+        backend: backend
+        session: session
+        liveCanvasPanel: liveCanvasPanel
+        stylesForVariant: function(variant) { return root.previewStyles(variant) }
+        closeAfterCancel: root.closeAfterCancel
+
+        onRejected: function(message) {
+            root.errorMessage = message
+        }
+
+        onApplied: function(sessionId, generationId, variant, themeName) {
             if (root.closeAfterCancel)
-                return;
-            root.previewBusy = false;
-            if (sessionId!==session.sessionId || generationId!==session.generationId) { root.errorMessage="Backend previewed a different generation"; return }
-            if (root.pendingColorPreview) {
-                root.pendingColorPreview = false;
-                liveCanvasPanel.markColorsLive();
-            }
-            session.markPreviewed(variant);
-            root.refreshProtocol();
-
-            if (root.pendingApplyPreview) {
-                root.pendingApplyPreview = false;
-                if (root.pendingApplyCapture) {
-                    root.demoBusy = true;
-                    backend.captureDemoPreview(session.sessionId);
-                    return;
-                }
-                if (root.pendingApplyCloseDemo) {
-                    root.pendingApplyCloseDemo = false;
-                    root.demoBusy = true;
-                    backend.closeDemo(session.sessionId);
-                    return;
-                }
-                root.opened = true;
-                backend.applyTheme(
-                    session.sessionId,
-                    session.generationId,
-                    root.pendingApplyVariant,
-                    root.pendingApplyName,
-                    root.pendingApplyUnlock,
-                    false
-                );
-                return;
-            }
-
-            if (root.pendingApplyCapture) {
-                root.demoBusy = true;
-                backend.captureDemoPreview(session.sessionId);
-                return;
-            }
+                return
+            if (root.applyController.handlePreviewApplied())
+                return
+            root.refreshProtocol()
 
             // Shell and Bar Demos are QML-only reader surfaces. They do not own
             // a backend workspace or demo-state.json, so previewing them must
@@ -1313,278 +1062,148 @@ Item {
                 // Reassert workspace ownership after the candidate reload. The
                 // Demo itself remains in Hyprland's dwindle layout; only the
                 // Studio panel is an overlay and must never become a tiled pane.
-                root.demoBusy = true;
-                backend.reflowDemo(session.sessionId);
-                return;
+                root.demoController.reflow()
+                return
             }
 
             if (root.pendingDemo) {
-                root.pendingDemo = false;
-                root.demoBusy = false;
-                root.livePanelOpen = true;
-                root.opened = false;
-                return;
+                root.demoController.finishPendingDemo()
+                root.livePanelOpen = true
+                root.opened = false
+                return
             }
 
             if (root.liveCanvasActive) {
-                root.livePanelOpen = true;
-                root.opened = false;
+                root.livePanelOpen = true
+                root.opened = false
             } else {
-                root.opened = false;
-                root.livePanelOpen = false;
+                root.opened = false
+                root.livePanelOpen = false
             }
         }
-        onPreviewApplyFailed: function(message) {
+
+        onFailed: function(message) {
             if (root.closeAfterCancel)
-                return;
-            root.previewBusy = false;
-            root.pendingColorPreview = false;
-            if (root.pendingApplyPreview || root.pendingApplyCapture || root.pendingApplyCloseDemo) {
-                root.failPendingApply(message)
+                return
+            if (root.applyController.handlePreviewFailed(message))
+                return
+            root.errorMessage = message
+            if (root.pendingDemo) {
+                root.demoController.finishPendingDemo()
+            }
+        }
+    }
+
+    Connections {
+        target: demoController
+
+        function onOpened(sessionId, workspace, monitor, reused) {
+            if (root.applyController.active)
+                return
+            if (root.pendingDemo) {
+                root.previewController.previewCurrentState(session.selectedVariant)
                 return
             }
-            root.errorMessage = message;
-            if (root.pendingDemo) {
-                root.pendingDemo = false;
-                root.demoBusy = false;
-            }
+            root.opened = false
+            root.livePanelOpen = root.liveCanvasActive
         }
-        onDemoOpened: function(sessionId, workspace, monitor, reused) {
-            if (root.closeAfterCancel)
-                return;
+
+        function onOpenFailed(message) {
+            if (root.applyController.active)
+                return
+            root.errorMessage = message
+            root.livePanelOpen = root.liveCanvasActive
+            root.opened = root.liveCanvasActive ? false : true
+        }
+
+        function onWindowOpened(sessionId, workspace, monitor, reused) {
+            if (root.applyController.active)
+                return
+            root.opened = false
+            root.livePanelOpen = root.liveCanvasActive
+        }
+
+        function onWindowOpenFailed(message) {
+            if (root.applyController.active)
+                return
+            root.errorMessage = message
+            root.opened = root.liveCanvasActive ? false : true
+        }
+
+        function onReflowed(sessionId) {
+            if (root.closeAfterCancel || root.applyController.active)
+                return
             if (sessionId !== session.sessionId) {
-                root.demoBusy = false;
-                root.errorMessage = "Backend opened a different demo session";
-                root.opened = true;
-                return;
-            }
-            root.demoActive = true;
-            root.demoMode = "full";
-            root.liveCanvasMonitor = monitor;
-            if (root.pendingApplyCapture) {
-                root.previewCurrentState(root.pendingApplyVariant);
-                return;
+                root.errorMessage = "Backend reflowed a different live canvas session"
+                return
             }
             if (root.pendingDemo) {
-                root.previewCurrentState(session.selectedVariant);
-                return;
-            }
-            root.demoBusy = false;
-            root.opened = false;
-            root.livePanelOpen = root.liveCanvasActive;
-        }
-        onDemoOpenFailed: function(message) {
-            if (root.closeAfterCancel)
-                return;
-            root.demoBusy = false;
-            root.demoActive = false;
-            root.demoMode = "none";
-            root.livePanelOpen = root.liveCanvasActive;
-            root.liveCanvasMonitor = "";
-            root.pendingDemo = false;
-            if (root.pendingApplyAfterDemo || root.pendingApplyCapture) {
-                root.resetPendingApply()
-                root.applyBusy = false
-            }
-            root.errorMessage = message;
-            root.opened = root.liveCanvasActive ? false : true;
-        }
-        onWindowDemoOpened: function(sessionId, workspace, monitor, reused) {
-            if (root.closeAfterCancel)
-                return;
-            if (sessionId !== session.sessionId) {
-                root.demoBusy = false;
-                root.pendingWindowDemo = false;
-                root.errorMessage = "Backend opened a different Window demo session";
-                root.opened = true;
-                return;
-            }
-            root.pendingWindowDemo = false;
-            root.demoActive = true;
-            root.demoMode = "window";
-            root.liveCanvasMonitor = monitor;
-            root.demoBusy = false;
-            root.opened = false;
-            root.livePanelOpen = root.liveCanvasActive;
-        }
-        onWindowDemoOpenFailed: function(message) {
-            if (root.closeAfterCancel)
-                return;
-            root.demoBusy = false;
-            root.pendingWindowDemo = false;
-            root.demoActive = false;
-            root.demoMode = "none";
-            root.livePanelOpen = root.liveCanvasActive;
-            root.liveCanvasMonitor = "";
-            root.errorMessage = message;
-            root.opened = root.liveCanvasActive ? false : true;
-        }
-        onDemoReflowed: function(sessionId) {
-            if (root.closeAfterCancel)
-                return;
-            if (sessionId !== session.sessionId) {
-                root.demoBusy = false;
-                root.errorMessage = "Backend reflowed a different live canvas session";
-                return;
-            }
-            root.demoBusy = false;
-            if (root.pendingDemo) {
-                root.pendingDemo = false;
-                root.livePanelOpen = true;
-                root.opened = false;
-                return;
+                root.demoController.finishPendingDemo()
+                root.livePanelOpen = true
+                root.opened = false
+                return
             }
             // Reapplication from the side panel keeps the panel available for
             // the next direction instead of forcing a trip back through the
             // bar widget.
-            root.livePanelOpen = true;
-            root.opened = false;
+            root.livePanelOpen = true
+            root.opened = false
         }
-        onDemoReflowFailed: function(message) {
-            if (root.closeAfterCancel)
-                return;
-            root.demoBusy = false;
+
+        function onReflowFailed(message) {
+            if (root.closeAfterCancel || root.applyController.active)
+                return
             // Demo cleanup removes demo-state.json after its windows and
             // workspace are gone. A queued reflow can arrive just after that
             // cleanup and otherwise exposes an internal transient path to the
             // user. Treat the missing state as an already-closed Demo.
             if (message.indexOf("demo-state.json") !== -1 && message.indexOf("no such file") !== -1) {
-                root.demoActive = false;
-                root.demoMode = "none";
-                root.liveCanvasMonitor = "";
-                root.pendingDemo = false;
-                root.errorMessage = "";
-                root.livePanelOpen = root.liveCanvasActive;
-                return;
-            }
-            root.errorMessage = message;
-            root.pendingDemo = false;
-            root.livePanelOpen = root.liveCanvasActive;
-            root.opened = root.liveCanvasActive ? false : true;
-        }
-        onDemoCaptured: function(sessionId, previewPath) {
-            if (root.closeAfterCancel)
-                return;
-            if (sessionId !== session.sessionId) {
-                root.failPendingApply("Backend captured a different Demo session")
-                return;
-            }
-            if (!root.pendingApplyCapture)
-                return;
-            root.demoBusy = true;
-            backend.closeDemo(session.sessionId);
-        }
-        onDemoCaptureFailed: function(message) {
-            if (root.closeAfterCancel)
-                return;
-            if (root.pendingApplyCapture) {
-                root.failPendingApply(message)
+                demoController.markClosed()
+                root.errorMessage = ""
+                root.livePanelOpen = root.liveCanvasActive
                 return
             }
-            root.demoBusy = false;
-            root.errorMessage = message;
-            root.opened = true;
+            root.errorMessage = message
+            root.demoController.finishPendingDemo()
+            root.livePanelOpen = root.liveCanvasActive
+            root.opened = root.liveCanvasActive ? false : true
         }
-        onDemoClosed: function(sessionId, closed) {
-            root.demoBusy = false;
+
+        function onCaptured(sessionId, previewPath) {
+            if (root.applyController.active)
+                return
+        }
+
+        function onCaptureFailed(message) {
+            if (root.applyController.active)
+                return
+            root.errorMessage = message
+            root.opened = true
+        }
+
+        function onClosed(sessionId, wasClosed) {
+            if (root.applyController.active)
+                return
             if (sessionId !== session.sessionId) {
-                root.errorMessage = "Backend closed a different demo session";
-                return;
-            }
-            root.demoActive = false;
-            root.demoMode = "none";
-            root.livePanelOpen = root.liveCanvasActive;
-            if (root.pendingApplyAbortAfterDemo) {
-                root.resetPendingApply()
-                root.applyBusy = false
-                root.opened = true
+                root.errorMessage = "Backend closed a different demo session"
                 return
             }
             if (root.pendingWindowDemo) {
-                root.pendingWindowDemo = false;
-                root.demoBusy = true;
-                backend.openWindowDemo(session.sessionId);
-                return;
+                root.pendingWindowDemo = false
+                demoController.openWindowAfterClose()
+                return
             }
-            if (root.pendingApplyAfterDemo) {
-                const variant = root.pendingApplyVariant;
-                const name = root.pendingApplyName;
-                const generateUnlock = root.pendingApplyUnlock;
-                const capturePreview = root.pendingApplyCapture;
-                root.resetPendingApply();
-                // Demo capture must hide Omagen while the screenshot is taken,
-                // but the permanent Go/theme-set phase belongs behind the
-                // applying modal until the backend process fully completes.
-                root.opened = true;
-                backend.applyTheme(
-                    session.sessionId,
-                    session.generationId,
-                    variant,
-                    name,
-                    generateUnlock,
-                    capturePreview
-                );
-                return;
-            }
-            root.opened = root.liveCanvasActive ? false : true;
-        }
-        onDemoCloseFailed: function(message) {
-            root.demoBusy = false;
-            root.errorMessage = message;
-            if (root.pendingApplyAfterDemo || root.pendingApplyAbortAfterDemo || root.pendingWindowDemo) {
-                // A failed Demo close must abort this Apply attempt. Keeping
-                // applyBusy/pendingApplyAfterDemo set would leave the UI
-                // waiting forever for a demoClosed signal that will not come.
-                root.resetPendingApply();
-                root.applyBusy = false;
-                root.pendingWindowDemo = false;
-                root.opened = true;
-            }
-        }
-        onThemeApplied: function(sessionId, generationId, variant, themeName) {
-            if (root.closeAfterCancel)
-                return;
-            applyBusy = false
-            if (sessionId !== session.sessionId || generationId !== session.generationId) { errorMessage = "Backend applied a different generation"; return }
-            root.clearSession(true)
-        }
-        onThemeApplyFailed: function(message) {
-            if (root.closeAfterCancel)
-                return;
-            applyBusy = false;
-            applyRecoveryRequired = true;
-            errorMessage = message;
-            root.opened = true;
+            root.opened = root.liveCanvasActive ? false : true
         }
 
-        onProtocolSnapshotLoaded: function(sessionId, snapshot) {
-            if (!session.active || sessionId !== session.sessionId)
-                return;
-            root.protocolBusy = false;
-            root.updateProtocolAvailability(snapshot);
-        }
-        onProtocolSnapshotFailed: function(sessionId, message) {
-            if (!session.active || sessionId !== session.sessionId)
-                return;
-            root.protocolBusy = false;
-            root.protocolCanBack = false;
-            root.protocolCanForward = false;
-            root.protocolMessage = message;
-        }
-        onProtocolNavigationCompleted: function(sessionId, navigation) {
-            if (!session.active || sessionId !== session.sessionId)
-                return;
-            root.applyProtocolState(navigation.state);
-            root.protocolMessage = "History cursor moved and the preview was reapplied.";
-            root.protocolBusy = false;
-            root.refreshProtocol();
-        }
-        onProtocolNavigationFailed: function(sessionId, message) {
-            if (!session.active || sessionId !== session.sessionId)
-                return;
-            root.protocolBusy = false;
-            root.protocolMessage = message;
-            root.refreshProtocol();
+        function onCloseFailed(message) {
+            if (root.applyController.active)
+                return
+            root.errorMessage = message
+            if (root.pendingWindowDemo) {
+                root.pendingWindowDemo = false
+                root.opened = true
+            }
         }
     }
 
@@ -1662,11 +1281,7 @@ Item {
         themeName: root.runtimeSetupTheme
         message: root.runtimeSetupMessage
 
-        onInstallRequested: {
-            root.runtimeSetupBusy = true;
-            root.runtimeSetupMessage = "";
-            backend.installRuntime();
-        }
+        onInstallRequested: runtimeSetupController.install()
         onKeepNativeRequested: {
             root.keepNativeRuntimeSetup();
         }
