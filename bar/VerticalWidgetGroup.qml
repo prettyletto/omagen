@@ -24,7 +24,7 @@ Column {
         delegate: Item {
             id: slotFrame
             required property var modelData
-            width: parent && parent.centerSlots ? parent.width : slot.implicitWidth
+            width: groupRoot.centerSlots ? groupRoot.width : slot.implicitWidth
             height: slot.implicitHeight
 
             // The compact floating rail has an inset narrower than a
@@ -33,10 +33,10 @@ Column {
             // retains its existing intrinsic-width composition.
             WidgetSlot {
                 id: slot
-                bar: slotFrame.parent.bar
+                bar: groupRoot.bar
                 entry: slotFrame.modelData
-                region: slotFrame.parent.groupRegion
-                active: slotFrame.parent.active
+                region: groupRoot.groupRegion
+                active: groupRoot.active
                 anchors.horizontalCenter: parent.horizontalCenter
             }
         }

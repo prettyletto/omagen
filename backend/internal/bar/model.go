@@ -113,6 +113,13 @@ type WorkspacePresentation struct {
 	Glyphs []string `json:"glyphs,omitempty"`
 }
 
+// Clock controls only the visual presentation used by the Omagen replacement
+// bar. The native clock remains the default and remains the behavioral owner
+// for the calendar, format cycling, timezone action, IPC, and popout routing.
+type Clock struct {
+	Style string `json:"style"`
+}
+
 // BarSpec is the shared document consumed by the preview and by the native /
 // Omagen compiler. It deliberately has no widget layout field: shell.json is
 // a user-owned canonical document and must only change after an explicit
@@ -129,6 +136,7 @@ type BarSpec struct {
 	Behavior  Behavior              `json:"behavior"`
 	Regions   Regions               `json:"regions"`
 	Workspace WorkspacePresentation `json:"workspace"`
+	Clock     Clock                 `json:"clock"`
 	Motion    Motion                `json:"motion"`
 }
 
@@ -143,6 +151,7 @@ func Default() BarSpec {
 		Behavior:  Behavior{Visibility: "always", ExclusiveZone: "reserve", HideDelayMs: 500, RevealDelayMs: 50, EdgeSensor: 3, KeepVisibleWhilePopupOpen: true},
 		Regions:   Regions{Left: RegionBehavior{Mode: "native"}, Center: RegionBehavior{Mode: "native"}, Right: RegionBehavior{Mode: "native"}},
 		Workspace: WorkspacePresentation{Mode: "native"},
+		Clock:     Clock{Style: "native"},
 		Motion:    Motion{Preset: "native", DurationMs: 180, Easing: "out_cubic"},
 	}
 }
@@ -220,6 +229,9 @@ func (s BarSpec) Normalize() BarSpec {
 	}
 	if s.Workspace.Mode == "" {
 		s.Workspace.Mode = d.Workspace.Mode
+	}
+	if s.Clock.Style == "" {
+		s.Clock.Style = d.Clock.Style
 	}
 	if s.Motion.Preset == "" {
 		s.Motion.Preset = d.Motion.Preset
@@ -299,6 +311,9 @@ func (s BarSpec) Validate() error {
 	if s.Workspace.Mode == "glyphs" && len(s.Workspace.Glyphs) == 0 {
 		return fmt.Errorf("custom workspace glyphs are empty")
 	}
+	if !oneOf(s.Clock.Style, "native", "neon", "matrix", "lcd") {
+		return fmt.Errorf("invalid clock style %q", s.Clock.Style)
+	}
 	if !oneOf(s.Motion.Preset, "native", "none", "subtle", "smooth", "expressive", "cyberpunk") || s.Motion.DurationMs < 0 || s.Motion.DurationMs > 2000 || !oneOf(s.Motion.Easing, "linear", "out_cubic", "out_quart", "in_out_cubic") {
 		return fmt.Errorf("invalid bar motion")
 	}
@@ -317,6 +332,7 @@ type CompileResult struct {
 		Behavior  bool `json:"behavior"`
 		Regions   bool `json:"regions"`
 		Workspace bool `json:"workspace"`
+		Clock     bool `json:"clock"`
 	} `json:"capabilities"`
 }
 
@@ -345,8 +361,9 @@ func Compile(spec BarSpec) (CompileResult, error) {
 	nativeBehavior := spec.Behavior.Visibility == "always" && !spec.Behavior.HoverExpand && spec.Behavior.ExclusiveZone == "reserve"
 	nativeRegions := spec.Regions.Left.Mode == "native" && spec.Regions.Center.Mode == "native" && spec.Regions.Right.Mode == "native"
 	nativeWorkspace := spec.Workspace.Mode == "native" && len(spec.Workspace.Glyphs) == 0
+	nativeClock := spec.Clock.Style == "native"
 	nativeMotion := spec.Motion.Preset == "native" && spec.Motion.DurationMs == Default().Motion.DurationMs && spec.Motion.Easing == Default().Motion.Easing
-	needsOmagen := !nativeTopology || !nativeSurface || !nativeGeometry || !nativeBehavior || !nativeRegions || !nativeWorkspace || !nativeMotion
+	needsOmagen := !nativeTopology || !nativeSurface || !nativeGeometry || !nativeBehavior || !nativeRegions || !nativeWorkspace || !nativeClock || !nativeMotion
 	engine := spec.Engine
 	if engine == EngineAuto {
 		if needsOmagen {
@@ -364,6 +381,7 @@ func Compile(spec BarSpec) (CompileResult, error) {
 	result.Capabilities.Behavior = nativeBehavior
 	result.Capabilities.Regions = nativeRegions
 	result.Capabilities.Workspace = nativeWorkspace
+	result.Capabilities.Clock = nativeClock
 	return result, nil
 }
 

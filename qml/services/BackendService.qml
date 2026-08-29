@@ -103,6 +103,15 @@ Item {
     function inspectProtocol(sessionId) { protocolGateway.inspect(sessionId) }
     function navigateProtocolBack(sessionId) { protocolGateway.back(sessionId) }
     function navigateProtocolForward(sessionId) { protocolGateway.forward(sessionId) }
+
+    Gateways.BackendCommand {
+        id: pingCommand
+        failureFallback: "Omagen backend is unavailable"
+        invalidJsonFallback: "Backend returned invalid ping JSON"
+        onCompleted: function(result) { root.backendReady() }
+        onFailed: function(message) { root.backendUnavailable(message) }
+    }
+
     Gateways.SessionGateway {
         id: sessionGateway
         executable: root.executable

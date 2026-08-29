@@ -6,16 +6,17 @@ import qs.Ui
 import ".." as Bar
 
 Item {
+  id: minimalVerticalContent
   property var bar: null
     anchors.fill: parent
 
     Bar.IslandSurface {
-        bar: bar
+        bar: minimalVerticalContent.bar
         id: minimalVerticalSurface
-        width: bar.barSize
-        height: bar.minimalExpanded
+        width: minimalVerticalContent.bar.barSize
+        height: minimalVerticalContent.bar.minimalExpanded
             ? parent.height
-            : Math.max(bar.barSize, minimalVerticalWorkspaceGroup.implicitHeight + Style.space(12))
+            : Math.max(minimalVerticalContent.bar.barSize, minimalVerticalWorkspaceGroup.implicitHeight + Style.space(12))
         anchors.bottom: parent.bottom
         anchors.horizontalCenter: parent.horizontalCenter
         clip: true
@@ -30,64 +31,64 @@ Item {
         Item {
             id: minimalVerticalTopRegion
             width: parent.width
-            height: Math.max(bar.barSize,
+            height: Math.max(minimalVerticalContent.bar.barSize,
                 minimalVerticalRightGroup.implicitHeight
-                    + bar.barSize + Style.space(12))
+                    + minimalVerticalContent.bar.barSize + Style.space(12))
             anchors.top: parent.top
 
             Bar.VerticalWidgetGroup {
-                bar: bar
+                bar: minimalVerticalContent.bar
                 id: minimalVerticalRightGroup
                 region: "right"
-                entries: bar.entriesWithoutTray(bar.layoutConfig.right)
+                entries: minimalVerticalContent.bar.entriesWithoutTray(minimalVerticalContent.bar.layoutConfig.right)
                 centerSlots: true
                 width: parent.width
                 anchors.top: parent.top
-                visible: bar.minimalExpanded
+                visible: minimalVerticalContent.bar.minimalExpanded
             }
 
             Bar.WidgetSlot {
-                bar: bar
+                bar: minimalVerticalContent.bar
                 id: minimalVerticalTraySlot
-                entry: bar.trayEntry(bar.layoutConfig.right) || ({ id: "omarchy.tray" })
+                entry: minimalVerticalContent.bar.trayEntry(minimalVerticalContent.bar.layoutConfig.right) || ({ id: "omarchy.tray" })
                 region: "right"
-                width: bar.barSize
+                width: minimalVerticalContent.bar.barSize
                 x: (parent.width - width) / 2
                 // Keep the tray's top edge fixed at the lower edge of
                 // the top section while its custom drawer grows down.
                 y: minimalVerticalRightGroup.implicitHeight + Style.space(12)
-                visible: bar.minimalExpanded
+                visible: minimalVerticalContent.bar.minimalExpanded
                 z: 10
             }
         }
 
         Bar.CenterGestureGroup {
-            bar: bar
+            bar: minimalVerticalContent.bar
             id: minimalVerticalCenterGroup
-            entries: bar.layoutConfig.center
+            entries: minimalVerticalContent.bar.layoutConfig.center
             width: parent.width
-            visible: bar.minimalExpanded
+            visible: minimalVerticalContent.bar.minimalExpanded
             anchors.centerIn: parent
         }
 
         Bar.VerticalWidgetGroup {
-            bar: bar
+            bar: minimalVerticalContent.bar
             id: minimalVerticalWorkspaceGroup
             region: "left"
-            entries: bar.minimalWorkspaceEntries(bar.layoutConfig.left)
+            entries: minimalVerticalContent.bar.minimalWorkspaceEntries(minimalVerticalContent.bar.layoutConfig.left)
             centerSlots: true
             width: parent.width
-            visible: !bar.minimalExpanded
+            visible: !minimalVerticalContent.bar.minimalExpanded
             anchors.bottom: parent.bottom
         }
 
         Bar.VerticalWidgetGroup {
-            bar: bar
+            bar: minimalVerticalContent.bar
             region: "right"
-            entries: bar.layoutConfig.left
+            entries: minimalVerticalContent.bar.layoutConfig.left
             centerSlots: true
             width: parent.width
-            visible: bar.minimalExpanded
+            visible: minimalVerticalContent.bar.minimalExpanded
             anchors.bottom: parent.bottom
         }
     }

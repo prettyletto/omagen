@@ -6,6 +6,7 @@ import qs.Ui
 import ".." as Bar
 
 Item {
+  id: islandsHorizontalContent
   property var bar: null
     anchors.fill: parent
 
@@ -13,32 +14,32 @@ Item {
     // own island surface. The right cluster is anchored to the edge so
     // the tray grows left without moving the system island.
     Bar.IslandSurface {
-        bar: bar
+        bar: islandsHorizontalContent.bar
         id: islandsLeft
         implicitWidth: leftGroup.implicitWidth + Style.space(16)
-        implicitHeight: bar.barSize
+        implicitHeight: islandsHorizontalContent.bar.barSize
         anchors.left: parent.left
         anchors.leftMargin: Style.space(12)
         anchors.verticalCenter: parent.verticalCenter
         Bar.WidgetGroup {
-            bar: bar
+            bar: islandsHorizontalContent.bar
             id: leftGroup
             region: "left"
-            entries: bar.layoutConfig.left
+            entries: islandsHorizontalContent.bar.layoutConfig.left
             anchors.centerIn: parent
         }
     }
 
     Bar.IslandSurface {
-        bar: bar
+        bar: islandsHorizontalContent.bar
         id: islandsCenter
         implicitWidth: centerGroup.implicitWidth + Style.space(16)
-        implicitHeight: bar.barSize
+        implicitHeight: islandsHorizontalContent.bar.barSize
         anchors.centerIn: parent
         Bar.CenterGestureGroup {
-            bar: bar
+            bar: islandsHorizontalContent.bar
             id: centerGroup
-            entries: bar.layoutConfig.center
+            entries: islandsHorizontalContent.bar.layoutConfig.center
             anchors.centerIn: parent
         }
     }
@@ -51,31 +52,31 @@ Item {
         spacing: Style.space(12)
 
         Bar.IslandSurface {
-            bar: bar
+            bar: islandsHorizontalContent.bar
             id: islandsTray
             horizontalPadding: 0
             verticalPadding: 0
-            implicitWidth: Math.max(bar.barSize, traySlot.implicitWidth)
-            implicitHeight: bar.barSize
+            implicitWidth: Math.max(islandsHorizontalContent.bar.barSize, traySlot.implicitWidth)
+            implicitHeight: islandsHorizontalContent.bar.barSize
             Bar.WidgetSlot {
-                bar: bar
+                bar: islandsHorizontalContent.bar
                 id: traySlot
-                entry: bar.trayEntry(bar.layoutConfig.right) || ({ id: "omarchy.tray" })
+                entry: islandsHorizontalContent.bar.trayEntry(islandsHorizontalContent.bar.layoutConfig.right) || ({ id: "omarchy.tray" })
                 region: "right"
                 anchors.centerIn: parent
             }
         }
 
         Bar.IslandSurface {
-            bar: bar
+            bar: islandsHorizontalContent.bar
             id: islandsRight
             implicitWidth: rightGroup.implicitWidth + Style.space(16)
             implicitHeight: bar.barSize
-            Bar.WidgetGroup {
-                bar: bar
+        Bar.WidgetGroup {
+                bar: islandsHorizontalContent.bar
                 id: rightGroup
                 region: "right"
-                entries: bar.entriesWithoutTray(bar.layoutConfig.right)
+                entries: islandsHorizontalContent.bar.entriesWithoutTray(islandsHorizontalContent.bar.layoutConfig.right)
                 anchors.centerIn: parent
             }
         }

@@ -124,6 +124,46 @@ function normalizedLookFeelRecipe(composition) {
     }
 }
 
+function isObject(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function copyValue(value) {
+    if (Array.isArray(value)) {
+        var array = []
+        for (var index = 0; index < value.length; ++index)
+            array.push(copyValue(value[index]))
+        return array
+    }
+    if (isObject(value)) {
+        var object = {}
+        for (var key in value)
+            if (Object.prototype.hasOwnProperty.call(value, key))
+                object[key] = copyValue(value[key])
+        return object
+    }
+    return value
+}
+
+// Editor signals may carry a complete document or only the field that changed.
+// Merge objects recursively at this boundary so a partial update cannot turn
+// sibling settings back into normalizer defaults. Arrays and explicit nulls
+// remain replacements: clearing a list or nested document must still work.
+function mergeStyleDocument(current, incoming) {
+    var result = isObject(current) ? copyValue(current) : ({})
+    if (!isObject(incoming))
+        return result
+    for (var key in incoming) {
+        if (!Object.prototype.hasOwnProperty.call(incoming, key))
+            continue
+        var value = incoming[key]
+        result[key] = isObject(result[key]) && isObject(value)
+            ? mergeStyleDocument(result[key], value)
+            : copyValue(value)
+    }
+    return result
+}
+
 function styleJson(value) {
     return JSON.stringify(value || ({}))
 }

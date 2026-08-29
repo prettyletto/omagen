@@ -6,16 +6,17 @@ import qs.Ui
 import ".." as Bar
 
 Item {
+  id: minimalHorizontalContent
   property var bar: null
     anchors.fill: parent
 
     Bar.IslandSurface {
-        bar: bar
+        bar: minimalHorizontalContent.bar
         id: minimalHorizontalSurface
-        width: bar.minimalExpanded
+        width: minimalHorizontalContent.bar.minimalExpanded
             ? parent.width
-            : Math.max(bar.barSize, minimalWorkspaceGroup.implicitWidth + Style.space(16))
-        height: bar.barSize
+            : Math.max(minimalHorizontalContent.bar.barSize, minimalWorkspaceGroup.implicitWidth + Style.space(16))
+        height: minimalHorizontalContent.bar.barSize
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         clip: true
@@ -25,37 +26,37 @@ Item {
         }
 
         Bar.WidgetGroup {
-            bar: bar
+            bar: minimalHorizontalContent.bar
             id: minimalWorkspaceGroup
             region: "left"
-            entries: bar.minimalWorkspaceEntries(bar.layoutConfig.left)
-            visible: !bar.minimalExpanded
+            entries: minimalHorizontalContent.bar.minimalWorkspaceEntries(minimalHorizontalContent.bar.layoutConfig.left)
+            visible: !minimalHorizontalContent.bar.minimalExpanded
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
         }
 
         Bar.WidgetGroup {
-            bar: bar
+            bar: minimalHorizontalContent.bar
             id: minimalExpandedLeftGroup
             region: "left"
-            entries: bar.layoutConfig.left
-            visible: bar.minimalExpanded
+            entries: minimalHorizontalContent.bar.layoutConfig.left
+            visible: minimalHorizontalContent.bar.minimalExpanded
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
         }
 
         Bar.CenterGestureGroup {
-            bar: bar
-            entries: bar.layoutConfig.center
-            visible: bar.minimalExpanded
+            bar: minimalHorizontalContent.bar
+            entries: minimalHorizontalContent.bar.layoutConfig.center
+            visible: minimalHorizontalContent.bar.minimalExpanded
             anchors.centerIn: parent
         }
 
         Bar.WidgetGroup {
-            bar: bar
+            bar: minimalHorizontalContent.bar
             region: "right"
-            entries: bar.layoutConfig.right
-            visible: bar.minimalExpanded
+            entries: minimalHorizontalContent.bar.layoutConfig.right
+            visible: minimalHorizontalContent.bar.minimalExpanded
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
         }

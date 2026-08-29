@@ -17,6 +17,14 @@ BarWidget {
   readonly property string presentationMode: String(root.workspaceSpec.mode || "native")
   readonly property var glyphs: Array.isArray(root.workspaceSpec.glyphs) ? root.workspaceSpec.glyphs : []
   readonly property real trailingGap: root.vertical ? 0 : Style.spaceReal(1.5)
+  // Multi-character/custom labels need breathing room inside island pills.
+  // Keep native spacing and the frozen horizontal compact-float layout intact.
+  readonly property bool islandCustomPresentation: !root.vertical && root.bar
+    && root.bar.topology === "islands"
+    && root.presentationMode !== "native"
+    && root.presentationMode !== "numbers"
+  readonly property real horizontalWorkspaceGap: root.islandCustomPresentation
+    ? Style.space(4) : Style.space(1)
   readonly property int workspaceCount: root.workspaceIds().length
 
   function workspaceById(id) {
@@ -79,10 +87,14 @@ BarWidget {
 
   // Size the host before its Loader/positioner lays it out. This prevents the
   // implicit-size cycle that makes a replacement workspace widget disappear.
+  // Custom island labels use their natural text width so the painted gaps are
+  // uniform instead of being reduced beside wider labels such as "III".
   implicitWidth: root.vertical
     ? root.barSize
+    : root.islandCustomPresentation
+      ? workspaceGrid.implicitWidth + root.trailingGap
     : root.workspaceCount * Style.space(20)
-      + Math.max(0, root.workspaceCount - 1) * Style.space(1)
+      + Math.max(0, root.workspaceCount - 1) * root.horizontalWorkspaceGap
       + root.trailingGap
   implicitHeight: root.vertical
     ? root.workspaceCount * root.barSize
@@ -96,7 +108,7 @@ BarWidget {
     anchors.fill: parent
     anchors.rightMargin: root.trailingGap
     columns: root.vertical ? 1 : root.workspaceCount
-    columnSpacing: root.vertical ? 0 : Style.space(1)
+    columnSpacing: root.vertical ? 0 : root.horizontalWorkspaceGap
     rowSpacing: root.vertical ? Style.space(2) : 0
 
     Repeater {
@@ -117,7 +129,9 @@ BarWidget {
         clip: true
         horizontalMargin: 6
         verticalPadding: 6
-        fixedWidth: root.vertical ? root.barSize : Style.space(20)
+        fixedWidth: root.vertical
+          ? root.barSize
+          : root.islandCustomPresentation ? -1 : Style.space(20)
         fixedHeight: root.barSize
         onPressed: function() { root.focusWorkspace(modelData) }
       }

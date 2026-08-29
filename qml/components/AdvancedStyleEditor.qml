@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "Contrast.js" as Contrast
+import "../../bar/BarSizing.js" as BarSizing
 import "../features/style-editor" as StyleEditor
 
 // Live Canvas editor for the four native composition documents.  The
@@ -99,6 +100,12 @@ Item {
         { key: "dock", title: "Dock" },
         { key: "minimal", title: "Minimal" }
     ]
+    readonly property var clockStyleOptions: [
+        { key: "native", title: "Native" },
+        { key: "neon", title: "Neon Seven-Segment" },
+        { key: "matrix", title: "Dot Matrix" },
+        { key: "lcd", title: "Retro LCD" }
+    ]
     readonly property var barTopologyOptions: [
         { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
         { key: "sections", title: "Sections" }, { key: "islands", title: "Islands" },
@@ -156,6 +163,7 @@ Item {
         var behavior = current.behavior || ({})
         var regions = current.regions || ({})
         var motion = current.motion || ({})
+        var clock = current.clock || ({})
         var result = {
             version: 2,
             preset: current.preset || (root.barStyle.spec ? "custom" : "native"),
@@ -175,6 +183,10 @@ Item {
                 mode: current.workspace && current.workspace.mode ? current.workspace.mode : "native",
                 glyphs: current.workspace && current.workspace.glyphs ? current.workspace.glyphs : []
             },
+            clock: {
+                style: ["native", "neon", "matrix", "lcd"].indexOf(String(clock.style || "native")) >= 0
+                    ? String(clock.style || "native") : "native"
+            },
             motion: { preset: motion.preset || "native", duration_ms: Number(motion.duration_ms || 180), easing: motion.easing || "out_cubic" }
         }
         return root.normalizeBarSpecEngine(result)
@@ -184,6 +196,19 @@ Item {
         var spec = root.barSpec()
         var value = group === "surface" ? spec.surface.role : group === "density" ? spec.geometry.density : group === "attention" ? spec.attention.mode : spec[group]
         return value || fallback
+    }
+
+    function clockStyleValue() {
+        var clock = root.barSpec().clock || ({})
+        var style = String(clock.style || "native")
+        return ["native", "neon", "matrix", "lcd"].indexOf(style) >= 0 ? style : "native"
+    }
+
+    function chooseClockStyle(key) {
+        var spec = root.barSpec()
+        var style = String(key || "native")
+        spec.clock = { style: ["native", "neon", "matrix", "lcd"].indexOf(style) >= 0 ? style : "native" }
+        root.publishBarSpec(spec)
     }
 
     function barPaneValue() {
@@ -241,9 +266,14 @@ Item {
     }
 
     function barBaseSizeForDensity(density, spec) {
-        if (density === "compact") return root.barIsVertical(spec) ? 24 : 22
-        if (density === "comfortable") return root.barIsVertical(spec) ? 32 : 30
-        return root.barIsVertical(spec) ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
+        return BarSizing.baseSize(
+            density,
+            root.barIsVertical(spec),
+            Style.bar.sizeHorizontal,
+            Style.bar.sizeVertical,
+            Style.barScaleWithFont,
+            Style.fontScale
+        )
     }
 
     function barStructuralPadding(spec) {
@@ -319,6 +349,7 @@ Item {
         var motion = spec.motion || ({})
         var regions = spec.regions || ({})
         var workspace = spec.workspace || ({})
+        var clock = spec.clock || ({})
         var nativeSurface = ["native", "background", "dark", "light", "accent", "transparent"].indexOf(surface.role) >= 0
             && (surface.border_role || "none") === "none"
             && Number(surface.border_opacity || 0) === 0
@@ -342,7 +373,8 @@ Item {
             return !regions[region] || (regions[region].mode || "native") === "native"
         })
         var nativeWorkspace = (workspace.mode || "native") === "native" && (!workspace.glyphs || workspace.glyphs.length === 0)
-        var needsAdapter = !nativeTopology || !nativeSurface || !nativeGeometry || !nativeBehavior || !nativeRegions || !nativeWorkspace || !nativeMotion
+        var nativeClock = (clock.style || "native") === "native"
+        var needsAdapter = !nativeTopology || !nativeSurface || !nativeGeometry || !nativeBehavior || !nativeRegions || !nativeWorkspace || !nativeClock || !nativeMotion
         if (!needsAdapter && spec.engine === "omagen")
             spec.engine = "auto"
         if (needsAdapter && spec.engine === "native")
@@ -453,36 +485,28 @@ Item {
         if (key === "custom")
             return
         var spec = root.barSpec()
-		var currentDensity = spec.geometry && spec.geometry.density
-			? String(spec.geometry.density)
-			: String(root.barStyle.density || "native")
-		var explicitDensity = currentDensity !== "native" ? currentDensity : ""
-		spec.preset = key
+        spec.preset = key
         spec.engine = "auto"
         spec.topology = "continuous"
         spec.position = "top"
         spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "none", border_opacity: 0, border_width: 0, shadow: "none" }
-        spec.geometry = { density: "native", thickness: 0, edge_offset: 0, outer_margin: 0, inner_padding: 0, section_gap: 8, widget_gap: 0, radius: 0, length_mode: "full", length_value: 0, alignment: "center" }
+        spec.geometry = { density: BarSizing.presetDensity(key), thickness: 0, edge_offset: 0, outer_margin: 0, inner_padding: 0, section_gap: 8, widget_gap: 0, radius: 0, length_mode: "full", length_value: 0, alignment: "center" }
         spec.behavior = { visibility: "always", exclusive_zone: "reserve", hover_expand: false, hide_delay_ms: 500, reveal_delay_ms: 50, edge_sensor: 3, keep_visible_while_popup_open: true }
         spec.regions = { left: { mode: "native" }, center: { mode: "native" }, right: { mode: "native" } }
         spec.workspace = { mode: "native", glyphs: [] }
         spec.motion = { preset: "native", duration_ms: 180, easing: "out_cubic" }
         switch (key) {
-        case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.density = "compact"; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
+        case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
         case "float-expanded": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.density = "native"; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; spec.behavior.hover_expand = true; break
         case "sections": spec.topology = "sections"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "accent", border_opacity: 0.35, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 10; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
         case "islands": spec.engine = "omagen"; spec.topology = "islands"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
         case "dock": spec.engine = "omagen"; spec.topology = "dock"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "foreground", border_opacity: 0.25, border_width: 1, shadow: "floating" }; spec.geometry.length_mode = "content"; spec.geometry.alignment = "center"; spec.geometry.radius = 16; spec.behavior.visibility = "auto_hide"; spec.behavior.hover_expand = true; break
-        case "minimal": spec.engine = "omagen"; spec.topology = "minimal"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.geometry.density = "compact"; spec.behavior.hover_expand = true; spec.motion = { preset: "smooth", duration_ms: 260, easing: "out_cubic" }; break
+        case "minimal": spec.engine = "omagen"; spec.topology = "minimal"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.behavior.hover_expand = true; spec.motion = { preset: "smooth", duration_ms: 260, easing: "out_cubic" }; break
         case "split": spec.engine = "omagen"; spec.topology = "split"; spec.surface.role = "dark"; break
         case "notch": spec.engine = "omagen"; spec.topology = "notch"; spec.surface.role = "dark"; spec.geometry.radius = 14; break
         case "rail": spec.engine = "omagen"; spec.topology = "rail"; spec.position = "left"; spec.surface.role = "dark"; break
         }
 		spec.surface.treatment = "preset"
-		// Presets provide their own default density, but an explicit Compact or
-		// Comfortable choice is a user override and must survive preset changes.
-		if (explicitDensity !== "")
-			spec.geometry.density = explicitDensity
         var profile = {
             schema_version: 1,
             ownership: "overlay",
@@ -590,6 +614,7 @@ Item {
         if (group === "visibility") return "Visibility is staged with the theme profile and restored with the user's bar state."
         if (group === "expansion") return "Choose whether the themed bar expands fixed content on hover, focus, or available space."
         if (group === "workspace") return "Workspace presentation is a theme profile; native workspace actions remain authoritative."
+        if (group === "clock") return "Change the clock face while retaining the native clock's calendar, format cycling, timezone action, and panel routing."
         if (group === "reveal") return "How the replacement bar is summoned while the native bar remains the fallback for unmarked themes."
         return "Native keeps transparency; Show islands exposes the supported docked section surfaces."
     }
@@ -648,6 +673,12 @@ Item {
                 visibility: {
                     native: "Keep the native bar visibility and transparency.",
                     islands: "Show the supported docked section surfaces as separate islands."
+                },
+                clock: {
+                    native: "Keep Omarchy's native clock face and rendering.",
+                    neon: "Use beveled seven-segment digits with a theme-accent glow.",
+                    matrix: "Use a compact LED dot-matrix face that scales cleanly on vertical rails.",
+                    lcd: "Use a restrained retro LCD capsule while keeping date formats readable."
                 },
                 reveal: {
                     edge: "Reveal the hidden bar by touching the screen edge.",
@@ -759,7 +790,7 @@ Item {
 
                     Text {
                         Layout.fillWidth: true
-                        text: "Choose a bar preset, then tune its size. Native widgets, placement, ordering, and input stay with Quattro."
+                        text: "Choose a bar preset, clock face, then tune its size. Placement, ordering, input, and clock behavior stay with Quattro."
                         color: root.foregroundColor
                         opacity: 0.62
                         wrapMode: Text.WordWrap
@@ -811,6 +842,16 @@ Item {
                                     selectedKey: root.barPresetValue()
                                     optionDescriptions: root.barOptionDescriptions("preset", root.barPresetOptions)
                                     onChoiceSelected: root.chooseBarPreset(key)
+                                }
+
+                                BarChoiceGroup {
+                                    Layout.fillWidth: true
+                                    title: "Clock"
+                                    subtitle: "Change the face while preserving the native clock behavior"
+                                    options: root.clockStyleOptions
+                                    selectedKey: root.clockStyleValue()
+                                    optionDescriptions: root.barOptionDescriptions("clock", root.clockStyleOptions)
+                                    onChoiceSelected: root.chooseClockStyle(key)
                                 }
 
                                 BarChoiceGroup {
