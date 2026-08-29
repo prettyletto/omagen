@@ -17,12 +17,14 @@ Item {
     // Match the native vertical clock's fixed line stride without changing
     // the rail width selected by the active bar geometry.
     readonly property int lineHeight: vertical ? Style.bar.iconSlot : barSize
-    readonly property color dotColor: Color.accent
+    // Keep the matrix accent until the bar becomes translucent, then follow
+    // Quattro's contrast-aware foreground selected from the wallpaper.
+    readonly property color dotColor: bar && bar.transparent ? bar.barForeground : Color.accent
     readonly property var lines: Model.normalizedLines(value)
     readonly property bool renderable: Model.isMatrixText(value)
     readonly property real cellSize: vertical
         ? Math.max(1, Math.min(3, (lineHeight - 5) / 7))
-        : Math.max(2, Math.min(4, (barSize - 6) / 7))
+        : Math.max(2, Math.min(3, (barSize - 9) / 7))
     readonly property real characterGap: Math.max(1, cellSize * 1.45)
 
     function characterWidth(character) {
@@ -94,7 +96,7 @@ Item {
 
     MultiEffect {
         anchors.fill: matrixSource
-        anchors.margins: -Style.space(6)
+        anchors.margins: -Style.space(4)
         source: matrixSource
         visible: root.renderable
         blurEnabled: true

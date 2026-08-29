@@ -84,6 +84,11 @@ type Behavior struct {
 	KeepVisibleWhilePopupOpen bool   `json:"keep_visible_while_popup_open"`
 }
 
+// AutoHideDelayMs is the fixed idle period used by the Bar Inspector's
+// auto-hide behavior. Keeping it in the BarSpec makes generated documents
+// self-describing while the QML host enforces the same runtime value.
+const AutoHideDelayMs = 5000
+
 type Motion struct {
 	Preset     string `json:"preset"`
 	DurationMs int    `json:"duration_ms"`
@@ -120,6 +125,14 @@ type Clock struct {
 	Style string `json:"style"`
 }
 
+// DockPresentation controls the single visual shown by the Dock while its
+// content is collapsed. It is presentation-only: the full widget layout and
+// hover expansion remain owned by the Dock host.
+type DockPresentation struct {
+	Closed string `json:"closed"`
+	Glyph  string `json:"glyph,omitempty"`
+}
+
 // BarSpec is the shared document consumed by the preview and by the native /
 // Omagen compiler. It deliberately has no widget layout field: shell.json is
 // a user-owned canonical document and must only change after an explicit
@@ -137,6 +150,7 @@ type BarSpec struct {
 	Regions   Regions               `json:"regions"`
 	Workspace WorkspacePresentation `json:"workspace"`
 	Clock     Clock                 `json:"clock"`
+	Dock      DockPresentation      `json:"dock"`
 	Motion    Motion                `json:"motion"`
 }
 
@@ -148,10 +162,11 @@ func Default() BarSpec {
 		Surface:   Surface{Treatment: "preset", Role: "native", Opacity: 1, BorderRole: "none", Shadow: "none"},
 		Geometry:  Geometry{Density: "native", SectionGap: 8, LengthMode: "full", Alignment: "center"},
 		Attention: Attention{Mode: "semantic"},
-		Behavior:  Behavior{Visibility: "always", ExclusiveZone: "reserve", HideDelayMs: 500, RevealDelayMs: 50, EdgeSensor: 3, KeepVisibleWhilePopupOpen: true},
+		Behavior:  Behavior{Visibility: "always", ExclusiveZone: "reserve", HideDelayMs: AutoHideDelayMs, RevealDelayMs: 50, EdgeSensor: 3, KeepVisibleWhilePopupOpen: true},
 		Regions:   Regions{Left: RegionBehavior{Mode: "native"}, Center: RegionBehavior{Mode: "native"}, Right: RegionBehavior{Mode: "native"}},
 		Workspace: WorkspacePresentation{Mode: "native"},
 		Clock:     Clock{Style: "native"},
+		Dock:      DockPresentation{Closed: "ellipsis", Glyph: "✦"},
 		Motion:    Motion{Preset: "native", DurationMs: 180, Easing: "out_cubic"},
 	}
 }
@@ -218,6 +233,9 @@ func (s BarSpec) Normalize() BarSpec {
 	if s.Behavior.EdgeSensor == 0 {
 		s.Behavior.EdgeSensor = d.Behavior.EdgeSensor
 	}
+	if s.Behavior.Visibility == "auto_hide" {
+		s.Behavior.HideDelayMs = AutoHideDelayMs
+	}
 	if s.Regions.Left.Mode == "" {
 		s.Regions.Left.Mode = d.Regions.Left.Mode
 	}
@@ -232,6 +250,9 @@ func (s BarSpec) Normalize() BarSpec {
 	}
 	if s.Clock.Style == "" {
 		s.Clock.Style = d.Clock.Style
+	}
+	if s.Dock.Closed == "" {
+		s.Dock.Closed = d.Dock.Closed
 	}
 	if s.Motion.Preset == "" {
 		s.Motion.Preset = d.Motion.Preset
@@ -313,6 +334,15 @@ func (s BarSpec) Validate() error {
 	}
 	if !oneOf(s.Clock.Style, "native", "neon", "matrix", "lcd") {
 		return fmt.Errorf("invalid clock style %q", s.Clock.Style)
+	}
+	if !oneOf(s.Dock.Closed, "workspace", "ellipsis", "clock", "glyph") {
+		return fmt.Errorf("invalid dock closed content %q", s.Dock.Closed)
+	}
+	if !utf8.ValidString(s.Dock.Glyph) || utf8.RuneCountInString(s.Dock.Glyph) > 4 {
+		return fmt.Errorf("invalid dock glyph")
+	}
+	if s.Dock.Closed == "glyph" && utf8.RuneCountInString(s.Dock.Glyph) == 0 {
+		return fmt.Errorf("custom dock glyph is empty")
 	}
 	if !oneOf(s.Motion.Preset, "native", "none", "subtle", "smooth", "expressive", "cyberpunk") || s.Motion.DurationMs < 0 || s.Motion.DurationMs > 2000 || !oneOf(s.Motion.Easing, "linear", "out_cubic", "out_quart", "in_out_cubic") {
 		return fmt.Errorf("invalid bar motion")

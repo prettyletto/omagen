@@ -17,6 +17,7 @@ PanelWindow {
     readonly property bool bottomEdge: bar.position === "bottom"
     readonly property bool leftEdge: bar.position === "left"
     readonly property bool rightEdge: bar.position === "right"
+    readonly property bool surfaceHidden: bar.barHidden === true || bar.autoHideHidden === true
     readonly property bool fullWidth: !bar.contentSized && bar.topology !== "dock"
     readonly property bool islandsFullLength: bar.topology === "islands"
     readonly property int compactIntrinsicWidth: presetLoader.item
@@ -54,15 +55,20 @@ PanelWindow {
         : Style.bar.iconSlot
     readonly property int compactTrayGap: Style.space(8)
 
-    visible: !remapGuard.remapping
+    // The Default/native path is rendered by OmagenBar's dedicated
+    // NativeBarClone loader. Do not instantiate the replacement preset here
+    // as a second PanelWindow; hiding this surface alone is insufficient
+    // because NativeBarPreset contains its own native PanelWindow variants.
+    visible: !remapGuard.remapping && !(bar && bar.nativeDefaultClone === true)
     color: "transparent"
     surfaceFormat.opaque: false
     // A replacement bar still occupies the native bar's exclusive zone.
     // Ignoring the zone for floating/content-sized surfaces lets tiled
     // windows render underneath the painted bar, which is the overlap seen
     // in the live desktop. Auto mirrors Quattro's native BarPanel contract;
-    // only an explicitly hidden bar gives the space back.
-    exclusionMode: bar.barHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
+    // an explicit bar-off toggle or the local auto-hide state gives the space
+    // back while keeping the layer surface alive for quick reveal.
+    exclusionMode: panel.surfaceHidden ? ExclusionMode.Ignore : ExclusionMode.Auto
     WlrLayershell.namespace: "pretty-omagen-bar"
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
@@ -77,10 +83,10 @@ PanelWindow {
         right: !bar.vertical || rightEdge
     }
     margins {
-        top: topEdge ? (bar.barHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
-        bottom: bottomEdge ? (bar.barHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
-        left: leftEdge ? (bar.barHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
-        right: rightEdge ? (bar.barHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
+        top: topEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
+        bottom: bottomEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
+        left: leftEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
+        right: rightEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
     }
     implicitWidth: bar.vertical
         ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)
@@ -286,11 +292,12 @@ PanelWindow {
         }
 
         Loader {
-            id: presetLoader
-            anchors.fill: parent
-            active: bar !== null
-            source: bar ? Qt.resolvedUrl("bar/BarPresetRouter.qml") : ""
-            onLoaded: if (item && "bar" in item) item.bar = bar
+        id: presetLoader
+        anchors.fill: parent
+        active: bar !== null && !(bar && bar.nativeDefaultClone === true)
+        source: bar && !(bar.nativeDefaultClone === true)
+            ? Qt.resolvedUrl("bar/BarPresetRouter.qml") : ""
+        onLoaded: if (item && "bar" in item) item.bar = bar
         }
 
         // Float Compact keeps the tray outside the main pill. Its left edge

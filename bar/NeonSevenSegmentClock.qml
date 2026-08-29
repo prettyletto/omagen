@@ -17,12 +17,15 @@ Item {
     // The native vertical clock allocates one Style.bar.iconSlot per line;
     // keep that stride while the rail width still follows the active bar.
     readonly property int lineHeight: vertical ? Style.bar.iconSlot : barSize
-    readonly property color segmentColor: Color.accent
+    // Preserve the neon accent on opaque bars. Once transparency is active,
+    // use the same sampled foreground as native bar widgets so the face stays
+    // legible against the wallpaper underneath.
+    readonly property color segmentColor: bar && bar.transparent ? bar.barForeground : Color.accent
     readonly property var lines: Model.normalizedLines(value)
     readonly property bool renderable: Model.isSevenSegmentText(value)
     readonly property real digitHeight: vertical
-        ? Math.max(10, Math.min(18, lineHeight - 5))
-        : Math.max(13, barSize - 7)
+        ? Math.max(10, Math.min(16, lineHeight - 7))
+        : Math.max(11, Math.min(17, barSize - 8))
     readonly property real digitWidth: digitHeight * 0.58
     readonly property real characterGap: Math.max(1, digitHeight * 0.10)
     readonly property real colonWidth: Math.max(5, digitHeight * 0.25)
@@ -153,7 +156,7 @@ Item {
 
     MultiEffect {
         anchors.fill: neonSource
-        anchors.margins: -Style.space(7)
+        anchors.margins: -Style.space(5)
         source: neonSource
         visible: root.renderable
         blurEnabled: true

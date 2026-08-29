@@ -21,14 +21,12 @@ Item {
         )
     }
 
-    Text {
+    Bar.DockClosedContent {
         visible: !dockVerticalContent.bar.dockExpanded
         anchors.centerIn: parent
-        text: "⋮"
-        color: dockVerticalContent.bar.barForeground
-        font.family: dockVerticalContent.bar.fontFamily
-        font.pixelSize: Style.bar.iconFont
-        font.bold: true
+        width: parent.width
+        height: parent.height
+        bar: dockVerticalContent.bar
     }
 
     Column {

@@ -52,6 +52,10 @@ Item {
         { key: "glass", title: "Glass · blurred" },
         { key: "clear", title: "Clear" }
     ]
+    readonly property int barAutoHideDelayMs: 5000
+    readonly property var barAutoHideOptions: [
+        { key: "off", title: "Off" }, { key: "on", title: "On" }
+    ]
     // Size is the first post-preset customization. The BarSpec keeps the
     // compatibility field named density because that is the native Quattro
     // token contract, while the editor presents the user-facing choice as
@@ -164,6 +168,7 @@ Item {
         var regions = current.regions || ({})
         var motion = current.motion || ({})
         var clock = current.clock || ({})
+        var dock = current.dock || ({})
         var result = {
             version: 2,
             preset: current.preset || (root.barStyle.spec ? "custom" : "native"),
@@ -173,7 +178,7 @@ Item {
             surface: { treatment: surface.treatment || "preset", role: surface.role || root.barStyle.surface || "native", opacity: surface.opacity !== undefined ? surface.opacity : 1, blur: Number(surface.blur || 0), border_role: surface.border_role || "none", border_opacity: Number(surface.border_opacity || 0), border_width: Number(surface.border_width || 0), shadow: surface.shadow || "none" },
             geometry: { density: geometry.density || root.barStyle.density || "native", thickness: Number(geometry.thickness || 0), edge_offset: Number(geometry.edge_offset || 0), outer_margin: Number(geometry.outer_margin || 0), inner_padding: Number(geometry.inner_padding || 0), section_gap: Number(geometry.section_gap !== undefined ? geometry.section_gap : 8), widget_gap: Number(geometry.widget_gap || 0), radius: Number(geometry.radius || 0), length_mode: geometry.length_mode || "full", length_value: Number(geometry.length_value || 0), alignment: geometry.alignment || "center" },
             attention: { mode: (current.attention && current.attention.mode) || root.barStyle.attention || "semantic" },
-            behavior: { visibility: behavior.visibility || "always", exclusive_zone: behavior.exclusive_zone || "reserve", hover_expand: behavior.hover_expand === true, hide_delay_ms: Number(behavior.hide_delay_ms || 500), reveal_delay_ms: Number(behavior.reveal_delay_ms || 50), edge_sensor: Number(behavior.edge_sensor || 3), keep_visible_while_popup_open: behavior.keep_visible_while_popup_open !== false },
+            behavior: { visibility: behavior.visibility || "always", exclusive_zone: behavior.exclusive_zone || "reserve", hover_expand: behavior.hover_expand === true, hide_delay_ms: Number(behavior.hide_delay_ms || root.barAutoHideDelayMs), reveal_delay_ms: Number(behavior.reveal_delay_ms || 50), edge_sensor: Number(behavior.edge_sensor || 3), keep_visible_while_popup_open: behavior.keep_visible_while_popup_open !== false },
             regions: {
                 left: { mode: regions.left && regions.left.mode ? regions.left.mode : "native" },
                 center: { mode: regions.center && regions.center.mode ? regions.center.mode : "native" },
@@ -187,8 +192,15 @@ Item {
                 style: ["native", "neon", "matrix", "lcd"].indexOf(String(clock.style || "native")) >= 0
                     ? String(clock.style || "native") : "native"
             },
+            dock: {
+                closed: ["workspace", "ellipsis", "clock", "glyph"].indexOf(String(dock.closed || "ellipsis")) >= 0
+                    ? String(dock.closed || "ellipsis") : "ellipsis",
+                glyph: String(dock.glyph || "✦")
+            },
             motion: { preset: motion.preset || "native", duration_ms: Number(motion.duration_ms || 180), easing: motion.easing || "out_cubic" }
         }
+        if (result.behavior.visibility === "auto_hide")
+            result.behavior.hide_delay_ms = root.barAutoHideDelayMs
         return root.normalizeBarSpecEngine(result)
     }
 
@@ -257,6 +269,18 @@ Item {
     function chooseBarPane(key) {
         var spec = root.barSpec()
         root.applyBarPaneTreatment(spec, key)
+        root.publishBarSpec(spec)
+    }
+
+    function barAutoHideValue() {
+        return root.barSpec().behavior.visibility === "auto_hide" ? "on" : "off"
+    }
+
+    function chooseBarAutoHide(key) {
+        var spec = root.barSpec()
+        spec.preset = "custom"
+        spec.behavior.visibility = key === "on" ? "auto_hide" : "always"
+        spec.behavior.hide_delay_ms = root.barAutoHideDelayMs
         root.publishBarSpec(spec)
     }
 
@@ -401,6 +425,9 @@ Item {
             var oldBehavior = root.barStyle.profile && root.barStyle.profile.behavior
                 ? JSON.parse(JSON.stringify(root.barStyle.profile.behavior)) : ({})
             oldBehavior.form = topologyForm
+            oldBehavior.visibility = spec.behavior.visibility === "auto_hide" ? "auto-hide"
+                : spec.behavior.visibility === "fullscreen" ? "fullscreen-only"
+                : spec.behavior.visibility === "hover" ? "intelligent" : "always"
             oldBehavior.expansion = spec.behavior.hover_expand ? "hover" : "none"
             profile = { schema_version: 1, ownership: "overlay", implementation: "replacement", bar: { id: "pretty.omagen.bar" }, behavior: oldBehavior }
         }
@@ -491,9 +518,10 @@ Item {
         spec.position = "top"
         spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "none", border_opacity: 0, border_width: 0, shadow: "none" }
         spec.geometry = { density: BarSizing.presetDensity(key), thickness: 0, edge_offset: 0, outer_margin: 0, inner_padding: 0, section_gap: 8, widget_gap: 0, radius: 0, length_mode: "full", length_value: 0, alignment: "center" }
-        spec.behavior = { visibility: "always", exclusive_zone: "reserve", hover_expand: false, hide_delay_ms: 500, reveal_delay_ms: 50, edge_sensor: 3, keep_visible_while_popup_open: true }
+        spec.behavior = { visibility: "always", exclusive_zone: "reserve", hover_expand: false, hide_delay_ms: root.barAutoHideDelayMs, reveal_delay_ms: 50, edge_sensor: 3, keep_visible_while_popup_open: true }
         spec.regions = { left: { mode: "native" }, center: { mode: "native" }, right: { mode: "native" } }
         spec.workspace = { mode: "native", glyphs: [] }
+        spec.dock = { closed: "ellipsis", glyph: "✦" }
         spec.motion = { preset: "native", duration_ms: 180, easing: "out_cubic" }
         switch (key) {
         case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
@@ -656,6 +684,10 @@ Item {
                     metal: "Use a near-opaque dark neutral pane for a restrained metal-like finish without compositor blur.",
                     glass: "Use a translucent theme tint with real Hyprland layer blur behind the bar.",
                     clear: "Use a mostly transparent pane without blur for maximum wallpaper visibility and low GPU cost."
+                },
+                autoHide: {
+                    off: "Keep the bar visible until the native bar toggle is used.",
+                    on: "Hide the bar after 5 seconds without pointer activity; move to the screen edge to reveal it."
                 },
                 density: {
                     native: "Keep the native bar spacing and height tokens.",
@@ -875,6 +907,16 @@ Item {
                                     onChoiceSelected: root.chooseBarPane(key)
                                 }
 
+                                BarChoiceGroup {
+                                    Layout.fillWidth: true
+                                    title: "Auto hide"
+                                    subtitle: "Hide the bar after 5 seconds of idle time"
+                                    options: root.barAutoHideOptions
+                                    selectedKey: root.barAutoHideValue()
+                                    optionDescriptions: root.barOptionDescriptions("autoHide", root.barAutoHideOptions)
+                                    onChoiceSelected: root.chooseBarAutoHide(key)
+                                }
+
                                 Rectangle {
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: 1
@@ -884,6 +926,15 @@ Item {
 
                                 BarWorkspaceControls {
                                     Layout.fillWidth: true
+                                    spec: root.barSpec()
+                                    onSpecEdited: root.publishBarSpec(spec)
+                                }
+
+                                BarDockControls {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: visible ? implicitHeight : 0
+                                    Layout.minimumHeight: 0
+                                    visible: root.barSpec().topology === "dock"
                                     spec: root.barSpec()
                                     onSpecEdited: root.publishBarSpec(spec)
                                 }

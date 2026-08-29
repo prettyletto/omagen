@@ -78,6 +78,17 @@ func TestExplicitNativeRejectsAdvancedBehavior(t *testing.T) {
 	}
 }
 
+func TestAutoHideUsesFixedFiveSecondDelay(t *testing.T) {
+	spec := Default()
+	spec.Behavior.Visibility = "auto_hide"
+	spec.Behavior.HideDelayMs = 250
+
+	normalized := spec.Normalize()
+	if normalized.Behavior.HideDelayMs != AutoHideDelayMs {
+		t.Fatalf("auto-hide delay = %d, want %d", normalized.Behavior.HideDelayMs, AutoHideDelayMs)
+	}
+}
+
 func TestClockStylesUseOmagenWithoutChangingNativeClockBehavior(t *testing.T) {
 	if spec := Default(); spec.Clock.Style != "native" {
 		t.Fatalf("default clock style = %q, want native", spec.Clock.Style)
@@ -272,7 +283,45 @@ func TestDockPresetUsesAutoHideContentSizedOmagenComposition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.Topology != TopologyDock || spec.Engine != EngineOmagen || spec.Geometry.LengthMode != "content" || spec.Geometry.Alignment != "center" || spec.Behavior.Visibility != "auto_hide" || !spec.Behavior.HoverExpand {
+	if spec.Topology != TopologyDock || spec.Engine != EngineOmagen || spec.Geometry.LengthMode != "content" || spec.Geometry.Alignment != "center" || spec.Behavior.Visibility != "auto_hide" || spec.Behavior.HideDelayMs != AutoHideDelayMs || !spec.Behavior.HoverExpand {
 		t.Fatalf("dock preset should be centered, content-sized, and hover-expanded: %#v", spec)
+	}
+}
+
+func TestDockClosedPresentationDefaultsAndValidation(t *testing.T) {
+	spec, err := Preset("dock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Dock.Closed != "ellipsis" || spec.Dock.Glyph != "✦" {
+		t.Fatalf("dock closed presentation = %#v", spec.Dock)
+	}
+
+	for _, mode := range []string{"workspace", "ellipsis", "clock", "glyph"} {
+		t.Run(mode, func(t *testing.T) {
+			candidate := spec
+			candidate.Dock.Closed = mode
+			if err := candidate.Validate(); err != nil {
+				t.Fatalf("dock closed mode %q rejected: %v", mode, err)
+			}
+		})
+	}
+
+	invalid := spec
+	invalid.Dock.Closed = "unsupported"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("unsupported dock closed mode was accepted")
+	}
+
+	invalid = spec
+	invalid.Dock.Closed = "glyph"
+	invalid.Dock.Glyph = ""
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("empty custom dock glyph was accepted")
+	}
+
+	invalid.Dock.Glyph = "12345"
+	if err := invalid.Validate(); err == nil {
+		t.Fatal("oversized custom dock glyph was accepted")
 	}
 }

@@ -14,5 +14,6 @@ Item {
     manifest: bar.manifest
     workspaceOverrideEnabled: bar.workspaceMode !== "native"
     workspaceSpecOverride: bar.workspaceSpec
+    clockStyle: bar.clockStyle
   }
 }

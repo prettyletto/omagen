@@ -33,6 +33,7 @@ PanelWindow {
     readonly property var behaviorSpec: root.spec.behavior || ({})
     readonly property var regionsSpec: root.spec.regions || ({})
 	readonly property var workspaceSpec: root.spec.workspace || ({})
+	readonly property var dockSpec: root.spec.dock || ({})
     readonly property string topology: String(root.spec.topology || root.fallbackTopology())
     readonly property string position: String(root.spec.position || (root.fallbackTopology() === "rail" ? "left" : "top"))
     readonly property bool vertical: root.position === "left" || root.position === "right"
@@ -159,6 +160,14 @@ PanelWindow {
 			return glyphs[index] !== undefined && String(glyphs[index]).length > 0 ? String(glyphs[index]) : String(index + 1)
 		}
 		return String(index + 1)
+	}
+
+	function dockClosedLabel() {
+		var mode = String(root.dockSpec.closed || "ellipsis")
+		if (mode === "workspace") return root.workspaceLabel(0)
+		if (mode === "clock") return Qt.formatTime(new Date(), "HH:mm")
+		if (mode === "glyph") return String(root.dockSpec.glyph || "✦")
+		return root.vertical ? "⋮" : "···"
 	}
 
 	function alignmentLabel() {
@@ -327,6 +336,7 @@ PanelWindow {
                         { label: "PANE", value: root.surfaceTreatment.toUpperCase() },
 						{ label: "GROWTH", value: root.alignmentLabel() },
 						{ label: "WORKSPACES", value: String(root.workspaceSpec.mode || "native").toUpperCase() },
+						{ label: "CLOSED", value: root.topology === "dock" ? String(root.dockSpec.closed || "ellipsis").toUpperCase() : "N/A" },
 						{ label: "MOTION", value: root.motionSummary() },
 						{ label: "ENGINE", value: root.replacement ? "OMAGEN BAR" : root.adapter ? "OMAGEN ADAPTER" : "QUATTRO" }
                     ]
@@ -393,10 +403,13 @@ PanelWindow {
 						readonly property real compactLength: root.topology === "minimal"
 							? Math.max(Style.space(150), availableLength * 0.24)
 							: Math.max(Style.space(190), availableLength * (root.topology === "split" ? 0.62 : 0.46))
+						readonly property bool dockCollapsed: root.topology === "dock" && !root.previewExpanded
 						readonly property real expandedLength: root.topology === "minimal"
 							? availableLength
 							: Math.min(availableLength, compactLength * 1.38)
-						readonly property real currentLength: contentSized ? (root.previewExpanded ? expandedLength : compactLength) : availableLength
+						readonly property real currentLength: root.topology === "dock" && !root.previewExpanded
+							? Math.min(Style.space(64), availableLength)
+							: contentSized ? (root.previewExpanded ? expandedLength : compactLength) : availableLength
 						x: root.vertical ? (stage.width - width) / 2
 							: root.topology === "minimal" ? Style.space(21)
 							: root.alignment === "start" ? Style.space(21)
@@ -460,9 +473,10 @@ PanelWindow {
                                 radius: root.barRadius > 0 ? Math.min(root.barRadius, Math.min(width, height) / 2) : Math.min(Style.cornerRadius, Math.min(width, height) / 2)
                                 borderSpec: Border.flat(Util.alpha(root.borderColor, root.borderOpacity * (regionMode === "quiet" ? 0.5 : 1)), regionMode === "island" ? Math.max(1, root.borderWidth) : root.borderWidth)
 
-                                RowLayout {
-                                    visible: !root.vertical && regionMode !== "hidden"
-                                        && (root.topology !== "minimal" || root.previewExpanded || modelData === 0)
+								RowLayout {
+									visible: !root.vertical && regionMode !== "hidden"
+										&& !barFrame.dockCollapsed
+										&& (root.topology !== "minimal" || root.previewExpanded || modelData === 0)
                                     anchors.fill: parent
                                     anchors.leftMargin: Style.space(10)
                                     anchors.rightMargin: Style.space(10)
@@ -488,9 +502,10 @@ PanelWindow {
                                     Text { visible: modelData === 0; text: root.barStyle.attention === "accent" ? "●" : "•"; color: root.activeColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
                                 }
 
-                                Text {
-                                    visible: root.vertical && regionMode !== "hidden"
-                                        && (root.topology !== "minimal" || root.previewExpanded || modelData === 0)
+								Text {
+									visible: root.vertical && regionMode !== "hidden"
+										&& !barFrame.dockCollapsed
+										&& (root.topology !== "minimal" || root.previewExpanded || modelData === 0)
                                     anchors.centerIn: parent
 									text: modelData === 1 ? "OMAGEN" : modelData === 0 ? [0, 1, 2].map(root.workspaceLabel).join("  ") : "NET"
                                     color: root.foregroundColor
@@ -498,10 +513,22 @@ PanelWindow {
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.bodySmall
                                     font.bold: true
-                                }
-                            }
-                        }
-                    }
+								}
+							}
+						}
+
+						Text {
+							visible: barFrame.dockCollapsed
+							anchors.centerIn: parent
+							text: root.dockClosedLabel()
+							color: root.foregroundColor
+							font.family: Style.font.family
+							font.pixelSize: root.dockSpec.closed === "glyph" ? Style.font.heading : Style.font.body
+							font.bold: true
+							fontSizeMode: Text.Fit
+							minimumPixelSize: Style.font.caption
+						}
+					}
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
