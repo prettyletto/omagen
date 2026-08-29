@@ -21,7 +21,7 @@ Item {
 
     implicitWidth: vertical
         ? barSize
-        : Math.max(53, Math.min(160, String(value || "06:53").length * textSize * 0.56 + 12))
+        : Math.max(53, Math.ceil(gothicText.implicitWidth + 10))
     implicitHeight: vertical
         ? Math.max(lineHeight, Math.max(1, lines.length) * lineHeight)
         : Math.max(barSize, textSize + 8)

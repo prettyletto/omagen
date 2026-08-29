@@ -47,7 +47,13 @@ Item {
         return total
     }
 
-    readonly property real horizontalWidth: Math.max(64, lineWidth(lines[0] || "06:53"))
+    // Date/weekday formats fall back to Text because they are not valid
+    // seven-segment glyphs. Measure that fallback text itself so it gets the
+    // same expanding slot as the custom numeric face.
+    readonly property real fallbackWidth: fallbackText.implicitWidth + 12
+    readonly property real horizontalWidth: renderable
+        ? Math.max(64, lineWidth(lines[0] || "06:53"))
+        : Math.max(64, Math.ceil(fallbackWidth))
 
     implicitWidth: vertical ? barSize : horizontalWidth
     implicitHeight: vertical
@@ -167,6 +173,7 @@ Item {
     }
 
     Text {
+        id: fallbackText
         visible: !root.renderable
         anchors.fill: parent
         text: root.value
@@ -174,6 +181,7 @@ Item {
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: root.vertical ? Math.max(9, root.barSize * 0.42) : Math.max(11, root.barSize * 0.58)
         font.bold: true
+        wrapMode: Text.NoWrap
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
