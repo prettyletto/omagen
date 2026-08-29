@@ -72,15 +72,22 @@ Item {
         && !compactTray && !workspacePresentation
         && moduleName === "omarchy.clock" && !registryComponent
     readonly property var activeItem: workspacePresentation ? workspaceLoader.item : qmlCustom ? qmlLoader.item : commandCustom ? commandLoader.item : nativeClockFallback ? nativeClockLoader.item : loader.item
+    // Styled clocks keep the native widget as their interaction and popup
+    // owner, but their face owns the horizontal content width. Measuring the
+    // hidden native clock here would leave a longer weekday/date format in a
+    // compact slot, causing Text.ElideRight to show fragments such as
+    // "Saturday 1…" instead of allowing the bar to grow.
+    readonly property var layoutItem: styledClock && styledClockLoader.item
+        ? styledClockLoader.item : activeItem
     // Native vertical ModuleSlot fixes every widget to the rail width;
     // allowing a widget's horizontal implicit width here clips text and
     // icons into the fragments seen in the live screenshot.
     implicitWidth: !slot.active || !bar ? 0 : bar.vertical
         ? bar.barSize
-        : (activeItem && activeItem.visible !== false ? activeItem.implicitWidth : 0)
+        : (layoutItem && layoutItem.visible !== false ? layoutItem.implicitWidth : 0)
     implicitHeight: !slot.active || !bar
         ? 0
-        : (activeItem && activeItem.visible !== false ? activeItem.implicitHeight : 0)
+        : (layoutItem && layoutItem.visible !== false ? layoutItem.implicitHeight : 0)
     width: implicitWidth
     height: implicitHeight
     // Third-party widgets may paint a horizontal label or badge even
@@ -114,6 +121,11 @@ Item {
     function injectActiveProps() {
         injectProps(loader.item)
         injectProps(nativeClockLoader.item)
+        injectProps(styledClockLoader.item)
+        injectProps(workspaceLoader.item)
+        if (workspaceLoader.item && "workspaceSpecOverride" in workspaceLoader.item)
+            workspaceLoader.item.workspaceSpecOverride = bar && bar.workspaceSpec
+                ? bar.workspaceSpec : ({})
     }
 
     // The registry can finish loading after the bar receives shell.json, and
@@ -127,6 +139,18 @@ Item {
     onSettingsChanged: injectActiveProps()
     Component.onCompleted: registerIfReady()
     Component.onDestruction: unregisterIfReady()
+
+    // The replacement bar and its workspace delegate can be constructed before
+    // OmagenBar's FileView has finished reading the active theme sidecar. The
+    // first injection may therefore contain the intentional empty default.
+    // Reapply it when the bar publishes the parsed spec so labels do not stay
+    // on the native numeric fallback until the next shell restart.
+    Connections {
+        target: slot.bar
+        ignoreUnknownSignals: true
+        function onSpecDocumentChanged() { slot.injectActiveProps() }
+        function onWorkspaceSpecChanged() { slot.injectActiveProps() }
+    }
 
     function toggleClockFormat() {
         if (!clockSlot || !bar || !activeItem || !("settings" in activeItem)) return false

@@ -312,6 +312,32 @@ func TestWriteHyprlandGlassPresetAddsSubtleTranslucency(t *testing.T) {
 	}
 }
 
+func TestWriteHyprlandOrientalKeepsActiveWindowCrisp(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc"}
+	if err := WriteHyprlandWithAnimationsAndShell(dir, p, "split_top", 2, "soft", "airy", "flat", "native", "frosted_rich", 36, session.DefaultAnimationsStyle(), session.ShellPresetGlass); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"shadow = { enabled = false }",
+		"inactive_opacity = 0.72",
+		"dim_inactive = true, dim_strength = 0.34",
+		"blur = { enabled = true, size = 24, passes = 4, ignore_opacity = true, new_optimizations = true }",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("Oriental compositor output missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "\n    active_opacity =") {
+		t.Fatalf("Oriental active window must remain opaque:\n%s", text)
+	}
+}
+
 func TestWriteHyprlandScopesBarGlassBlurToBothBarOwners(t *testing.T) {
 	dir := t.TempDir()
 	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc", Blue: "#4488dd", Magenta: "#cc55ee"}

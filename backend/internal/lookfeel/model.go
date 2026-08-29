@@ -89,7 +89,7 @@ func Catalog() []CatalogEntry {
 		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 3},
 		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
 		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 3},
-		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a segmented ribbon, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 3},
+		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a segmented ribbon, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 4},
 	}
 }
 
@@ -170,7 +170,7 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = natureBar()
 		composition.Animations = natureMotion()
 	case PresetOriental:
-		composition.PresetRevision = 3
+		composition.PresetRevision = 4
 		composition.Window = orientalWindow()
 		composition.Shell = orientalShell()
 		composition.Bar = orientalBar()
@@ -316,13 +316,14 @@ func natureWindow() session.DesktopStyle {
 
 func orientalWindow() session.DesktopStyle {
 	style := session.DefaultDesktopStyle()
-	// Kanagawa's quiet, architectural contrast: a restrained top split rather
-	// than a neon or continuously animated border, with warm translucent focus
-	// and a shadow-only inactive state.
+	// Kanagawa's quiet, architectural contrast: keep the focused client crisp
+	// and fully opaque, then reserve the expensive frosted treatment for
+	// unfocused windows so the desktop recedes without washing out the active
+	// surface.
 	style.BorderStyle = "split_top"
 	style.BorderSizeMode, style.BorderSize = "fixed", 2
-	style.Shape, style.Spacing, style.Depth = "soft", "airy", "shadow"
-	style.Active, style.Inactive = "frosted_balanced", "shadow_only"
+	style.Shape, style.Spacing, style.Depth = "soft", "airy", "flat"
+	style.Active, style.Inactive = "native", "frosted_rich"
 	return style
 }
 
