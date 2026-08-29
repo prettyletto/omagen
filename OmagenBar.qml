@@ -9,6 +9,7 @@ import Quickshell.Services.SystemTray
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "bar/BarSizing.js" as BarSizing
 
 // Shared Omagen bar runtime. Visual compositions live in bar/presets/*.qml;
  // this file owns the injected host contract, runtime readers, and shared
@@ -100,6 +101,9 @@ Item {
     readonly property var workspaceSpec: root.spec.workspace && typeof root.spec.workspace === "object"
         ? root.spec.workspace : ({})
     readonly property string workspaceMode: String(root.workspaceSpec.mode || "native")
+    readonly property var clockSpec: root.spec.clock && typeof root.spec.clock === "object"
+        ? root.spec.clock : ({})
+    readonly property string clockStyle: root.normalizeClockStyle(root.clockSpec.style)
     // The replacement bar always renders Omagen's workspace widget. Its
     // `native` mode is a faithful clone of Quattro's normal presentation, while
     // the other modes change labels only; Hyprland still owns state and
@@ -131,11 +135,13 @@ Item {
     readonly property var motionSpec: root.spec.motion && typeof root.spec.motion === "object" ? root.spec.motion : ({})
     readonly property string density: String(root.geometrySpec.density || "native")
     readonly property int barSize: {
-        var thickness = Number(root.geometrySpec.thickness || 0)
-        if (thickness > 0) return thickness
-        if (root.density === "compact") return root.vertical ? 24 : 26
-        if (root.density === "comfortable") return root.vertical ? 32 : 30
-        return root.vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
+        return BarSizing.resolvedBaseSize(
+            root.spec,
+            Style.bar.sizeHorizontal,
+            Style.bar.sizeVertical,
+            Style.barScaleWithFont,
+            Style.fontScale
+        )
     }
     // Islands need a little breathing room around the native vertical slot
     // width. The slot itself remains barSize-wide so widget contracts and
@@ -153,6 +159,7 @@ Item {
     // behavior byte-for-byte aligned with the installed native bar.
     readonly property bool nativeDefaultClone: root.topology === "continuous"
         && root.position === "top"
+        && root.clockStyle === "native"
         && String(root.surfaceSpec.role || "native") === "native"
         && Number(root.surfaceSpec.opacity !== undefined ? root.surfaceSpec.opacity : 1) === 1
         && Number(root.surfaceSpec.blur || 0) === 0
@@ -244,6 +251,11 @@ Item {
     function normalizePosition(value) {
         var next = String(value || "top")
         return ["top", "bottom", "left", "right"].indexOf(next) >= 0 ? next : "top"
+    }
+
+    function normalizeClockStyle(value) {
+        var next = String(value || "native").toLowerCase()
+        return ["native", "neon", "matrix", "lcd"].indexOf(next) >= 0 ? next : "native"
     }
 
     function normalizedLayout(layout) {
@@ -916,9 +928,13 @@ Item {
         path: root.stateHome + "/omarchy/current/theme/omagen.bar.spec.json"
         watchChanges: true
         printErrors: false
-        onLoaded: root.loadSpec(text())
+        onLoaded: {
+            root.loadSpec(text())
+        }
         onFileChanged: reload()
-        onLoadFailed: root.specDocument = ({})
+        onLoadFailed: {
+            root.specDocument = ({})
+        }
         Component.onCompleted: reload()
     }
 
@@ -973,6 +989,19 @@ Item {
         id: nativeDefaultCloneLoader
         active: root.nativeDefaultClone
         sourceComponent: nativeDefaultCloneComponent
+    }
+
+    // Inline components retain the Omagen host root when Quickshell creates
+    // one delegate per monitor. A `property var bar: root` declaration inside
+    // the delegate is evaluated in the delegate's dynamic scope and can be
+    // null during the asynchronous plugin injection pass; this mirrors the
+    // native bar's own component pattern and keeps the host contract stable.
+    component OmagenBarSurface: BarSurface {
+        bar: root
+    }
+
+    component OmagenBarMoveGhostPanel: BarMoveGhostPanel {
+        bar: root
     }
 
     Timer {
@@ -1039,8 +1068,7 @@ Item {
     Variants {
         model: Quickshell.screens
         delegate: Component {
-            BarSurface {
-                property var bar: root
+            OmagenBarSurface {
                 required property var modelData
                 screen: modelData
                 visible: !root.nativeDefaultClone
@@ -1051,8 +1079,7 @@ Item {
     Variants {
         model: Quickshell.screens
         delegate: Component {
-            BarMoveGhostPanel {
-                property var bar: root
+            OmagenBarMoveGhostPanel {
                 required property var modelData
                 screen: modelData
                 ghostScreen: modelData

@@ -8,10 +8,11 @@ import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "bar" as Bar
 
 PanelWindow {
     id: panel
-        property var bar: null
+    property var bar: null
     readonly property bool topEdge: bar.position === "top"
     readonly property bool bottomEdge: bar.position === "bottom"
     readonly property bool leftEdge: bar.position === "left"
@@ -22,24 +23,36 @@ PanelWindow {
         ? Math.ceil(presetLoader.item.implicitWidth || presetLoader.implicitWidth)
         : Math.ceil(presetLoader.implicitWidth)
     // Float Compact wraps the measured three-zone content. There is no
-    // monitor-percentage width target: the pill grows only as much as the
-    // left, center, and right groups require, while the tray stays outside.
+    // monitor-percentage width target: the main pill grows only as much as
+    // the left, center, and right groups require.
     readonly property int compactContentWidth: compactIntrinsicWidth
-    // Float Compact is two surfaces: the balanced main pill and the
-    // detached tray. Keep the tray out of the pill's width calculation so
-    // its own hit targets and drawer can live outside the main surface.
+    // Float Compact's dedicated tray surface is mounted separately below,
+    // so its hit targets and drawer do not change the pill's width.
     readonly property int contentWidth: (bar.floatingCompact
         ? compactContentWidth
         : presetLoader.implicitWidth) + Style.space(16)
     readonly property int contentHeight: Math.max(bar.barSize,
         Math.ceil(presetLoader.item ? (presetLoader.item.implicitHeight || presetLoader.implicitHeight) : presetLoader.implicitHeight)
             + Style.space(16))
+    readonly property int compactVerticalWidth: bar.floatingCompact && bar.vertical
+        ? bar.barSize + Style.space(4) : bar.barSize
     readonly property int surfaceWidth: bar.vertical
-        ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : bar.barSize)
+        ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)
         : (fullWidth || islandsFullLength ? 0 : contentWidth)
     readonly property int surfaceHeight: bar.vertical
         ? (fullWidth || islandsFullLength ? 0 : contentHeight)
         : bar.barSize
+    readonly property bool compactTrayEnabled: bar.floatingCompact && !bar.vertical
+    readonly property bool compactVerticalTrayEnabled: bar.floatingCompact && bar.vertical
+    readonly property int compactTrayCollapsedWidth: compactTraySlot.activeItem
+        && "collapsedWidth" in compactTraySlot.activeItem
+        ? compactTraySlot.activeItem.collapsedWidth
+        : Style.bar.iconSlot
+    readonly property int compactVerticalTrayCollapsedHeight: compactVerticalTraySlot.activeItem
+        && "collapsedWidth" in compactVerticalTraySlot.activeItem
+        ? compactVerticalTraySlot.activeItem.collapsedWidth
+        : Style.bar.iconSlot
+    readonly property int compactTrayGap: Style.space(8)
 
     visible: !remapGuard.remapping
     color: "transparent"
@@ -70,7 +83,7 @@ PanelWindow {
         right: rightEdge ? (bar.barHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
     }
     implicitWidth: bar.vertical
-        ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : bar.barSize)
+        ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)
         : surfaceWidth
     implicitHeight: bar.vertical ? surfaceHeight : bar.dock ? bar.dockThickness : bar.barSize
 
@@ -229,13 +242,13 @@ PanelWindow {
         // PanelWindow remains monitor-edge sized for placement and input.
         // Paint the compact surface from the panel's actual geometry,
         // rather than the transient content item's initial 0×0 size.
-        // The main pill is centered on the monitor. The tray is a
-        // separate sibling to its right, so it must not pull the pill's
-        // center left as part of a combined bounding box.
+        // The measured compact content is centered on the monitor. The tray
+        // is a separate sibling surface, offset to the right like Quattro's
+        // detached tray affordance.
         x: Math.round((panel.width - width) / 2)
         y: Math.round((panel.height - height) / 2)
         width: bar.vertical
-            ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : bar.barSize)
+            ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)
             : (panel.islandsFullLength
             ? panel.width
             : bar.dock
@@ -280,6 +293,44 @@ PanelWindow {
             onLoaded: if (item && "bar" in item) item.bar = bar
         }
 
+        // Float Compact keeps the tray outside the main pill. Its left edge
+        // stays fixed while the drawer expands rightward, so expanding the
+        // tray never moves the main surface or changes its measured width.
+        Item {
+            id: compactTrayFrame
+            z: 2
+            visible: panel.compactTrayEnabled
+            width: Math.max(compactTraySlot.implicitWidth, panel.compactTrayCollapsedWidth)
+            height: bar.barSize
+            x: Math.round(Math.min(panel.width - surfaceFrame.x - width - bar.outerMargin,
+                surfaceFrame.width + panel.compactTrayGap))
+            y: 0
+
+            BorderSurface {
+                anchors.fill: parent
+                color: bar.transparent ? "transparent" : Util.alpha(bar.surfaceColor, bar.surfaceOpacity)
+                radius: bar.radius > 0 ? bar.radius : Style.cornerRadius
+                borderSpec: !bar.transparent && bar.borderWidth > 0
+                    ? Border.flat(Util.alpha(bar.borderColor, bar.borderOpacity), bar.borderWidth)
+                    : Border.none()
+            }
+
+            Bar.WidgetSlot {
+                id: compactTraySlot
+                bar: panel.bar
+                active: panel.compactTrayEnabled
+                entry: panel.bar
+                    ? (panel.bar.trayEntry(panel.bar.layoutConfig.right) || ({ id: "omarchy.tray" }))
+                    : ({ id: "omarchy.tray" })
+                region: "right"
+                width: Math.max(implicitWidth, panel.compactTrayCollapsedWidth)
+                height: implicitHeight
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+        }
+
         CyberpunkBarSignal {
             anchors.fill: parent
             z: 20
@@ -288,6 +339,42 @@ PanelWindow {
             primaryColor: Color.accent
             secondaryColor: bar.barForeground
             fontFamily: bar.fontFamily
+        }
+
+        // Float Compact's vertical tray is a separate cap above the rail.
+        // Keep its lower edge fixed beside the main surface so the drawer
+        // reveals upward without changing the rail's measured body.
+        Item {
+            id: compactVerticalTrayFrame
+            z: 2
+            visible: panel.compactVerticalTrayEnabled
+            width: surfaceFrame.width
+            height: Math.max(compactVerticalTraySlot.implicitHeight,
+                panel.compactVerticalTrayCollapsedHeight)
+            x: 0
+            y: -height - panel.compactTrayGap
+
+            BorderSurface {
+                anchors.fill: parent
+                color: bar.transparent ? "transparent" : Util.alpha(bar.surfaceColor, bar.surfaceOpacity)
+                radius: bar.radius > 0 ? bar.radius : Style.cornerRadius
+                borderSpec: !bar.transparent && bar.borderWidth > 0
+                    ? Border.flat(Util.alpha(bar.borderColor, bar.borderOpacity), bar.borderWidth)
+                    : Border.none()
+            }
+
+            Bar.WidgetSlot {
+                id: compactVerticalTraySlot
+                bar: panel.bar
+                active: panel.compactVerticalTrayEnabled
+                entry: panel.bar
+                    ? (panel.bar.trayEntry(panel.bar.layoutConfig.right) || ({ id: "omarchy.tray" }))
+                    : ({ id: "omarchy.tray" })
+                region: "right"
+                width: parent.width
+                height: Math.max(implicitHeight, panel.compactVerticalTrayCollapsedHeight)
+                anchors.bottom: parent.bottom
+            }
         }
     }
 }

@@ -146,6 +146,24 @@ Item {
     function styleJson(value) {
         return StyleDocuments.styleJson(value)
     }
+    function mergeStyleDocument(current, incoming) {
+        return StyleDocuments.mergeStyleDocument(current, incoming)
+    }
+    function normalizeEditedShellStyle(value) {
+        return root.normalizeShellStyle(root.mergeStyleDocument(root.shellStyle, value))
+    }
+    function normalizeEditedDesktopStyle(value) {
+        return root.normalizeDesktopStyle(root.mergeStyleDocument(root.desktopStyle, value))
+    }
+    function normalizeEditedBarStyle(value) {
+        return root.normalizeBarStyle(root.mergeStyleDocument(root.barStyle, value))
+    }
+    function normalizeEditedAnimationsStyle(value) {
+        return root.normalizeAnimationsStyle(root.mergeStyleDocument(root.animationsStyle, value))
+    }
+    function normalizeEditedTerminalTranslucency(value) {
+        return root.normalizeTerminalTranslucency(root.mergeStyleDocument(root.terminalTranslucency, value))
+    }
     function refreshLookFeelCustomized() {
         if (!root.lookFeelRecipe)
             return
@@ -177,17 +195,17 @@ Item {
         root.refreshLookFeelCustomized()
     }
     function requestLookFeelPreset(preset) {
-        if (!root.lookFeelController.requestPreset(preset))
+        if (!lookFeelController.requestPreset(preset))
             return
         root.errorMessage = ""
     }
     function loadLookFeelRecipe(preset) {
         if (!preset || preset === "omarchy-native") {
             root.lookFeelRecipe = null
-            root.lookFeelController.loadRecipe(preset)
+            lookFeelController.loadRecipe(preset)
             return
         }
-        root.lookFeelController.loadRecipe(preset)
+        lookFeelController.loadRecipe(preset)
     }
     function resetLookFeelScope(scope) {
         if (!root.lookFeelRecipe || root.lookFeelBusy)
@@ -590,13 +608,13 @@ Item {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy)
             return;
         if (nextShellStyle)
-            root.shellStyle = root.normalizeShellStyle(nextShellStyle);
+            root.shellStyle = root.normalizeEditedShellStyle(nextShellStyle);
         if (nextDesktopStyle)
-            root.desktopStyle = root.normalizeDesktopStyle(nextDesktopStyle);
+            root.desktopStyle = root.normalizeEditedDesktopStyle(nextDesktopStyle);
         if (nextBarStyle)
-            root.barStyle = root.normalizeBarStyle(nextBarStyle);
+            root.barStyle = root.normalizeEditedBarStyle(nextBarStyle);
         if (nextAnimationsStyle)
-            root.animationsStyle = root.normalizeAnimationsStyle(nextAnimationsStyle);
+            root.animationsStyle = root.normalizeEditedAnimationsStyle(nextAnimationsStyle);
         liveCanvasPanel.setStagedColors(overrides || ({}), variant);
         session.selectVariant(variant);
         errorMessage = "";
@@ -955,7 +973,7 @@ Item {
 
         function onDiscarded(sessionId, generationId) {
             root.liveCanvasActive = false
-            root.demoController.markClosed()
+            demoController.markClosed()
             root.livePanelOpen = false
             liveCanvasPanel.clearColorSession()
             session.clearGeneration()
@@ -1051,7 +1069,7 @@ Item {
         onApplied: function(sessionId, generationId, variant, themeName) {
             if (root.closeAfterCancel)
                 return
-            if (root.applyController.handlePreviewApplied())
+            if (applyController.handlePreviewApplied())
                 return
             root.refreshProtocol()
 
@@ -1062,12 +1080,12 @@ Item {
                 // Reassert workspace ownership after the candidate reload. The
                 // Demo itself remains in Hyprland's dwindle layout; only the
                 // Studio panel is an overlay and must never become a tiled pane.
-                root.demoController.reflow()
+                demoController.reflow()
                 return
             }
 
             if (root.pendingDemo) {
-                root.demoController.finishPendingDemo()
+                demoController.finishPendingDemo()
                 root.livePanelOpen = true
                 root.opened = false
                 return
@@ -1085,11 +1103,11 @@ Item {
         onFailed: function(message) {
             if (root.closeAfterCancel)
                 return
-            if (root.applyController.handlePreviewFailed(message))
+            if (applyController.handlePreviewFailed(message))
                 return
             root.errorMessage = message
             if (root.pendingDemo) {
-                root.demoController.finishPendingDemo()
+                demoController.finishPendingDemo()
             }
         }
     }
@@ -1098,10 +1116,10 @@ Item {
         target: demoController
 
         function onOpened(sessionId, workspace, monitor, reused) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             if (root.pendingDemo) {
-                root.previewController.previewCurrentState(session.selectedVariant)
+                previewController.previewCurrentState(session.selectedVariant)
                 return
             }
             root.opened = false
@@ -1109,7 +1127,7 @@ Item {
         }
 
         function onOpenFailed(message) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             root.errorMessage = message
             root.livePanelOpen = root.liveCanvasActive
@@ -1117,28 +1135,28 @@ Item {
         }
 
         function onWindowOpened(sessionId, workspace, monitor, reused) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             root.opened = false
             root.livePanelOpen = root.liveCanvasActive
         }
 
         function onWindowOpenFailed(message) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             root.errorMessage = message
             root.opened = root.liveCanvasActive ? false : true
         }
 
         function onReflowed(sessionId) {
-            if (root.closeAfterCancel || root.applyController.active)
+            if (root.closeAfterCancel || applyController.active)
                 return
             if (sessionId !== session.sessionId) {
                 root.errorMessage = "Backend reflowed a different live canvas session"
                 return
             }
             if (root.pendingDemo) {
-                root.demoController.finishPendingDemo()
+                demoController.finishPendingDemo()
                 root.livePanelOpen = true
                 root.opened = false
                 return
@@ -1151,7 +1169,7 @@ Item {
         }
 
         function onReflowFailed(message) {
-            if (root.closeAfterCancel || root.applyController.active)
+            if (root.closeAfterCancel || applyController.active)
                 return
             // Demo cleanup removes demo-state.json after its windows and
             // workspace are gone. A queued reflow can arrive just after that
@@ -1164,25 +1182,25 @@ Item {
                 return
             }
             root.errorMessage = message
-            root.demoController.finishPendingDemo()
+            demoController.finishPendingDemo()
             root.livePanelOpen = root.liveCanvasActive
             root.opened = root.liveCanvasActive ? false : true
         }
 
         function onCaptured(sessionId, previewPath) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
         }
 
         function onCaptureFailed(message) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             root.errorMessage = message
             root.opened = true
         }
 
         function onClosed(sessionId, wasClosed) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             if (sessionId !== session.sessionId) {
                 root.errorMessage = "Backend closed a different demo session"
@@ -1197,7 +1215,7 @@ Item {
         }
 
         function onCloseFailed(message) {
-            if (root.applyController.active)
+            if (applyController.active)
                 return
             root.errorMessage = message
             if (root.pendingWindowDemo) {
@@ -1412,16 +1430,16 @@ Item {
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
         onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
         onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
-            root.shellStyle = root.normalizeShellStyle(shellStyle)
-            root.desktopStyle = root.normalizeDesktopStyle(desktopStyle)
-            root.barStyle = root.normalizeBarStyle(barStyle)
-            root.animationsStyle = root.normalizeAnimationsStyle(animationsStyle)
+            root.shellStyle = root.normalizeEditedShellStyle(shellStyle)
+            root.desktopStyle = root.normalizeEditedDesktopStyle(desktopStyle)
+            root.barStyle = root.normalizeEditedBarStyle(barStyle)
+            root.animationsStyle = root.normalizeEditedAnimationsStyle(animationsStyle)
             root.refreshLookFeelCustomized()
         }
         onLookFeelPresetRequested: root.requestLookFeelPreset(preset)
         onLookFeelResetRequested: root.resetLookFeelScope(scope)
         onTerminalIntentChanged: function(terminal) {
-            root.terminalTranslucency = root.normalizeTerminalTranslucency(terminal)
+            root.terminalTranslucency = root.normalizeEditedTerminalTranslucency(terminal)
             root.refreshLookFeelCustomized()
         }
         onProtocolBackRequested: root.navigateProtocol("back")

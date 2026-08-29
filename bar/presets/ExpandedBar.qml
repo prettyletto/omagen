@@ -6,26 +6,27 @@ import qs.Ui
 import ".." as Bar
 
 Item {
+  id: expandedBarContent
   property var bar: null
     anchors.fill: parent
 
     Bar.WidgetGroup {
-        bar: bar
+        bar: expandedBarContent.bar
         region: "left"
-        entries: bar.layoutConfig.left
+        entries: expandedBarContent.bar.layoutConfig.left
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
     }
     Bar.CenterGestureGroup {
-        bar: bar
+        bar: expandedBarContent.bar
         region: "center"
-        entries: bar.layoutConfig.center
+        entries: expandedBarContent.bar.layoutConfig.center
         anchors.centerIn: parent
     }
     Bar.WidgetGroup {
-        bar: bar
+        bar: expandedBarContent.bar
         region: "right"
-        entries: bar.layoutConfig.right
+        entries: expandedBarContent.bar.layoutConfig.right
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
     }

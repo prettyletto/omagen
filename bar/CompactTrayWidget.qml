@@ -30,8 +30,22 @@ BarWidget {
     readonly property var allItems: compactTrayRoot.bucket("all")
     readonly property int drawerCount: drawerItems.length
     readonly property bool hasItems: pinnedItems.length > 0 || drawerCount > 0
-    readonly property bool vertical: bar.vertical
+    readonly property bool vertical: bar ? bar.vertical : false
+    // A floating compact bar has a dedicated tray surface and must keep its
+    // collapsed affordance available even while no StatusNotifier item is
+    // registered. The native tray may have nothing to reveal, but the user
+    // can still open the management menu and newly registered items should
+    // not cause the bar geometry to appear from nowhere.
+    readonly property bool keepCollapsedControl: !!bar && bar.floatingCompact
+    readonly property bool islandsHorizontalChevron: !vertical && !!bar
+        && bar.topology === "islands"
     readonly property int itemExtent: Style.bar.iconSlot
+    readonly property int verticalWidth: bar && bar.floatingCompact
+        ? bar.barSize + Style.space(4) : (bar ? bar.barSize : 0)
+    readonly property int collapsedWidth: vertical
+        ? ((hasItems || keepCollapsedControl) ? itemExtent * (1 + pinnedItems.length) : 0)
+        : (hasItems ? itemExtent * (1 + pinnedItems.length)
+            : (keepCollapsedControl ? itemExtent : 0))
     readonly property int submenuDepth: submenuStack.length
     readonly property string currentMenuTitle: submenuDepth > 0 ? submenuStack[submenuDepth - 1].title : ""
     readonly property var currentMenuChildren: submenuDepth > 0
@@ -59,7 +73,7 @@ BarWidget {
 
     function ownedByOmarchy(item) {
         var layout = compactTrayRoot.bar && compactTrayRoot.bar.layoutConfig
-            ? compactTrayRoot.bar.layoutConfig : bar.layoutConfig
+            ? compactTrayRoot.bar.layoutConfig : ({})
         return compactTrayRoot.itemNamed(item, "localsend")
             || (compactTrayRoot.layoutHasWidget(layout, "omarchy.dropbox")
                 && compactTrayRoot.itemNamed(item, "dropbox"))
@@ -127,12 +141,12 @@ BarWidget {
         return name.slice(-9) === "-symbolic"
     }
 
-    visible: hasItems
-    implicitWidth: vertical ? bar.barSize
-        : (hasItems ? itemExtent * (1 + pinnedItems.length + (expanded ? drawerCount : 0)) : 0)
+    visible: hasItems || keepCollapsedControl
+    implicitWidth: vertical ? verticalWidth
+        : (collapsedWidth + (expanded ? itemExtent * drawerCount : 0))
     implicitHeight: vertical
-        ? (hasItems ? itemExtent * (1 + pinnedItems.length + (expanded ? drawerCount : 0)) : 0)
-        : bar.barSize
+        ? (collapsedWidth + (expanded ? itemExtent * drawerCount : 0))
+        : (bar ? bar.barSize : 0)
     width: implicitWidth
     height: implicitHeight
 
@@ -214,12 +228,13 @@ BarWidget {
     Rectangle {
         id: compactTraySurface
         anchors.fill: parent
-        color: bar.topology === "islands"
+        color: bar && bar.topology === "islands"
             ? "transparent"
-            : (bar.transparent ? "transparent" : Util.alpha(bar.surfaceColor, bar.surfaceOpacity))
-        radius: bar.barSize / 2
-        border.width: bar.topology === "islands" ? 0 : bar.borderWidth
-        border.color: !bar.transparent && bar.borderWidth > 0
+            : (bar && bar.transparent ? "transparent" : bar
+                ? Util.alpha(bar.surfaceColor, bar.surfaceOpacity) : "transparent")
+        radius: bar ? bar.barSize / 2 : 0
+        border.width: bar && bar.topology === "islands" ? 0 : (bar ? bar.borderWidth : 0)
+        border.color: bar && !bar.transparent && bar.borderWidth > 0
             ? Util.alpha(bar.borderColor, bar.borderOpacity)
             : "transparent"
     }
@@ -228,16 +243,20 @@ BarWidget {
         id: compactTrayChevron
         width: compactTrayRoot.vertical ? parent.width : compactTrayRoot.itemExtent
         height: compactTrayRoot.vertical ? compactTrayRoot.itemExtent : parent.height
-        x: compactTrayRoot.vertical ? 0 : parent.width - width
-        anchors.top: compactTrayRoot.vertical ? parent.top : undefined
+        x: 0
+        anchors.bottom: compactTrayRoot.vertical ? parent.bottom : undefined
 
         Text {
             anchors.centerIn: parent
-            // Compact vertical rails keep the tray entry at the top;
-            // the collapsed affordance points upward toward the tray.
+            // The detached vertical tray expands upward from the rail;
+            // invert the chevron when it is open so it points back down.
+            // Islands keep the tray against the right system island, so its
+            // collapsed affordance points left toward the space it reveals.
             text: compactTrayRoot.vertical
-                ? (compactTrayRoot.expanded ? "\uf077" : "\uf078")
-                : (compactTrayRoot.expanded ? "\uf053" : "\uf054")
+                ? (compactTrayRoot.expanded ? "\uf078" : "\uf077")
+                : compactTrayRoot.islandsHorizontalChevron
+                    ? (compactTrayRoot.expanded ? "\uf054" : "\uf053")
+                    : (compactTrayRoot.expanded ? "\uf053" : "\uf054")
             color: compactTrayRoot.foreground
             font.family: compactTrayRoot.fontFamily
             font.pixelSize: Style.bar.iconFont
@@ -264,7 +283,11 @@ BarWidget {
 
     Row {
         id: compactTrayIcons
-        x: compactTrayChevron.x - width
+        // The detached horizontal tray starts with its chevron and reveals
+        // drawer items outward, toward the monitor edge.
+        x: compactTrayRoot.vertical
+            ? compactTrayChevron.x
+            : compactTrayChevron.x + compactTrayChevron.width
         anchors.verticalCenter: parent.verticalCenter
         spacing: 0
         visible: !compactTrayRoot.vertical && compactTrayRoot.expanded && compactTrayRoot.drawerCount > 0
@@ -324,7 +347,10 @@ BarWidget {
 
     Row {
         id: compactTrayPinned
-        x: parent.width - width
+        x: compactTrayRoot.vertical
+            ? parent.width - width
+            : compactTrayChevron.width
+                + (compactTrayRoot.expanded ? compactTrayRoot.drawerCount * compactTrayRoot.itemExtent : 0)
         anchors.verticalCenter: parent.verticalCenter
         spacing: 0
 
@@ -384,7 +410,7 @@ BarWidget {
     Column {
         id: compactTrayVerticalIcons
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: compactTrayChevron.bottom
+        anchors.bottom: compactTrayChevron.top
         spacing: 0
         visible: compactTrayRoot.vertical && compactTrayRoot.expanded
 
@@ -444,8 +470,9 @@ BarWidget {
     Column {
         id: compactTrayPinnedVertical
         anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: compactTrayRoot.expanded ? compactTrayVerticalIcons.bottom : compactTrayChevron.bottom
+        anchors.top: parent.top
         spacing: 0
+        visible: compactTrayRoot.vertical
 
         Repeater {
             model: compactTrayRoot.pinnedItems
@@ -861,4 +888,3 @@ BarWidget {
     }
 
 }
-

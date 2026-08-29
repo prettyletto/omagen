@@ -4,6 +4,8 @@ Item {
   id: root
   property var bar: null
   anchors.fill: parent
+  implicitWidth: presetLoader.item ? presetLoader.item.implicitWidth : 0
+  implicitHeight: presetLoader.item ? presetLoader.item.implicitHeight : 0
 
   readonly property string preset: bar ? String(bar.spec.preset || "custom") : "custom"
 
@@ -24,6 +26,7 @@ Item {
   }
 
   Loader {
+    id: presetLoader
     anchors.fill: parent
     active: root.bar !== null
     source: root.bar ? root.sourceFor(root.preset) : ""

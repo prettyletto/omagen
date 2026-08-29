@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import qs.Commons
 import "Contrast.js" as Contrast
+import "../../bar/BarSizing.js" as BarSizing
 
 Item {
     id: root
@@ -64,17 +65,26 @@ Item {
         : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 5 : 9
     readonly property real paneInset: root.configurationPreview && root.desktopStyle.spacing === "airy" ? 12
         : root.configurationPreview && root.desktopStyle.spacing === "compact" ? 7 : 9
-    readonly property real previewBarHeight: root.barStyle.density === "comfortable" ? 34
-        : root.barStyle.density === "compact" ? 22 : 28
     readonly property var barSpec: root.barStyle.spec || ({})
     readonly property string barTopology: root.barSpec.topology || (root.barStyle.visibility === "islands" ? "sections" : root.barStyle.form === "docked" ? "sections" : "continuous")
     readonly property string barPosition: root.barSpec.position || "top"
     readonly property bool verticalBar: root.barPosition === "left" || root.barPosition === "right"
+    readonly property string barDensity: String(root.barSpec.geometry && root.barSpec.geometry.density || root.barStyle.density || "native")
+    readonly property real previewBarHeight: BarSizing.baseSize(
+        root.barDensity,
+        root.verticalBar,
+        Style.bar.sizeHorizontal,
+        Style.bar.sizeVertical,
+        Style.barScaleWithFont,
+        Style.fontScale
+    )
     readonly property real barOpacity: root.barSpec.surface && root.barSpec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.opacity))) : 1
     readonly property int barRadius: root.barSpec.geometry && root.barSpec.geometry.radius !== undefined ? Number(root.barSpec.geometry.radius) : 0
     readonly property int barEdgeOffset: root.barSpec.geometry && root.barSpec.geometry.edge_offset !== undefined ? Math.max(0, Number(root.barSpec.geometry.edge_offset)) : 0
     readonly property int barOuterMargin: root.barSpec.geometry && root.barSpec.geometry.outer_margin !== undefined ? Math.max(0, Number(root.barSpec.geometry.outer_margin)) : 0
-    readonly property int barThickness: root.barSpec.geometry && Number(root.barSpec.geometry.thickness) > 0 ? Number(root.barSpec.geometry.thickness) : root.previewBarHeight
+    readonly property int barThickness: root.barSpec.geometry && Number(root.barSpec.geometry.thickness) > 0
+        ? Number(root.barSpec.geometry.thickness)
+        : root.previewBarHeight + BarSizing.structuralPadding(root.barSpec, root.verticalBar ? Style.space(16) : 0)
     readonly property int barBorderWidth: root.barSpec.surface && root.barSpec.surface.border_width !== undefined ? Math.max(0, Number(root.barSpec.surface.border_width)) : 0
     readonly property real barBorderOpacity: root.barSpec.surface && root.barSpec.surface.border_opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.border_opacity))) : 0
     readonly property int barMotionDuration: root.barSpec.motion && root.barSpec.motion.duration_ms !== undefined ? Math.max(0, Number(root.barSpec.motion.duration_ms)) : 150
@@ -310,14 +320,14 @@ Item {
                     anchors.left: parent.left
                     anchors.leftMargin: 8
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: root.barStyle.density === "compact" ? 3 : 5
+                    spacing: root.barDensity === "compact" ? 3 : 5
 
                     Repeater {
                         model: ["1", "2", "3"]
                         delegate: Rectangle {
                             required property string modelData
-                            width: root.barStyle.density === "comfortable" ? 24 : root.barStyle.density === "compact" ? 15 : 19
-                            height: parent.parent.height - (root.barStyle.density === "compact" ? 8 : 10)
+                            width: root.barDensity === "comfortable" ? 24 : root.barDensity === "compact" ? 15 : 19
+                            height: parent.parent.height - (root.barDensity === "compact" ? 8 : 10)
                             radius: Math.min(5, height / 3)
                             color: modelData === "1" ? Util.alpha(root.barActive(), 0.28) : "transparent"
                             border.width: modelData === "1" ? 1 : 0

@@ -54,4 +54,3 @@ PanelWindow {
         opacity: 0.8
     }
 }
-

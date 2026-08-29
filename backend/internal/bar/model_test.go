@@ -11,7 +11,7 @@ func TestPresetCompilationSelectsNativeOrOmagen(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if compiled.Engine != EngineNative || !compiled.Capabilities.Topology {
+	if compiled.Engine != EngineNative || !compiled.Capabilities.Topology || !compiled.Capabilities.Clock {
 		t.Fatalf("native compilation = %#v", compiled)
 	}
 	sections, err := Preset("sections")
@@ -75,6 +75,35 @@ func TestExplicitNativeRejectsAdvancedBehavior(t *testing.T) {
 	spec.Behavior.Visibility = "auto_hide"
 	if _, err := Compile(spec); err == nil {
 		t.Fatal("native engine accepted auto-hide")
+	}
+}
+
+func TestClockStylesUseOmagenWithoutChangingNativeClockBehavior(t *testing.T) {
+	if spec := Default(); spec.Clock.Style != "native" {
+		t.Fatalf("default clock style = %q, want native", spec.Clock.Style)
+	}
+
+	for _, style := range []string{"neon", "matrix", "lcd"} {
+		t.Run(style, func(t *testing.T) {
+			spec := Default()
+			spec.Clock.Style = style
+			compiled, err := Compile(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if compiled.Engine != EngineOmagen || compiled.Native {
+				t.Fatalf("clock style %q compiled as native: %#v", style, compiled)
+			}
+			if compiled.Capabilities.Clock {
+				t.Fatalf("clock style %q incorrectly reported native capability", style)
+			}
+		})
+	}
+
+	spec := Default()
+	spec.Clock.Style = "unsupported"
+	if err := spec.Validate(); err == nil {
+		t.Fatal("unsupported clock style was accepted")
 	}
 }
 

@@ -23,10 +23,10 @@ Item {
     height: implicitHeight
 
     Bar.WidgetGroup {
-        bar: bar
+        bar: compactHorizontalContent.bar
         id: compactLeftGroup
         region: "left"
-        entries: bar.layoutConfig.left
+        entries: compactHorizontalContent.bar.layoutConfig.left
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
     }
@@ -37,13 +37,13 @@ Item {
         y: Math.round((parent.height - Style.space(16)) / 2)
         width: 1
         height: Style.space(16)
-        color: Util.alpha(bar.barForeground, 0.24)
+        color: Util.alpha(compactHorizontalContent.bar.barForeground, 0.24)
     }
 
     Bar.CenterGestureGroup {
-        bar: bar
+        bar: compactHorizontalContent.bar
         id: compactCenterGroup
-        entries: bar.layoutConfig.center
+        entries: compactHorizontalContent.bar.layoutConfig.center
         width: implicitWidth
         height: implicitHeight
         x: compactLeftGroup.width + compactHorizontalContent.zoneGap
@@ -57,16 +57,17 @@ Item {
         y: Math.round((parent.height - Style.space(16)) / 2)
         width: 1
         height: Style.space(16)
-        color: Util.alpha(bar.barForeground, 0.24)
+        color: Util.alpha(compactHorizontalContent.bar.barForeground, 0.24)
     }
 
     Bar.WidgetGroup {
-        bar: bar
+        bar: compactHorizontalContent.bar
         id: compactRightGroup
         region: "right"
-        entries: bar.entriesWithoutTray(bar.layoutConfig.right)
+        entries: compactHorizontalContent.bar.entriesWithoutTray(compactHorizontalContent.bar.layoutConfig.right)
         x: compactLeftGroup.width + compactCenterGroup.width
             + compactHorizontalContent.zoneGap * 2
         anchors.verticalCenter: parent.verticalCenter
     }
+
 }

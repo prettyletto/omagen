@@ -16,25 +16,31 @@ Item {
     required property var entry
     property bool active: true
     property string region: ""
-    readonly property string moduleName: bar.entryId(entry)
-    readonly property var settings: bar.entrySettings(entry)
-    readonly property string customType: bar.customModuleType(entry)
+    readonly property string moduleName: bar ? bar.entryId(entry) : ""
+    readonly property var settings: bar ? bar.entrySettings(entry) : ({})
+    readonly property string customType: bar ? bar.customModuleType(entry) : ""
     readonly property bool qmlCustom: customType === "qml"
     readonly property bool commandCustom: customType === "command"
-    readonly property bool compactTray: moduleName === "omarchy.tray"
+    readonly property bool compactTray: !!bar && moduleName === "omarchy.tray"
         && (bar.topology === "islands"
             || bar.topology === "dock"
             || (bar.topology === "floating" && bar.density === "compact")
             || (bar.topology === "minimal" && bar.vertical))
-    readonly property bool workspacePresentation: moduleName === "omarchy.workspaces"
+    // Keep the native clock mounted as the active item. StyledClockWidget is
+    // presentation-only and paints above it, so the native calendar, IPC,
+    // format cycling, timezone action, and popout identity remain untouched.
+    readonly property bool styledClock: !!bar && moduleName === "omarchy.clock"
+        && bar.clockStyle !== "native"
+    readonly property bool workspacePresentation: !!bar && moduleName === "omarchy.workspaces"
         && bar.workspacePresentationActive
-    readonly property bool dragSource: bar.barDragSource === slot
-    readonly property bool panelOpen: bar.activePopout === slot.activeItem
+    readonly property bool dragSource: !!bar && bar.barDragSource === slot
+    readonly property bool panelOpen: !!bar && bar.activePopout === slot.activeItem
     // Match the native bar's indicator contract. Panel widgets can supply
     // a painted extent (clock/weather use a smaller vertical mark); using
     // the whole slot makes the indicator look like a line through the
     // icon instead of a pointer to the active module.
     readonly property real panelIndicatorExtent: {
+        if (!bar) return 0
         var key = bar.vertical ? "openPanelIndicatorHeight" : "openPanelIndicatorWidth"
         var hint = activeItem && key in activeItem ? activeItem[key] : undefined
         if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
@@ -45,7 +51,7 @@ Item {
     // alone would hide that dependency from QML's binding tracker and
     // could leave a stale component mounted until a full shell restart.
     readonly property var registryComponent: {
-        var widgets = bar.barWidgetRegistry && bar.barWidgetRegistry.widgets
+        var widgets = bar && bar.barWidgetRegistry && bar.barWidgetRegistry.widgets
             ? bar.barWidgetRegistry.widgets : ({})
         if (qmlCustom || commandCustom) return null
         if (compactTray) return compactTrayWidgetComponent
@@ -59,38 +65,59 @@ Item {
     // Native vertical ModuleSlot fixes every widget to the rail width;
     // allowing a widget's horizontal implicit width here clips text and
     // icons into the fragments seen in the live screenshot.
-    implicitWidth: !slot.active ? 0 : bar.vertical
+    implicitWidth: !slot.active || !bar ? 0 : slot.styledClock
+        ? (styledClockLoader.item ? styledClockLoader.item.implicitWidth : (bar.vertical ? bar.barSize : Style.space(78)))
+        : bar.vertical
         ? bar.barSize
         : (activeItem && activeItem.visible !== false ? activeItem.implicitWidth : 0)
-    implicitHeight: !slot.active ? 0 : (activeItem && activeItem.visible !== false ? activeItem.implicitHeight : 0)
+    implicitHeight: !slot.active || !bar ? 0 : slot.styledClock
+        ? (styledClockLoader.item ? styledClockLoader.item.implicitHeight : (bar.vertical ? Style.bar.iconSlot * 3 : bar.barSize))
+        : (activeItem && activeItem.visible !== false ? activeItem.implicitHeight : 0)
     width: implicitWidth
     height: implicitHeight
     // Third-party widgets may paint a horizontal label or badge even
     // after receiving a vertical bar. Keep that drawing contained in its
     // compact rail slot so it cannot overlap adjacent modules.
-    clip: bar.vertical
+    clip: bar ? bar.vertical : false
 
-    Component.onCompleted: bar.registerModuleSlot(slot)
-    Component.onDestruction: bar.unregisterModuleSlot(slot)
+    property bool registered: false
+
+    function registerIfReady() {
+        if (bar && !registered) {
+            bar.registerModuleSlot(slot)
+            registered = true
+        }
+    }
+
+    function unregisterIfReady() {
+        if (bar && registered) {
+            bar.unregisterModuleSlot(slot)
+            registered = false
+        }
+    }
+
+    onBarChanged: registerIfReady()
+    Component.onCompleted: registerIfReady()
+    Component.onDestruction: unregisterIfReady()
 
     BorderSurface {
         visible: slot.dragSource
         anchors.fill: parent
         anchors.margins: Style.space(1)
         color: "transparent"
-        borderSpec: Border.flat(bar.barForeground, 1)
+        borderSpec: Border.flat(bar ? bar.barForeground : "transparent", 1)
         radius: Math.min(Style.cornerRadius, height / 2)
-        opacity: bar.transparent ? 0.32 : 0.7
+        opacity: bar && bar.transparent ? 0.32 : 0.7
     }
 
     Rectangle {
-        visible: bar.barDragSource !== null && bar.barDragTarget === slot
-        color: bar.urgent
+        visible: !!bar && bar.barDragSource !== null && bar.barDragTarget === slot
+        color: bar ? bar.urgent : "transparent"
         radius: Math.min(width, height) / 2
-        width: bar.vertical ? slot.width : Style.space(2)
-        height: bar.vertical ? Style.space(2) : slot.height
-        x: bar.vertical ? 0 : (bar.barDragAfter ? slot.width - width : 0)
-        y: bar.vertical ? (bar.barDragAfter ? slot.height - height : 0) : 0
+        width: bar && bar.vertical ? slot.width : Style.space(2)
+        height: bar && bar.vertical ? Style.space(2) : slot.height
+        x: bar && bar.vertical ? 0 : (bar && bar.barDragAfter ? slot.width - width : 0)
+        y: bar && bar.vertical ? (bar.barDragAfter ? slot.height - height : 0) : 0
         z: 20
     }
 
@@ -101,14 +128,14 @@ Item {
         opacity: slot.panelOpen && !slot.dragSource ? 0.9 : 0
         color: Color.accent
         radius: Math.min(width, height) / 2
-        width: bar.vertical ? Style.space(2) : slot.panelIndicatorExtent
-        height: bar.vertical ? slot.panelIndicatorExtent : Style.space(2)
-        x: bar.vertical
+        width: bar && bar.vertical ? Style.space(2) : slot.panelIndicatorExtent
+        height: bar && bar.vertical ? slot.panelIndicatorExtent : Style.space(2)
+        x: bar && bar.vertical
             ? (bar.position === "left" ? parent.width - width - inset : inset)
             : Math.round((parent.width - width) / 2)
-        y: bar.vertical
+        y: bar && bar.vertical
             ? Math.round((parent.height - height) / 2)
-            : (bar.position === "top" ? parent.height - height - inset : inset)
+            : (bar && bar.position === "top" ? parent.height - height - inset : inset)
         z: 50
 
         Behavior on opacity {
@@ -120,13 +147,30 @@ Item {
         id: loader
         active: slot.active && !slot.qmlCustom && !slot.commandCustom && !slot.workspacePresentation
         anchors.fill: parent
-        opacity: slot.dragSource ? 0.25 : 1
+        // Do not destroy or replace the native clock item. It owns the
+        // calendar panel and remains the click/popup target even while its
+        // visual label is covered by the selected Omagen face.
+        opacity: slot.styledClock ? 0 : (slot.dragSource ? 0.25 : 1)
         sourceComponent: slot.registryComponent
         onLoaded: {
             if (!item) return
             if ("bar" in item) item.bar = bar
             if ("moduleName" in item) item.moduleName = slot.moduleName
             if ("settings" in item) item.settings = slot.settings
+            if (styledClockLoader.item && "clock" in styledClockLoader.item) styledClockLoader.item.clock = item
+        }
+    }
+
+    Loader {
+        id: styledClockLoader
+        active: slot.active && slot.styledClock
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        source: slot.styledClock ? Qt.resolvedUrl("ClockStyleWidget.qml") : ""
+        onLoaded: {
+            if (!item) return
+            if ("bar" in item) item.bar = bar
+            if ("clock" in item) item.clock = loader.item
         }
     }
 
@@ -175,7 +219,7 @@ Item {
 
     Component {
         id: commandModuleComponent
-        Bar.CustomCommandModule { entry: slot.entry; bar: bar }
+        Bar.CustomCommandModule { entry: slot.entry; bar: slot.bar }
     }
 
     MouseArea {
@@ -188,10 +232,10 @@ Item {
 
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
-        enabled: !slot.compactTray && slot.visible && slot.width > 0 && slot.height > 0
+        enabled: !!bar && !slot.compactTray && slot.visible && slot.width > 0 && slot.height > 0
         propagateComposedEvents: true
         cursorShape: dragging ? Qt.ClosedHandCursor
-            : (bar.moduleClickTargetAt(slot, mouseX, mouseY) ? Qt.PointingHandCursor : Qt.ArrowCursor)
+            : (bar && bar.moduleClickTargetAt(slot, mouseX, mouseY) ? Qt.PointingHandCursor : Qt.ArrowCursor)
 
         onPressed: function(mouse) {
             dragging = false

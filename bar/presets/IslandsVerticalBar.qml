@@ -6,8 +6,9 @@ import qs.Ui
 import ".." as Bar
 
 Item {
+  id: islandsVerticalContent
   property var bar: null
-    width: bar.islandThickness
+    width: islandsVerticalContent.bar.islandThickness
     height: parent ? parent.height : 0
 
     Column {
@@ -20,17 +21,17 @@ Item {
                 - Style.space(12)) / 2)
 
             Bar.IslandSurface {
-                bar: bar
+                bar: islandsVerticalContent.bar
                 id: islandsVerticalRight
                 width: parent.width
                 height: rightVerticalGroup.implicitHeight + Style.space(12)
                 horizontalPadding: 0
                 verticalPadding: Style.space(6)
                 Bar.VerticalWidgetGroup {
-                    bar: bar
+                    bar: islandsVerticalContent.bar
                     id: rightVerticalGroup
                     region: "right"
-                    entries: bar.entriesWithoutTray(bar.layoutConfig.right)
+                    entries: islandsVerticalContent.bar.entriesWithoutTray(islandsVerticalContent.bar.layoutConfig.right)
                     centerSlots: true
                     width: bar.barSize
                     anchors.centerIn: parent
@@ -43,17 +44,17 @@ Item {
             }
 
             Bar.IslandSurface {
-                bar: bar
+                bar: islandsVerticalContent.bar
                 id: islandsVerticalTray
-                x: (bar.islandThickness - width) / 2
+                x: (islandsVerticalContent.bar.islandThickness - width) / 2
                 horizontalPadding: 0
                 verticalPadding: 0
-                implicitWidth: bar.barSize
-                implicitHeight: Math.max(bar.barSize, traySlot.implicitHeight)
+                implicitWidth: islandsVerticalContent.bar.barSize
+                implicitHeight: Math.max(islandsVerticalContent.bar.barSize, traySlot.implicitHeight)
                 Bar.WidgetSlot {
-                    bar: bar
+                    bar: islandsVerticalContent.bar
                     id: traySlot
-                    entry: bar.trayEntry(bar.layoutConfig.right) || ({ id: "omarchy.tray" })
+                    entry: islandsVerticalContent.bar.trayEntry(islandsVerticalContent.bar.layoutConfig.right) || ({ id: "omarchy.tray" })
                     region: "right"
                     anchors.horizontalCenter: parent.horizontalCenter
                     anchors.top: parent.top
@@ -66,17 +67,17 @@ Item {
             }
 
             Bar.IslandSurface {
-                bar: bar
+                bar: islandsVerticalContent.bar
                 id: islandsVerticalCenter
                 width: parent.width
                 height: centerVerticalGroup.implicitHeight + Style.space(12)
                 horizontalPadding: 0
                 verticalPadding: Style.space(6)
                 Bar.CenterGestureGroup {
-                    bar: bar
+                    bar: islandsVerticalContent.bar
                     id: centerVerticalGroup
-                    entries: bar.layoutConfig.center
-                    width: bar.barSize
+                    entries: islandsVerticalContent.bar.layoutConfig.center
+                    width: islandsVerticalContent.bar.barSize
                     anchors.centerIn: parent
                 }
             }
@@ -87,19 +88,19 @@ Item {
             }
 
             Bar.IslandSurface {
-                bar: bar
+                bar: islandsVerticalContent.bar
                 id: islandsVerticalLeft
                 width: parent.width
                 height: leftVerticalGroup.implicitHeight + Style.space(12)
                 horizontalPadding: 0
                 verticalPadding: Style.space(6)
                 Bar.VerticalWidgetGroup {
-                    bar: bar
+                    bar: islandsVerticalContent.bar
                     id: leftVerticalGroup
                     region: "left"
-                    entries: bar.layoutConfig.left
+                    entries: islandsVerticalContent.bar.layoutConfig.left
                     centerSlots: true
-                    width: bar.barSize
+                    width: islandsVerticalContent.bar.barSize
                     anchors.centerIn: parent
                 }
             }

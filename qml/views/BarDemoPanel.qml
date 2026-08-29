@@ -5,6 +5,7 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "../components" as Components
+import "../../bar/BarSizing.js" as BarSizing
 
 // An interactive BarSpec reader surface. It is also the visual contract for
 // the full-bar replacement: the demo exposes the same regions and growth
@@ -52,11 +53,14 @@ PanelWindow {
     readonly property int barRadius: root.geometrySpec.radius !== undefined ? Math.max(0, Number(root.geometrySpec.radius)) : 0
     readonly property int barBaseThickness: root.geometrySpec.thickness !== undefined && Number(root.geometrySpec.thickness) > 0
         ? Number(root.geometrySpec.thickness)
-        : String(root.geometrySpec.density || root.barStyle.density || "native") === "compact"
-            ? (root.vertical ? 24 : 22)
-            : String(root.geometrySpec.density || root.barStyle.density || "native") === "comfortable"
-                ? (root.vertical ? 32 : 30)
-                : (root.vertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal)
+        : BarSizing.baseSize(
+            String(root.geometrySpec.density || root.barStyle.density || "native"),
+            root.vertical,
+            Style.bar.sizeHorizontal,
+            Style.bar.sizeVertical,
+            Style.barScaleWithFont,
+            Style.fontScale
+        )
     readonly property int structuralThicknessPadding: root.topology === "dock"
         || (root.topology === "islands" && root.vertical) ? Style.space(16) : 0
     readonly property int barThickness: root.barBaseThickness + root.structuralThicknessPadding
