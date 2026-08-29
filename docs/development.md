@@ -19,6 +19,7 @@ assets/                   README and documentation media
 docs/                     User and contributor guides
 scripts/v1-check.sh       Full validation gate
 dev-install.sh            Local development installer
+uninstall.sh              Complete local/plugin-state uninstaller
 ~~~
 
 The plugin manifest declares the ID <code>pretty.omagen</code>, the

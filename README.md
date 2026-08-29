@@ -220,10 +220,28 @@ should also start with the [agent navigation guide](AGENTS.md) and its
 
 ## Remove
 
+To remove Omagen completely, including the separate full-bar plugin, its
+consented runtime hook, settings, and Omagen session state, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/uninstall.sh | bash
+```
+
+From a local checkout, the equivalent command is:
+
+```sh
+./uninstall.sh
+```
+
+The uninstaller recovers an active Omagen session before removing its files.
+It preserves permanent themes created by Omagen, unrelated Omarchy plugins,
+and hooks that do not carry Omagen's ownership marker.
+
+For plugin-manager removal only, without removing Omagen's user state:
+
 ```sh
 omarchy plugin remove pretty.omagen --yes
 ```
 
-Removing the plugin does not delete user-created permanent themes. Omagen
-session state lives under `~/.local/state/omagen`; only remove that state
-after confirming that no session is active.
+The complete uninstaller is the recommended command when Omagen should be
+removed from the machine.

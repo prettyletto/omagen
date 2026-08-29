@@ -20,7 +20,7 @@ func TestCatalogContainsStableInitialPresets(t *testing.T) {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 3 || entries[7].Revision != 2 || entries[8].Revision != 3 || entries[9].Revision != 3 {
+	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 3 || entries[7].Revision != 2 || entries[8].Revision != 3 || entries[9].Revision != 4 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
@@ -150,7 +150,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 		{PresetMonolith, "glyphs", "islands", "gothic", "none", 3},
 		{PresetOrbit, "glyphs", "orbit", "lcd", "none", 2},
 		{PresetNature, "glyphs", "islands", "classical", "none", 3},
-		{PresetOriental, "kanji", "ribbon", "classical", "none", 3},
+		{PresetOriental, "kanji", "ribbon", "classical", "none", 4},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -180,13 +180,13 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if oriental.Window.BorderStyle != "split_top" || oriental.Window.Active != "frosted_balanced" || oriental.Window.Inactive != "shadow_only" {
+	if oriental.Window.BorderStyle != "split_top" || oriental.Window.Depth != "flat" || oriental.Window.Active != "native" || oriental.Window.Inactive != "frosted_rich" {
 		t.Fatalf("oriental window identity = %#v", oriental.Window)
 	}
 	if oriental.Shell.Preset != session.ShellPresetGlass || oriental.Shell.Detail != "framed" || oriental.Shell.Notifications != "accent" {
 		t.Fatalf("oriental shell identity = %#v", oriental.Shell)
 	}
-	if oriental.PresetRevision != 3 || oriental.Bar.Spec.Topology != bar.TopologySections || oriental.Bar.Spec.Preset != "ribbon" || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "comfortable" {
+	if oriental.PresetRevision != 4 || oriental.Bar.Spec.Topology != bar.TopologySections || oriental.Bar.Spec.Preset != "ribbon" || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "comfortable" {
 		t.Fatalf("oriental bar identity = %#v", oriental.Bar.Spec)
 	}
 	if oriental.Animations.WindowOpen != "slide" || oriental.Animations.WindowClose != "fade" || oriental.Animations.Workspace != "slidefade" || oriental.Animations.WorkspaceAxis != "horizontal" || oriental.Animations.Curve != "glass" {
@@ -245,7 +245,7 @@ func TestPortableManifestExportsAndImportsResolvedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 3 || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
+	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 4 || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
 		t.Fatalf("oriental manifest = %#v", orientalManifest)
 	}
 }
