@@ -20,7 +20,7 @@ func TestCatalogContainsStableInitialPresets(t *testing.T) {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 7 || entries[2].Revision != 2 || entries[3].Revision != 7 {
+	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 3 || entries[7].Revision != 2 || entries[8].Revision != 3 || entries[9].Revision != 3 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
@@ -70,7 +70,7 @@ func TestResolveFocusedComposesGroundedDesktopShellBarAndMotion(t *testing.T) {
 	if composition.Shell.Preset != session.ShellPresetDefault || composition.Shell.Surface != "contrast" || composition.Shell.Detail != "focus" {
 		t.Fatalf("focused shell recipe = %#v", composition.Shell)
 	}
-	if composition.Bar.Spec == nil || composition.Bar.Spec.Topology != bar.TopologyDock || composition.Bar.Spec.Engine != bar.EngineOmagen || composition.Bar.Spec.Behavior.Visibility != "auto_hide" || !composition.Bar.Spec.Behavior.HoverExpand {
+	if composition.PresetRevision != 3 || composition.Bar.Spec == nil || composition.Bar.Spec.Topology != bar.TopologyDock || composition.Bar.Spec.Engine != bar.EngineOmagen || composition.Bar.Spec.Behavior.Visibility != "auto_hide" || !composition.Bar.Spec.Behavior.HoverExpand || composition.Bar.Spec.Dock.Closed != "clock" {
 		t.Fatalf("focused bar recipe = %#v", composition.Bar)
 	}
 	if composition.Bar.Profile == nil || composition.Bar.Profile.Behavior.Form != "dock" || composition.Bar.Profile.Behavior.Visibility != "auto-hide" {
@@ -111,7 +111,7 @@ func TestResolveGlassBlurComposesFourEnginesAndTerminalIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if composition.PresetRevision != 7 || composition.Window.Active != "frosted_light" || composition.Window.Inactive != "frosted_light" {
+	if composition.PresetRevision != 8 || composition.Window.Active != "frosted_light" || composition.Window.Inactive != "frosted_light" {
 		t.Fatalf("window glass recipe = %#v", composition.Window)
 	}
 	if composition.Shell.Preset != "glass" || composition.Shell.Detail != "edge" {
@@ -123,7 +123,7 @@ func TestResolveGlassBlurComposesFourEnginesAndTerminalIntent(t *testing.T) {
 	if composition.Bar.Profile == nil || composition.Bar.Profile.Implementation != "replacement" || string(composition.Bar.Profile.Bar) != `{"id":"pretty.omagen.bar"}` || composition.Bar.Profile.Behavior.Form != "floating" {
 		t.Fatalf("bar glass runtime profile = %#v", composition.Bar.Profile)
 	}
-	if composition.Bar.Spec.Workspace.Mode != "dots" {
+	if composition.Bar.Spec.Workspace.Mode != "dots" || composition.Bar.Spec.Clock.Style != "lcd" {
 		t.Fatalf("glass workspace = %#v", composition.Bar.Spec.Workspace)
 	}
 	if composition.Animations.Preset != "smooth" {
@@ -142,14 +142,15 @@ func TestResolveGlassBlurComposesFourEnginesAndTerminalIntent(t *testing.T) {
 
 func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	tests := []struct {
-		id, workspace, effect string
+		id, workspace, barPreset, clock, effect string
+		revision                                int
 	}{
-		{PresetSpectral, "letters", "spectral-shift"},
-		{PresetPhosphor, "glyphs", "phosphor-scan"},
-		{PresetMonolith, "glyphs", "none"},
-		{PresetOrbit, "glyphs", "none"},
-		{PresetNature, "glyphs", "none"},
-		{PresetOriental, "kanji", "none"},
+		{PresetSpectral, "letters", "ribbon", "lcd", "spectral-shift", 2},
+		{PresetPhosphor, "glyphs", "minimal", "matrix", "phosphor-scan", 3},
+		{PresetMonolith, "glyphs", "islands", "gothic", "none", 3},
+		{PresetOrbit, "glyphs", "orbit", "lcd", "none", 2},
+		{PresetNature, "glyphs", "islands", "classical", "none", 3},
+		{PresetOriental, "kanji", "ribbon", "classical", "none", 3},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -157,7 +158,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if composition.Bar.Spec == nil || composition.Bar.Spec.Workspace.Mode != test.workspace {
+			if composition.PresetRevision != test.revision || composition.Bar.Spec == nil || composition.Bar.Spec.Preset != test.barPreset || composition.Bar.Spec.Workspace.Mode != test.workspace || composition.Bar.Spec.Clock.Style != test.clock {
 				t.Fatalf("workspace = %#v, want %q", composition.Bar.Spec, test.workspace)
 			}
 			if got := composition.Animations.EffectiveScreenEffect().ID; got != test.effect {
@@ -172,7 +173,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(nature.Bar.Spec.Workspace.Glyphs, []string{"", "", "", "", ""}) || nature.Animations.Curve != "spring" || nature.Shell.Preset != session.ShellPresetGlass {
+	if nature.PresetRevision != 3 || nature.Bar.Spec.Preset != "islands" || nature.Bar.Spec.Topology != bar.TopologyIslands || !reflect.DeepEqual(nature.Bar.Spec.Workspace.Glyphs, []string{"", "", "", "", ""}) || nature.Animations.Curve != "spring" || nature.Shell.Preset != session.ShellPresetGlass {
 		t.Fatalf("nature identity = %#v", nature)
 	}
 	oriental, err := Resolve(PresetOriental)
@@ -185,7 +186,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	if oriental.Shell.Preset != session.ShellPresetGlass || oriental.Shell.Detail != "framed" || oriental.Shell.Notifications != "accent" {
 		t.Fatalf("oriental shell identity = %#v", oriental.Shell)
 	}
-	if oriental.Bar.Spec.Topology != bar.TopologySplit || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "comfortable" {
+	if oriental.PresetRevision != 3 || oriental.Bar.Spec.Topology != bar.TopologySections || oriental.Bar.Spec.Preset != "ribbon" || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "comfortable" {
 		t.Fatalf("oriental bar identity = %#v", oriental.Bar.Spec)
 	}
 	if oriental.Animations.WindowOpen != "slide" || oriental.Animations.WindowClose != "fade" || oriental.Animations.Workspace != "slidefade" || oriental.Animations.WorkspaceAxis != "horizontal" || oriental.Animations.Curve != "glass" {
@@ -226,7 +227,7 @@ func TestPortableManifestExportsAndImportsResolvedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Kind != ManifestKind || manifest.ID != PresetNature || manifest.Name != "Nature" || manifest.Version != 1 {
+	if manifest.Kind != ManifestKind || manifest.ID != PresetNature || manifest.Name != "Nature" || manifest.Version != 3 {
 		t.Fatalf("manifest metadata = %#v", manifest)
 	}
 	payload, err := json.Marshal(manifest)
@@ -244,7 +245,7 @@ func TestPortableManifestExportsAndImportsResolvedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 1 || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
+	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 3 || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
 		t.Fatalf("oriental manifest = %#v", orientalManifest)
 	}
 }
