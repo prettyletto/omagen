@@ -48,3 +48,10 @@ function structuralPadding(spec, padding) {
         ? Number(padding || 0) : 0
 }
 
+// Collapsed orbital bars must reserve the measured clock slot, not only the
+// bar thickness. Otherwise the clock face is clipped when the side groups
+// retract.
+function collapsedClockExtent(clockExtent, barSize, padding) {
+    return Math.max(Number(barSize) || 0,
+        (Number(clockExtent) || 0) + (Number(padding) || 0))
+}

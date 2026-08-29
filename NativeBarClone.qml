@@ -53,6 +53,10 @@ Item {
   property bool requestedTransparent: false
   property bool useTransparentForeground: false
   property bool transparent: false
+  // A persisted shell.json value must not make a newly mounted clone
+  // transparent. The double-click gesture below explicitly opts into the
+  // transparent state for the current bar instance.
+  property bool transparencyInteractionActive: false
   property bool centerSectionHovered: false
   // One bar surface exists per monitor and each reports into this count, so a
   // pointer crossing from one monitor's bar to another's stays counted however
@@ -381,7 +385,7 @@ Item {
     var config = Util.isPlainObject(barConfig) ? barConfig : fallbackBarConfig
 
     position = normalizePosition(config.position)
-    setRequestedTransparency(config.transparent === true)
+    setRequestedTransparency(transparencyInteractionActive && config.transparent === true)
     centerAnchor = Util.canonicalWidgetId(config.centerAnchor || "")
 
     // layoutEntries feeds plain JS arrays to the module Repeaters, and QML
@@ -646,7 +650,9 @@ Item {
   }
 
   function toggleTransparency() {
+    root.transparencyInteractionActive = true
     var nextTransparent = !(root.requestedTransparent === true)
+    root.setRequestedTransparency(nextTransparent)
     if (root.shell && typeof root.shell.mutateShellConfig === "function") {
       root.shell.mutateShellConfig(function(config) {
         if (!Util.isPlainObject(config.bar)) config.bar = {}
@@ -1611,6 +1617,8 @@ Item {
       && moduleName === "omarchy.clock" && !registryComponent
     readonly property bool styledClock: !customType && !workspaceOverride
       && moduleName === "omarchy.clock" && root.clockStyle !== "native"
+    readonly property bool clockSlot: !customType && !workspaceOverride
+      && moduleName === "omarchy.clock"
     readonly property bool registered: !workspaceOverride && !!registryComponent
     readonly property int activeLoaderStatus: workspaceOverride ? workspaceLoader.status
       : registered ? registryLoader.status
@@ -1800,7 +1808,7 @@ Item {
       readonly property real dragThreshold: Style.space(4)
 
       anchors.fill: parent
-      acceptedButtons: Qt.LeftButton
+      acceptedButtons: slot.clockSlot ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
       enabled: slot.visible && slot.width > 0 && slot.height > 0
       propagateComposedEvents: true
       cursorShape: root.moduleClickTargetAt(slot, mouseX, mouseY) ? Qt.PointingHandCursor : Qt.ArrowCursor
@@ -1879,6 +1887,10 @@ Item {
           return
         }
 
+        if (mouse.button === Qt.RightButton && slot.toggleClockFormat()) {
+          mouse.accepted = true
+          return
+        }
         if (!root.pressModuleClickTarget(slot, mouse.button, mouse.x, mouse.y)) mouse.accepted = false
       }
     }
@@ -1893,6 +1905,29 @@ Item {
       if ("moduleName" in target) target.moduleName = moduleName
       if ("settings" in target) target.settings = moduleSettings
       if ("workspaceSpecOverride" in target) target.workspaceSpecOverride = root.workspaceSpecOverride
+    }
+
+    function toggleClockFormat() {
+      if (!slot.clockSlot || !root.shell || !activeItem || !("settings" in activeItem)) return false
+
+      var source = activeItem.settings && typeof activeItem.settings === "object"
+        ? activeItem.settings : slot.moduleSettings
+      var next = ({})
+      for (var key in source) if (key !== "id") next[key] = source[key]
+
+      var formatKey = root.vertical ? "verticalFormat" : "format"
+      var altKey = root.vertical ? "verticalFormatAlt" : "formatAlt"
+      var timeOnly = root.vertical ? "HH\n—\nmm" : "HH:mm"
+      var dateAndTime = root.vertical ? "dd\nMMM\n'W'ww\n''yy" : "dddd HH:mm"
+      var current = String(next[formatKey] || timeOnly)
+      next[formatKey] = current === timeOnly ? dateAndTime : timeOnly
+      next[altKey] = dateAndTime
+
+      var entry = { id: slot.moduleName }
+      for (var setting in next) entry[setting] = next[setting]
+      activeItem.settings = entry
+      root.shell.updateEntryInline(slot.moduleName, entry)
+      return true
     }
 
     Component {

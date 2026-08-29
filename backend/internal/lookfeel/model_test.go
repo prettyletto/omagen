@@ -20,29 +20,29 @@ func TestCatalogContainsStableInitialPresets(t *testing.T) {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 7 || entries[2].Revision != 2 || entries[3].Revision != 6 {
+	if entries[1].Revision != 7 || entries[2].Revision != 2 || entries[3].Revision != 7 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
 
-func TestResolveCyberpunkGlitchComposesNeonShellBarAndGlitchMotion(t *testing.T) {
+func TestResolveCyberpunkGlitchComposesOrbitBarNeonClockAndGlitchMotion(t *testing.T) {
 	composition, err := Resolve(PresetCyberpunk)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if composition.PresetRevision != 6 || composition.Window.BorderStyle != "neon" || composition.Window.BorderSize != 4 || composition.Window.Shape != "rounded" || composition.Window.Inactive != "shadow_only" {
+	if composition.PresetRevision != 7 || composition.Window.BorderStyle != "neon" || composition.Window.BorderSize != 4 || composition.Window.Shape != "rounded" || composition.Window.Inactive != "shadow_only" {
 		t.Fatalf("cyberpunk window recipe = %#v", composition.Window)
 	}
 	if composition.Shell.Surface != "layered" || composition.Shell.Detail != "edge" || composition.Shell.Tooltip != "accent" || composition.Shell.Notifications != "accent" {
 		t.Fatalf("cyberpunk shell recipe = %#v", composition.Shell)
 	}
-	if composition.Bar.Surface != "dark" || composition.Bar.Spec == nil || composition.Bar.Spec.Topology != bar.TopologyIslands || composition.Bar.Spec.Surface.Treatment != "glass" || composition.Bar.Spec.Surface.Blur != 8 || composition.Bar.Spec.Motion.Preset != "cyberpunk" || composition.Bar.Spec.Behavior.HoverExpand != false {
+	if composition.Bar.Surface != "dark" || composition.Bar.Spec == nil || composition.Bar.Spec.Preset != "orbit" || composition.Bar.Spec.Topology != bar.TopologyFloating || composition.Bar.Spec.Surface.Treatment != "glass" || composition.Bar.Spec.Surface.Blur != 8 || composition.Bar.Spec.Motion.Preset != "cyberpunk" || composition.Bar.Spec.Behavior.HoverExpand != false {
 		t.Fatalf("cyberpunk bar recipe = %#v", composition.Bar)
 	}
-	if composition.Bar.Profile == nil || composition.Bar.Profile.Behavior.Form != "islands" || !composition.Bar.Profile.Behavior.Islands {
+	if composition.Bar.Profile == nil || composition.Bar.Profile.Behavior.Form != "floating" || composition.Bar.Profile.Behavior.Islands {
 		t.Fatalf("cyberpunk bar profile = %#v", composition.Bar.Profile)
 	}
-	if composition.Bar.Spec.Workspace.Mode != "roman" {
+	if composition.Bar.Spec.Workspace.Mode != "roman" || composition.Bar.Spec.Clock.Style != "neon" {
 		t.Fatalf("cyberpunk workspace = %#v", composition.Bar.Spec.Workspace)
 	}
 	if composition.Animations.Preset != "cyberpunk" || composition.Animations.Glitch != "medium" || composition.Animations.Border != "static" || composition.Animations.WindowOpacity != 82 {

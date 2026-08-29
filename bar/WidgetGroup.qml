@@ -16,14 +16,20 @@ Row {
     required property string region
     required property var entries
     property bool active: true
+    // Keep delegates mounted while a compact composition hides the group.
+    // The group is clamped and disabled visually instead of switching the
+    // Repeater model, which would destroy panel-owning widgets.
+    property bool collapseContents: false
     readonly property string groupRegion: region
     spacing: 0
     // Repeater delegates are created after the Row component itself. Keep
     // the group dimensions bound to the live child geometry so a compact
     // floating surface grows with its actual icons instead of leaving
     // late-loaded modules painting beyond the border.
-    width: childrenRect.width
+    width: collapseContents ? 0 : childrenRect.width
     height: childrenRect.height
+    clip: collapseContents
+    enabled: !collapseContents
     Repeater {
         model: active ? entries : []
         delegate: WidgetSlot {

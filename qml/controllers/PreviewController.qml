@@ -14,10 +14,37 @@ Item {
 
     property bool busy: false
     property bool pendingColorPreview: false
+    property string activeSignature: ""
+    property string lastAppliedSignature: ""
 
     signal applied(string sessionId, string generationId, string variant, string themeName)
     signal rejected(string message)
     signal failed(string message)
+
+    function stableValue(value) {
+        if (value === null || value === undefined)
+            return null
+        if (Array.isArray(value))
+            return value.map(function(item) { return root.stableValue(item) })
+        if (typeof value !== "object")
+            return value
+
+        var sorted = ({})
+        Object.keys(value).sort().forEach(function(key) {
+            sorted[key] = root.stableValue(value[key])
+        })
+        return sorted
+    }
+
+    function signature(variant, overrides, styles) {
+        return JSON.stringify({
+            sessionId: String(root.session && root.session.sessionId || ""),
+            generationId: String(root.session && root.session.generationId || ""),
+            variant: String(variant || ""),
+            overrides: root.stableValue(overrides || ({})),
+            styles: root.stableValue(styles || null)
+        })
+    }
 
     function previewCurrentState(variant) {
         if (!root.session || !root.session.workspaceReady || !root.liveCanvasPanel)
@@ -36,9 +63,14 @@ Item {
     function start(variant, overrides, styles, pendingColors) {
         if (!root.backend || !root.session || !root.session.sessionId
                 || !root.session.generationId)
-            return
+            return false
+
+        const nextSignature = root.signature(variant, overrides, styles)
+        if (!root.busy && nextSignature === root.lastAppliedSignature)
+            return false
 
         root.pendingColorPreview = pendingColors === true
+        root.activeSignature = nextSignature
         root.busy = true
         root.backend.applyPreview(
             root.session.sessionId,
@@ -47,11 +79,14 @@ Item {
             overrides || ({}),
             styles || null
         )
+        return true
     }
 
     function reset() {
         root.busy = false
         root.pendingColorPreview = false
+        root.activeSignature = ""
+        root.lastAppliedSignature = ""
     }
 
     Connections {
@@ -73,6 +108,8 @@ Item {
                 if (root.liveCanvasPanel)
                     root.liveCanvasPanel.markColorsLive()
             }
+            root.lastAppliedSignature = root.activeSignature
+            root.activeSignature = ""
             root.session.markPreviewed(variant)
             root.applied(sessionId, generationId, variant, themeName)
         }
@@ -83,6 +120,7 @@ Item {
 
             root.busy = false
             root.pendingColorPreview = false
+            root.activeSignature = ""
             root.failed(message)
         }
     }

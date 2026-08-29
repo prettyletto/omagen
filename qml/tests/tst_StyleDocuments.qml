@@ -62,6 +62,8 @@ TestCase {
         compare(BarSizing.baseSize("comfortable", false, 26, 28), 30)
         compare(BarSizing.baseSize("comfortable", true, 26, 28), 32)
         compare(BarSizing.baseSize("compact", false, 26, 28, true, 1.25), 28)
+        compare(BarSizing.collapsedClockExtent(78, 30, 14), 92)
+        compare(BarSizing.collapsedClockExtent(0, 30, 14), 30)
     }
 
     function test_barPresetDensityIsNotInheritedFromThePreviousPreset() {

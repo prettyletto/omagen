@@ -12,92 +12,156 @@ import "." as Bar
 
 Item {
     id: centerGestureGroup
+
     required property var bar
     required property var entries
     property string region: "center"
-    readonly property bool hasAnchor: bar.entryIndex(centerGestureGroup.entries, bar.centerAnchor) >= 0
-    readonly property var anchorEntry: bar.entryNamed(centerGestureGroup.entries, bar.centerAnchor)
-    implicitWidth: bar.vertical
-        ? (centerAnchoredColumn.visible ? centerAnchoredColumn.implicitWidth : centerColumn.implicitWidth)
-        : (centerAnchoredRow.visible ? centerAnchoredRow.implicitWidth : centerRow.implicitWidth)
-    implicitHeight: bar.vertical
-        ? (centerAnchoredColumn.visible ? centerAnchoredColumn.implicitHeight : centerColumn.implicitHeight)
-        : (centerAnchoredRow.visible ? centerAnchoredRow.implicitHeight : centerRow.implicitHeight)
+    // Orbit uses this while collapsed. The center anchor stays mounted and
+    // centered, while the before/after groups are clipped to zero without
+    // changing their Repeater models.
+    property bool compactAnchorOnly: false
 
-        Row {
-            id: centerRow
-            anchors.centerIn: parent
-            spacing: 0
-            visible: !bar.vertical && !centerGestureGroup.hasAnchor
-            WidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-                entries: centerGestureGroup.entries
-                active: centerRow.visible
-            }
-        }
+    readonly property bool hasAnchor: bar.entryIndex(centerGestureGroup.entries,
+        bar.centerAnchor) >= 0
+    readonly property var anchorEntry: bar.entryNamed(centerGestureGroup.entries,
+        bar.centerAnchor)
+    readonly property real anchorWidth: !bar.vertical && hasAnchor
+        ? centerAnchorModule.implicitWidth : 0
+    readonly property real anchorHeight: bar.vertical && hasAnchor
+        ? centerAnchorModule.implicitHeight : 0
+    readonly property real beforeWidth: compactAnchorOnly ? 0 : centerBeforeGroup.implicitWidth
+    readonly property real afterWidth: compactAnchorOnly ? 0 : centerAfterGroup.implicitWidth
+    readonly property real beforeHeight: compactAnchorOnly ? 0 : centerBeforeColumn.implicitHeight
+    readonly property real afterHeight: compactAnchorOnly ? 0 : centerAfterColumn.implicitHeight
+    // The clock stays centered, but a trayable indicator block can be much
+    // wider/taller on one side of it. Reserve that difference as symmetric
+    // space; otherwise the heavier side paints outside the center capsule and
+    // its inactive indicators are clipped during expansion.
+    readonly property real horizontalSideBalance: !bar.vertical && hasAnchor
+        ? Math.abs(beforeWidth - afterWidth) : 0
+    readonly property real verticalSideBalance: bar.vertical && hasAnchor
+        ? Math.abs(beforeHeight - afterHeight) : 0
+
+    // The anchor is centered in the parent, matching Quattro's native center
+    // host. The side groups attach to the anchor rather than to the overall
+    // row, so unequal side content cannot move the clock off the monitor
+    // center.
+    implicitWidth: bar.vertical
+        ? (hasAnchor
+            ? Math.max(anchorWidth, centerBeforeColumn.implicitWidth,
+                centerAfterColumn.implicitWidth)
+            : centerColumn.implicitWidth)
+        : (hasAnchor
+            ? beforeWidth + anchorWidth + afterWidth + horizontalSideBalance
+            : centerRow.implicitWidth)
+    implicitHeight: bar.vertical
+        ? (hasAnchor
+            ? beforeHeight + anchorHeight + afterHeight + verticalSideBalance
+            : centerColumn.implicitHeight)
+        : (hasAnchor
+            ? Math.max(centerBeforeGroup.implicitHeight,
+                centerAnchorModule.implicitHeight,
+                centerAfterGroup.implicitHeight)
+            : centerRow.implicitHeight)
+
+    // Omarchy's native center host holds indicator reveals while the pointer
+    // crosses the expanding center row. Attach the handler to the containing
+    // host rather than this content-sized group: inactive indicators such as
+    // screen recording and Stay Awake can widen/reposition the group without
+    // making the pointer leave its hover target.
+    HoverHandler {
+        // The parent Item is the stable center host in every preset. This is
+        // the same ownership boundary as native CenterModules' anchors.fill
+        // container, while the visual rows below retain their own measured
+        // geometry.
+        parent: centerGestureGroup.parent || centerGestureGroup
+        onHoveredChanged: centerGestureGroup.bar.setCenterSectionHovered(hovered)
+    }
 
     Row {
-        id: centerAnchoredRow
+        id: centerRow
         anchors.centerIn: parent
         spacing: 0
-            visible: !bar.vertical && centerGestureGroup.hasAnchor
-            WidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-                entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
-                active: centerAnchoredRow.visible
-            }
-            WidgetSlot {
-                bar: centerGestureGroup.bar
-                entry: centerGestureGroup.anchorEntry
-                region: "center"
-                active: centerAnchoredRow.visible
-            }
-            WidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-                entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
-                active: centerAnchoredRow.visible
-            }
+        visible: !bar.vertical && !centerGestureGroup.hasAnchor
+
+        WidgetGroup {
+            bar: centerGestureGroup.bar
+            region: "center"
+            entries: centerGestureGroup.entries
+            active: !centerGestureGroup.hasAnchor
         }
+    }
+
+    WidgetGroup {
+        id: centerBeforeGroup
+        bar: centerGestureGroup.bar
+        region: "center"
+        entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
+        active: centerGestureGroup.hasAnchor
+        collapseContents: centerGestureGroup.compactAnchorOnly
+        visible: !bar.vertical && centerGestureGroup.hasAnchor
+        anchors.right: centerAnchorModule.left
+        anchors.verticalCenter: centerAnchorModule.verticalCenter
+    }
+
+    WidgetSlot {
+        id: centerAnchorModule
+        bar: centerGestureGroup.bar
+        entry: centerGestureGroup.anchorEntry
+        region: "center"
+        active: centerGestureGroup.hasAnchor
+        visible: centerGestureGroup.hasAnchor
+        anchors.centerIn: parent
+    }
+
+    WidgetGroup {
+        id: centerAfterGroup
+        bar: centerGestureGroup.bar
+        region: "center"
+        entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
+        active: centerGestureGroup.hasAnchor
+        collapseContents: centerGestureGroup.compactAnchorOnly
+        visible: !bar.vertical && centerGestureGroup.hasAnchor
+        anchors.left: centerAnchorModule.right
+        anchors.verticalCenter: centerAnchorModule.verticalCenter
+    }
 
     Column {
         id: centerColumn
         anchors.centerIn: parent
         spacing: 0
         visible: bar.vertical && !centerGestureGroup.hasAnchor
-            VerticalWidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-            entries: centerGestureGroup.entries
-            active: centerColumn.visible
-        }
-        }
 
-    Column {
-        id: centerAnchoredColumn
-        anchors.centerIn: parent
-        spacing: 0
-        visible: bar.vertical && centerGestureGroup.hasAnchor
-            VerticalWidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-            entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
-            active: centerAnchoredColumn.visible
-        }
-            WidgetSlot {
-                bar: centerGestureGroup.bar
-                entry: centerGestureGroup.anchorEntry
+        VerticalWidgetGroup {
+            bar: centerGestureGroup.bar
             region: "center"
-            active: centerAnchoredColumn.visible
+            entries: centerGestureGroup.entries
+            active: !centerGestureGroup.hasAnchor
         }
-            VerticalWidgetGroup {
-                bar: centerGestureGroup.bar
-                region: "center"
-            entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
-            active: centerAnchoredColumn.visible
-        }
+    }
+
+    VerticalWidgetGroup {
+        id: centerBeforeColumn
+        bar: centerGestureGroup.bar
+        region: "center"
+        entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
+        active: centerGestureGroup.hasAnchor
+        collapseContents: centerGestureGroup.compactAnchorOnly
+        visible: bar.vertical && centerGestureGroup.hasAnchor
+        anchors.bottom: centerAnchorModule.top
+        anchors.horizontalCenter: centerAnchorModule.horizontalCenter
+    }
+
+    VerticalWidgetGroup {
+        id: centerAfterColumn
+        bar: centerGestureGroup.bar
+        region: "center"
+        entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
+        active: centerGestureGroup.hasAnchor
+        collapseContents: centerGestureGroup.compactAnchorOnly
+        visible: bar.vertical && centerGestureGroup.hasAnchor
+        anchors.top: centerAnchorModule.bottom
+        anchors.horizontalCenter: centerAnchorModule.horizontalCenter
     }
 
     MouseArea {

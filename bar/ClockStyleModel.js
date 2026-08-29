@@ -3,7 +3,7 @@
 // The clock style layer is deliberately presentation-only. The native clock
 // remains mounted underneath it, so these helpers only decide how its already
 // formatted display text should be painted.
-var CLOCK_STYLES = ["native", "neon", "matrix", "lcd"]
+var CLOCK_STYLES = ["native", "neon", "matrix", "lcd", "classical", "gothic"]
 
 var SEGMENTS = {
     "0": "abcdef",

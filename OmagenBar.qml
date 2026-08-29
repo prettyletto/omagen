@@ -77,9 +77,15 @@ Item {
     property string fontFamily: Style.font.family
     property bool transparent: false
     property bool requestedTransparent: false
+    // shell.json may retain the last native-bar transparency choice. Do not
+    // use that persisted value as the initial state of a newly loaded Omagen
+    // bar; transparency is an explicit runtime double-click action.
+    property bool transparencyInteractionActive: false
     property bool useTransparentForeground: false
     property bool centerHoverRevealSuppressed: false
     property bool centerSectionRevealHeld: false
+    property int centerSectionHoverCount: 0
+    property bool centerSectionHovered: false
     // Keep the same host contract as Quattro's native Bar.qml. WidgetButton
     // registers its real hit target here so a replacement slot can route
     // clicks and cursor shape without stealing the widget's own semantics.
@@ -209,7 +215,14 @@ Item {
     readonly property int edgeOffset: Math.max(0, Number(root.spec.geometry && root.spec.geometry.edge_offset || 0))
     readonly property int outerMargin: Math.max(0, Number(root.spec.geometry && root.spec.geometry.outer_margin || 0))
     readonly property int radius: Math.max(0, Number(root.spec.geometry && root.spec.geometry.radius || 0))
-    readonly property real surfaceOpacity: root.spec.surface && root.spec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.spec.surface.opacity))) : 1
+    readonly property string surfaceTreatment: String(root.spec.surface && root.spec.surface.treatment || "preset")
+    // Preset and explicit opaque bars are solid surfaces. Glass/clear/metal
+    // remain available as intentional translucent choices, but the normal
+    // Test Live preset must not inherit the old 0.9 alpha and show the desktop
+    // through the bar.
+    readonly property real surfaceOpacity: root.surfaceTreatment === "preset" || root.surfaceTreatment === "opaque"
+        ? 1
+        : (root.spec.surface && root.spec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.spec.surface.opacity))) : 1)
     readonly property string rawBarBackground: String(Color.shellValues["bar.background"] || "")
     // The native host is intentionally hidden with bar.background-alpha while
     // a replacement is active. Read the raw compiled colour here so Omagen's
@@ -241,7 +254,14 @@ Item {
     onThemeForegroundChanged: root.scheduleTransparentForegroundRefresh()
     onThemeContrastForegroundChanged: root.scheduleTransparentForegroundRefresh()
     onBarHiddenChanged: root.syncAutoHide()
-    onBarHoveredChanged: root.syncAutoHide()
+    onBarHoveredChanged: {
+        root.syncAutoHide()
+        // Indicator clicks can move an item from the inactive block into the
+        // active block while the center row is being rebuilt. Keep the
+        // center reveal held for the whole bar-hover lifetime so that active
+        // items such as coffee remain in the click path during that move.
+        root.centerSectionRevealHeld = root.barHovered
+    }
     onActivePopoutChanged: root.syncAutoHide()
     onVisibilityChanged: root.syncAutoHide()
     Component.onCompleted: {
@@ -259,6 +279,32 @@ Item {
             return
         root.lastGlitchAt = now
         root.glitchEpoch += 1
+    }
+
+    // Match Quattro's center-indicator ownership. The indicators widget
+    // reveals inactive entries (recording, coffee/stay-awake, night light,
+    // etc.) while the pointer is in the center section. Keep that reveal held
+    // while the row widens so the newly exposed item cannot move away before
+    // its click is delivered.
+    function setCenterSectionHovered(hovered) {
+        root.centerSectionHoverCount = Math.max(0,
+            root.centerSectionHoverCount + (hovered ? 1 : -1))
+        root.centerSectionHovered = root.centerSectionHoverCount > 0
+        if (root.centerSectionHovered) {
+            centerSectionRevealTimer.stop()
+            root.centerSectionRevealHeld = true
+        } else {
+            centerSectionRevealTimer.restart()
+        }
+    }
+
+    Timer {
+        id: centerSectionRevealTimer
+        interval: 120
+        onTriggered: {
+            if (!root.centerSectionHovered && !root.barHovered)
+                root.centerSectionRevealHeld = false
+        }
     }
 
     function showAutoHideBar() {
@@ -302,7 +348,7 @@ Item {
 
     function normalizeClockStyle(value) {
         var next = String(value || "native").toLowerCase()
-        return ["native", "neon", "matrix", "lcd"].indexOf(next) >= 0 ? next : "native"
+        return ["native", "neon", "matrix", "lcd", "classical", "gothic"].indexOf(next) >= 0 ? next : "native"
     }
 
     function normalizeDockClosedContent(value) {
@@ -377,6 +423,21 @@ Item {
         var result = ({})
         if (!entry || typeof entry !== "object") return result
         for (var key in entry) if (key !== "id") result[key] = entry[key]
+
+        // The native clock falls back to a date-plus-time label. Omagen's bar
+        // contract starts compact and exposes the date label only through the
+        // clock's explicit right-click toggle. Supply both orientations so the
+        // same contract survives a vertical bar.
+        if (root.entryId(entry) === "omarchy.clock") {
+            if (result.format === undefined || result.format === null || String(result.format) === "")
+                result.format = "HH:mm"
+            if (result.formatAlt === undefined || result.formatAlt === null || String(result.formatAlt) === "")
+                result.formatAlt = "dddd HH:mm"
+            if (result.verticalFormat === undefined || result.verticalFormat === null || String(result.verticalFormat) === "")
+                result.verticalFormat = "HH\n—\nmm"
+            if (result.verticalFormatAlt === undefined || result.verticalFormatAlt === null || String(result.verticalFormatAlt) === "")
+                result.verticalFormatAlt = "dd\nMMM\n'W'ww\n''yy"
+        }
         return result
     }
 
@@ -583,7 +644,9 @@ Item {
             return
         }
         root.forceOpaqueAfterMove = false
+        root.transparencyInteractionActive = true
         var nextTransparent = !(root.requestedTransparent === true)
+        root.setRequestedTransparency(nextTransparent)
         if (root.shell && typeof root.shell.mutateShellConfig === "function") {
             root.shell.mutateShellConfig(function(config) {
                 if (!config.bar || typeof config.bar !== "object") config.bar = {}
@@ -603,7 +666,8 @@ Item {
     }
 
     function syncRequestedTransparency() {
-        root.setRequestedTransparency(root.barConfig
+        root.setRequestedTransparency(root.transparencyInteractionActive
+            && root.barConfig
             && root.barConfig.transparent === true
             && !root.forceOpaqueAfterMove)
     }

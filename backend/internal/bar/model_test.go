@@ -94,7 +94,7 @@ func TestClockStylesUseOmagenWithoutChangingNativeClockBehavior(t *testing.T) {
 		t.Fatalf("default clock style = %q, want native", spec.Clock.Style)
 	}
 
-	for _, style := range []string{"neon", "matrix", "lcd"} {
+	for _, style := range []string{"neon", "matrix", "lcd", "classical", "gothic"} {
 		t.Run(style, func(t *testing.T) {
 			spec := Default()
 			spec.Clock.Style = style
@@ -275,6 +275,40 @@ func TestFloatingExpandedPresetUsesNativeTrayComposition(t *testing.T) {
 	}
 	if spec.Topology != TopologyFloating || spec.Geometry.Density != "native" || !spec.Behavior.HoverExpand {
 		t.Fatalf("floating expanded preset should retain native tray behavior: %#v", spec)
+	}
+}
+
+func TestOrbitPresetUsesFloatingCompactComposition(t *testing.T) {
+	spec, err := Preset("orbit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Topology != TopologyFloating || spec.Engine != EngineOmagen || spec.Geometry.Density != "compact" || spec.Surface.BorderRole != "accent" || spec.Surface.Opacity != 1 {
+		t.Fatalf("orbit preset should use a compact floating composition: %#v", spec)
+	}
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("orbit compilation = %#v", compiled)
+	}
+}
+
+func TestRibbonPresetUsesSectionComposition(t *testing.T) {
+	spec, err := Preset("ribbon")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Topology != TopologySections || spec.Engine != EngineOmagen || spec.Geometry.SectionGap != 2 || spec.Surface.BorderRole != "accent" {
+		t.Fatalf("ribbon preset should use a connected section composition: %#v", spec)
+	}
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Engine != EngineOmagen || compiled.Native {
+		t.Fatalf("ribbon compilation = %#v", compiled)
 	}
 }
 

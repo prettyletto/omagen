@@ -10,7 +10,8 @@ recorded opt-in transaction owns the complete profile.
 The clock style is presentation-only. `native` keeps the first-party Omarchy
 clock unchanged; `neon`, `matrix`, and `lcd` paint an Omagen face above the
 still-mounted native clock. The native clock remains the owner of its calendar
-popup, format cycling, timezone action, IPC target, and panel identity.
+popup, format cycling, timezone action, IPC target, and panel identity. The
+available Omagen faces are `neon`, `matrix`, `lcd`, `classical`, and `gothic`.
 
 The Dock closed presentation is also presentation-only. `dock.closed` accepts
 `workspace`, `ellipsis`, `clock`, or `glyph`; `dock.glyph` is a bounded custom

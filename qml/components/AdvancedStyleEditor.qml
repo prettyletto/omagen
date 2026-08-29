@@ -102,13 +102,17 @@ Item {
         { key: "float-expanded", title: "Float Expanded" },
         { key: "islands", title: "Islands" },
         { key: "dock", title: "Dock" },
-        { key: "minimal", title: "Minimal" }
+        { key: "minimal", title: "Minimal" },
+        { key: "orbit", title: "Orbit" },
+        { key: "ribbon", title: "Segmented Ribbon" }
     ]
     readonly property var clockStyleOptions: [
         { key: "native", title: "Native" },
         { key: "neon", title: "Neon Seven-Segment" },
         { key: "matrix", title: "Dot Matrix" },
-        { key: "lcd", title: "Retro LCD" }
+        { key: "lcd", title: "Retro LCD" },
+        { key: "classical", title: "Classical" },
+        { key: "gothic", title: "Gothic" }
     ]
     readonly property var barTopologyOptions: [
         { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
@@ -189,7 +193,7 @@ Item {
                 glyphs: current.workspace && current.workspace.glyphs ? current.workspace.glyphs : []
             },
             clock: {
-                style: ["native", "neon", "matrix", "lcd"].indexOf(String(clock.style || "native")) >= 0
+                style: ["native", "neon", "matrix", "lcd", "classical", "gothic"].indexOf(String(clock.style || "native")) >= 0
                     ? String(clock.style || "native") : "native"
             },
             dock: {
@@ -213,13 +217,13 @@ Item {
     function clockStyleValue() {
         var clock = root.barSpec().clock || ({})
         var style = String(clock.style || "native")
-        return ["native", "neon", "matrix", "lcd"].indexOf(style) >= 0 ? style : "native"
+        return ["native", "neon", "matrix", "lcd", "classical", "gothic"].indexOf(style) >= 0 ? style : "native"
     }
 
     function chooseClockStyle(key) {
         var spec = root.barSpec()
         var style = String(key || "native")
-        spec.clock = { style: ["native", "neon", "matrix", "lcd"].indexOf(style) >= 0 ? style : "native" }
+        spec.clock = { style: ["native", "neon", "matrix", "lcd", "classical", "gothic"].indexOf(style) >= 0 ? style : "native" }
         root.publishBarSpec(spec)
     }
 
@@ -232,11 +236,15 @@ Item {
         switch (String(preset || "native")) {
         case "float":
         case "float-expanded":
-            return { role: "background", opacity: 0.88, blur: 0 }
+            return { role: "background", opacity: 1, blur: 0 }
+        case "orbit":
+            return { role: "background", opacity: 1, blur: 0 }
         case "sections":
-            return { role: "dark", opacity: 0.9, blur: 0 }
+            return { role: "dark", opacity: 1, blur: 0 }
+        case "ribbon":
+            return { role: "dark", opacity: 1, blur: 0 }
         case "dock":
-            return { role: "dark", opacity: 0.9, blur: 0 }
+            return { role: "dark", opacity: 1, blur: 0 }
         case "split":
         case "notch":
         case "rail":
@@ -524,12 +532,14 @@ Item {
         spec.dock = { closed: "ellipsis", glyph: "✦" }
         spec.motion = { preset: "native", duration_ms: 180, easing: "out_cubic" }
         switch (key) {
-        case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
-        case "float-expanded": spec.topology = "floating"; spec.surface = { role: "background", opacity: 0.88, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.density = "native"; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; spec.behavior.hover_expand = true; break
-        case "sections": spec.topology = "sections"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "accent", border_opacity: 0.35, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 10; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
+        case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
+        case "float-expanded": spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.density = "native"; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; spec.behavior.hover_expand = true; break
+        case "sections": spec.topology = "sections"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.35, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 10; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
         case "islands": spec.engine = "omagen"; spec.topology = "islands"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
-        case "dock": spec.engine = "omagen"; spec.topology = "dock"; spec.surface = { role: "dark", opacity: 0.9, blur: 0, border_role: "foreground", border_opacity: 0.25, border_width: 1, shadow: "floating" }; spec.geometry.length_mode = "content"; spec.geometry.alignment = "center"; spec.geometry.radius = 16; spec.behavior.visibility = "auto_hide"; spec.behavior.hover_expand = true; break
+        case "dock": spec.engine = "omagen"; spec.topology = "dock"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.25, border_width: 1, shadow: "floating" }; spec.geometry.length_mode = "content"; spec.geometry.alignment = "center"; spec.geometry.radius = 16; spec.behavior.visibility = "auto_hide"; spec.behavior.hover_expand = true; break
         case "minimal": spec.engine = "omagen"; spec.topology = "minimal"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.behavior.hover_expand = true; spec.motion = { preset: "smooth", duration_ms: 260, easing: "out_cubic" }; break
+        case "orbit": spec.engine = "omagen"; spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.42, border_width: 1, shadow: "raised" }; spec.geometry.density = "compact"; spec.geometry.edge_offset = 10; spec.geometry.outer_margin = 10; spec.geometry.radius = 18; spec.motion = { preset: "smooth", duration_ms: 220, easing: "out_cubic" }; break
+        case "ribbon": spec.engine = "omagen"; spec.topology = "sections"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.36, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 2; spec.geometry.radius = 10; spec.motion = { preset: "subtle", duration_ms: 180, easing: "out_cubic" }; break
         case "split": spec.engine = "omagen"; spec.topology = "split"; spec.surface.role = "dark"; break
         case "notch": spec.engine = "omagen"; spec.topology = "notch"; spec.surface.role = "dark"; spec.geometry.radius = 14; break
         case "rail": spec.engine = "omagen"; spec.topology = "rail"; spec.position = "left"; spec.surface.role = "dark"; break
@@ -635,6 +645,8 @@ Item {
         if (group === "attention") return "Whether bar attention states use semantic colours or the theme accent."
         if (group === "preset") {
             if (key === "dock") return "A centered content-sized capsule that expands along the bar axis while the full edge remains the hover and drag host."
+            if (key === "orbit") return "A compact floating capsule with a highlighted center orbit and a detached tray cap."
+            if (key === "ribbon") return "A connected three-band ribbon that reflows into top, center, and bottom bands on vertical monitors."
             return key === "custom" ? "Keep the current structural choices while editing them below." : "Apply a complete recipe, including a clean placement and behavior baseline."
         }
         if (group === "topology") return key === "rail" ? "Use a vertical reader at the left edge; choosing another topology restores the top placement." : "Choose the structural shape independently from the recipe controls."
@@ -710,7 +722,9 @@ Item {
                     native: "Keep Omarchy's native clock face and rendering.",
                     neon: "Use beveled seven-segment digits with a theme-accent glow.",
                     matrix: "Use a compact LED dot-matrix face that scales cleanly on vertical rails.",
-                    lcd: "Use a restrained retro LCD capsule while keeping date formats readable."
+                    lcd: "Use a restrained retro LCD capsule while keeping date formats readable.",
+                    classical: "Use a fine serif clockmaker face with a quiet framed treatment.",
+                    gothic: "Use a bold blackletter-inspired face with angular ornamental framing."
                 },
                 reveal: {
                     edge: "Reveal the hidden bar by touching the screen edge.",
