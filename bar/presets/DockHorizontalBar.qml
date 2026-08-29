@@ -21,14 +21,12 @@ Item {
         )
     }
 
-    Text {
+    Bar.DockClosedContent {
         visible: !dockHorizontalContent.bar.dockExpanded
         anchors.centerIn: parent
-        text: "···"
-        color: dockHorizontalContent.bar.barForeground
-        font.family: dockHorizontalContent.bar.fontFamily
-        font.pixelSize: Style.bar.iconFont
-        font.bold: true
+        width: parent.width
+        height: parent.height
+        bar: dockHorizontalContent.bar
     }
 
     Row {

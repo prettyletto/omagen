@@ -61,17 +61,23 @@ Item {
         return widgets[canonical] && widgets[canonical].component
             ? widgets[canonical].component : null
     }
-    readonly property var activeItem: workspacePresentation ? workspaceLoader.item : qmlCustom ? qmlLoader.item : commandCustom ? commandLoader.item : loader.item
+    // A replacement bar can be constructed one turn before Quattro finishes
+    // registering its first-party widgets. Keep the native clock available in
+    // that window so the bar never degrades to a background-only strip. Once
+    // the registry publishes the real component this fallback is unloaded and
+    // the normal registry-owned clock resumes.
+    readonly property bool nativeClockFallback: !qmlCustom && !commandCustom
+        && !compactTray && !workspacePresentation
+        && moduleName === "omarchy.clock" && !registryComponent
+    readonly property var activeItem: workspacePresentation ? workspaceLoader.item : qmlCustom ? qmlLoader.item : commandCustom ? commandLoader.item : nativeClockFallback ? nativeClockLoader.item : loader.item
     // Native vertical ModuleSlot fixes every widget to the rail width;
     // allowing a widget's horizontal implicit width here clips text and
     // icons into the fragments seen in the live screenshot.
-    implicitWidth: !slot.active || !bar ? 0 : slot.styledClock
-        ? (styledClockLoader.item ? styledClockLoader.item.implicitWidth : (bar.vertical ? bar.barSize : Style.space(78)))
-        : bar.vertical
+    implicitWidth: !slot.active || !bar ? 0 : bar.vertical
         ? bar.barSize
         : (activeItem && activeItem.visible !== false ? activeItem.implicitWidth : 0)
-    implicitHeight: !slot.active || !bar ? 0 : slot.styledClock
-        ? (styledClockLoader.item ? styledClockLoader.item.implicitHeight : (bar.vertical ? Style.bar.iconSlot * 3 : bar.barSize))
+    implicitHeight: !slot.active || !bar
+        ? 0
         : (activeItem && activeItem.visible !== false ? activeItem.implicitHeight : 0)
     width: implicitWidth
     height: implicitHeight
@@ -145,7 +151,7 @@ Item {
 
     Loader {
         id: loader
-        active: slot.active && !slot.qmlCustom && !slot.commandCustom && !slot.workspacePresentation
+        active: slot.active && !slot.qmlCustom && !slot.commandCustom && !slot.workspacePresentation && !slot.nativeClockFallback
         anchors.fill: parent
         // Do not destroy or replace the native clock item. It owns the
         // calendar panel and remains the click/popup target even while its
@@ -159,6 +165,23 @@ Item {
             if ("settings" in item) item.settings = slot.settings
             if (styledClockLoader.item && "clock" in styledClockLoader.item) styledClockLoader.item.clock = item
         }
+    }
+
+    Loader {
+        id: nativeClockLoader
+        active: slot.active && slot.nativeClockFallback
+        anchors.fill: parent
+        opacity: slot.dragSource ? 0.25 : 1
+        source: slot.nativeClockFallback && bar && bar.omarchyPath
+            ? bar.omarchyPath + "/shell/plugins/panels/clock/BarWidget.qml" : ""
+        onLoaded: {
+            if (!item) return
+            if ("bar" in item) item.bar = bar
+            if ("moduleName" in item) item.moduleName = slot.moduleName
+            if ("settings" in item) item.settings = slot.settings
+        }
+        onStatusChanged: if (status === Loader.Error)
+            console.warn("native clock fallback failed", errorString())
     }
 
     Loader {

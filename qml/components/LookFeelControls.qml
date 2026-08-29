@@ -76,8 +76,9 @@ Item {
         var shell = recipe.shell || ({})
         var bar = recipe.bar || ({})
         var spec = bar.spec || ({})
-        var surface = spec.surface || ({})
+		var surface = spec.surface || ({})
 		var workspacePresentation = spec.workspace || ({})
+		var dockPresentation = spec.dock || ({})
         var motion = recipe.animations || ({})
 		var screenEffect = motion.screen_effect || motion.screenEffect || null
 		var effectName = screenEffect ? String(screenEffect.id || "none") : (motion.glitch && motion.glitch !== "none" ? "rgb-tear" : "none")
@@ -92,7 +93,7 @@ Item {
             "Shell · " + (shellPreset === "glass" ? "Glass" : "Default") + " / " + (shell.surface || "flat") + " / " + (shell.detail || "native") + " · " + (shell.tooltip || "native") + " tooltips · " + (shell.notifications || "native") + " notifications",
             "Shell material · " + shellMeaning,
             "Window · " + (window.shape || "native") + " shape · " + (window.spacing || "native") + " spacing · " + (window.depth || "native") + " depth · " + (window.active_style || window.activeStyle || "native") + " focused / " + (window.inactive_style || window.inactiveStyle || "native") + " inactive",
-			"Bar · " + (spec.preset || bar.form || "native") + " / " + (spec.topology || "native") + " · " + (surface.treatment || "native") + " surface" + (surface.opacity !== undefined ? " · " + Math.round(Number(surface.opacity) * 100) + "%" : "") + (surface.blur ? " · " + surface.blur + " blur" : "") + " · workspaces " + (workspacePresentation.mode || "native") + (workspacePresentation.glyphs && workspacePresentation.glyphs.length ? " [" + workspacePresentation.glyphs.join(" · ") + "]" : ""),
+			"Bar · " + (spec.preset || bar.form || "native") + " / " + (spec.topology || "native") + " · " + (surface.treatment || "native") + " surface" + (surface.opacity !== undefined ? " · " + Math.round(Number(surface.opacity) * 100) + "%" : "") + (surface.blur ? " · " + surface.blur + " blur" : "") + " · workspaces " + (workspacePresentation.mode || "native") + (workspacePresentation.glyphs && workspacePresentation.glyphs.length ? " [" + workspacePresentation.glyphs.join(" · ") + "]" : "") + (spec.topology === "dock" ? " · closed " + (dockPresentation.closed || "ellipsis") : ""),
 			"Motion · " + (motion.preset || "native") + " · windows " + (motion.window || "native") + " · " + Number(motion.windowOpacity !== undefined ? motion.windowOpacity : motion.window_opacity !== undefined ? motion.window_opacity : 100) + "% entrance opacity · workspaces " + (motion.workspace || "native") + " · " + (motion.windowMove || motion.window_move || "native") + " movement" + (effectName !== "none" ? " · " + effectName + " " + effectStrength + " · " + effectDuration + " ms finite screen signal" : ""),
             "Terminal · " + (terminal.mode || "preserve") + " · " + (terminal.opacity !== undefined ? Number(terminal.opacity).toFixed(2) : "1.00") + " opacity · " + (terminal.cell_mode || terminal.cellMode || "background") + " cells"
         ]

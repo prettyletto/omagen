@@ -23,7 +23,10 @@ BarWidget {
     property color animatedDiamondColor: idleDiamondColor
     property real diamondGlowOpacity: 0.28
 
-    readonly property color normalIconColor: root.bar ? root.bar.foreground : Color.foreground
+    // Match native WidgetButton: barForeground is the sampled contrast color
+    // when the active bar is translucent; foreground is only the static theme
+    // color and would leave the launcher icon unreadable on some wallpapers.
+    readonly property color normalIconColor: root.bar ? root.bar.barForeground : Color.foreground
     readonly property color accentAnchor: Color.accent
     readonly property color idleDiamondColor: Color.accent
     readonly property var accentRainbow: root.buildAccentRainbow(root.accentAnchor)
@@ -225,6 +228,8 @@ BarWidget {
     readonly property bool themedAutoHide: !(root.bar && root.bar.replacementHost === true) && root.barImplementation === "adapter"
         && (dockedSurface.specAutoHide || (dockedSurface.profileResolved && dockedSurface.profileVisibility === "auto-hide"))
     property bool revealHovered: false
+    property bool autoHideOwnsToggle: false
+    readonly property int autoHideDelayMs: 5000
     readonly property string barTogglePath: Quickshell.env("XDG_STATE_HOME") !== ""
         ? Quickshell.env("XDG_STATE_HOME") + "/omarchy/toggles/bar-off"
         : Quickshell.env("HOME") + "/.local/state/omarchy/toggles/bar-off"
@@ -241,40 +246,57 @@ BarWidget {
         command: ["touch", root.barTogglePath]
     }
 
+    function showAutoHideBar() {
+        if (!root.autoHideOwnsToggle)
+            return
+        root.autoHideOwnsToggle = false
+        showBarProcess.running = true
+    }
+
+    function hideAutoHideBar() {
+        if (!root.themedAutoHide || !root.bar || root.bar.barHidden === true || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
+            return
+        root.autoHideOwnsToggle = true
+        hideBarProcess.running = true
+    }
+
+    function syncAutoHide() {
+        if (!root.themedAutoHide) {
+            autoHideTimer.stop()
+            root.showAutoHideBar()
+            return
+        }
+        if (!root.bar || root.bar.barHidden === true || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined)) {
+            autoHideTimer.stop()
+            return
+        }
+        autoHideTimer.restart()
+    }
+
+    onThemedAutoHideChanged: root.syncAutoHide()
+    Component.onCompleted: root.syncAutoHide()
+
     Timer {
         id: autoHideTimer
-        interval: 1200
+        interval: root.autoHideDelayMs
         repeat: false
-        running: root.themedAutoHide
-            && root.bar
-            && root.bar.barHidden !== true
-            && root.bar.barHovered !== true
-            && !root.revealHovered
-        onTriggered: {
-            if (!root.themedAutoHide || !root.bar || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
-                return
-            hideBarProcess.running = true
-        }
+        onTriggered: root.hideAutoHideBar()
     }
 
     Connections {
         target: root.bar
         function onBarHoveredChanged() {
-            if (!root.themedAutoHide)
-                return
-            if (root.bar.barHovered === true) {
-                autoHideTimer.stop()
-                if (root.bar.barHidden === true)
-                    showBarProcess.running = true
-            } else {
-                autoHideTimer.restart()
-            }
+            root.syncAutoHide()
+            if (root.themedAutoHide && root.bar.barHovered === true)
+                root.showAutoHideBar()
         }
+        function onBarHiddenChanged() { root.syncAutoHide() }
+        function onActivePopoutChanged() { root.syncAutoHide() }
     }
 
     PanelWindow {
         id: revealEdge
-        visible: root.themedAutoHide && dockedSurface.profileReveal === "edge"
+        visible: root.themedAutoHide && root.bar && root.bar.barHidden === true && dockedSurface.profileReveal === "edge"
         screen: root.bar && root.bar.targetWindow ? root.bar.targetWindow(root) ? root.bar.targetWindow(root).screen : null : null
         color: "transparent"
         exclusionMode: ExclusionMode.Ignore
@@ -294,10 +316,9 @@ BarWidget {
                 root.revealHovered = hovered
                 if (hovered) {
                     autoHideTimer.stop()
-                    if (root.bar && root.bar.barHidden === true)
-                        showBarProcess.running = true
-                } else if (root.bar && root.bar.barHovered !== true) {
-                    autoHideTimer.restart()
+                    root.showAutoHideBar()
+                } else {
+                    root.syncAutoHide()
                 }
             }
         }

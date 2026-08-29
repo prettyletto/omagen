@@ -21,7 +21,12 @@ BarWidget {
     property var activeTrayAnchor: null
     property var submenuStack: []
     property bool menuLevelSettling: false
-    readonly property color foreground: bar ? bar.foreground : Color.foreground
+    // `bar.foreground` is Quattro's static theme foreground. Native bar
+    // widgets paint with `bar.barForeground`, which is replaced by
+    // omarchy-bar-text-color while the surface is translucent. Keep tray
+    // glyphs, symbolic icons, and its menus on that same contrast-aware
+    // foreground contract.
+    readonly property color foreground: bar ? bar.barForeground : Color.foreground
     readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
     readonly property var pinnedIds: settings && settings.pinned instanceof Array ? settings.pinned : []
     readonly property var hiddenIds: settings && settings.hidden instanceof Array ? settings.hidden : []

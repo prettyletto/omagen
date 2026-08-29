@@ -52,6 +52,12 @@ rm -rf "$DEST_DIR/demo"
 cp -a "$SRC_DIR/demo" "$DEST_DIR/demo"
 mkdir -p "$DEST_DIR/qml" "$DEST_DIR/bin"
 rsync -a --delete "$SRC_DIR/qml/" "$DEST_DIR/qml/"
+# AdvancedStyleEditor.qml lives in the overlay plugin but shares the bar
+# sizing contract with the full-bar plugin. Keep this helper available at the
+# relative import path used by the installed overlay without merging the two
+# plugin manifests or their ownership boundaries.
+mkdir -p "$DEST_DIR/bar"
+cp "$SRC_DIR/bar/BarSizing.js" "$DEST_DIR/bar/BarSizing.js"
 cp "$SRC_DIR/bin/omagen" "$DEST_DIR/bin/omagen"
 chmod +x "$DEST_DIR/bin/omagen"
 # Replace executables atomically. The running shell can still have the old

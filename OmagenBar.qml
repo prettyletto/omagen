@@ -41,6 +41,10 @@ Item {
     property var profileDocument: ({})
     property bool profileResolved: false
     property bool barHidden: false
+    // Full replacement bars park their own surface for auto-hide. Quattro's
+    // global bar-off marker remains reserved for the user's manual toggle.
+    property bool autoHideHidden: false
+    property int autoHideRevealHoverCount: 0
     property bool forceOpaqueAfterMove: false
     property int hoverCount: 0
     property bool barHovered: false
@@ -60,7 +64,12 @@ Item {
     property color themeForeground: Color.bar.text
     property color themeContrastForeground: Color.background
     property color transparentForeground: Color.bar.text
-    property color foreground: themeForeground
+    // Keep the legacy `bar.foreground` consumer contract contrast-aware in
+    // replacement bars too. Quattro's native WidgetButton reads
+    // `bar.barForeground`, but a few platform widgets (notably the tray)
+    // still read `bar.foreground`; leaving this static would make those
+    // widgets diverge only when a replacement surface is translucent.
+    property color foreground: barForeground
     property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
     property bool foregroundAnimationEnabled: true
     property color background: Color.bar.background
@@ -104,6 +113,10 @@ Item {
     readonly property var clockSpec: root.spec.clock && typeof root.spec.clock === "object"
         ? root.spec.clock : ({})
     readonly property string clockStyle: root.normalizeClockStyle(root.clockSpec.style)
+    readonly property var dockSpec: root.spec.dock && typeof root.spec.dock === "object"
+        ? root.spec.dock : ({})
+    readonly property string dockClosedContent: root.normalizeDockClosedContent(root.dockSpec.closed)
+    readonly property string dockClosedGlyph: root.normalizeDockGlyph(root.dockSpec.glyph)
     // The replacement bar always renders Omagen's workspace widget. Its
     // `native` mode is a faithful clone of Quattro's normal presentation, while
     // the other modes change labels only; Hyprland still owns state and
@@ -152,14 +165,18 @@ Item {
     readonly property bool floatingCompact: root.topology === "floating" && root.density === "compact"
     readonly property string alignment: String(root.spec.geometry && root.spec.geometry.alignment || "center")
     readonly property string visibility: String(root.spec.behavior && root.spec.behavior.visibility || "always")
-    // The Default workspace clone is deliberately narrow: when every value
-    // except workspace labels is native, render the actual Quattro Bar.qml
-    // source and override only omarchy.workspaces. This keeps the platform's
-    // surface, spacing, tray drawer, drag/reorder, popups, and center-anchor
-    // behavior byte-for-byte aligned with the installed native bar.
+    readonly property bool autoHide: root.visibility === "auto_hide"
+    readonly property int autoHideDelayMs: 5000
+    readonly property bool autoHideRevealHovered: root.autoHideRevealHoverCount > 0
+    readonly property bool autoHidePopupOpen: root.behaviorSpec.keep_visible_while_popup_open !== false
+        && root.activePopout !== null && root.activePopout !== undefined
+    // The Default workspace clone is deliberately narrow: when the surface,
+    // geometry, and behavior are native, render the actual Quattro Bar.qml
+    // source and override only omarchy.workspaces plus the optional Omagen
+    // clock face. This keeps the platform's surface, spacing, tray drawer,
+    // drag/reorder, popups, and center-anchor behavior aligned with native.
     readonly property bool nativeDefaultClone: root.topology === "continuous"
         && root.position === "top"
-        && root.clockStyle === "native"
         && String(root.surfaceSpec.role || "native") === "native"
         && Number(root.surfaceSpec.opacity !== undefined ? root.surfaceSpec.opacity : 1) === 1
         && Number(root.surfaceSpec.blur || 0) === 0
@@ -223,7 +240,14 @@ Item {
     onBarSizeChanged: root.scheduleTransparentForegroundRefresh()
     onThemeForegroundChanged: root.scheduleTransparentForegroundRefresh()
     onThemeContrastForegroundChanged: root.scheduleTransparentForegroundRefresh()
-    Component.onCompleted: root.syncRequestedTransparency()
+    onBarHiddenChanged: root.syncAutoHide()
+    onBarHoveredChanged: root.syncAutoHide()
+    onActivePopoutChanged: root.syncAutoHide()
+    onVisibilityChanged: root.syncAutoHide()
+    Component.onCompleted: {
+        root.syncRequestedTransparency()
+        root.syncAutoHide()
+    }
 
     function triggerCyberpunkSignal(eventName) {
         if (!root.cyberpunkSignalEnabled)
@@ -235,6 +259,29 @@ Item {
             return
         root.lastGlitchAt = now
         root.glitchEpoch += 1
+    }
+
+    function showAutoHideBar() {
+        root.autoHideHidden = false
+    }
+
+    function hideAutoHideBar() {
+        if (!root.autoHide || root.barHidden || root.autoHideHidden || root.barHovered || root.autoHideRevealHovered || root.autoHidePopupOpen)
+            return
+        root.autoHideHidden = true
+    }
+
+    function syncAutoHide() {
+        if (!root.autoHide) {
+            autoHideTimer.stop()
+            root.showAutoHideBar()
+            return
+        }
+        if (root.barHidden || root.autoHideHidden || root.barHovered || root.autoHideRevealHovered || root.autoHidePopupOpen) {
+            autoHideTimer.stop()
+            return
+        }
+        autoHideTimer.restart()
     }
 
     Connections {
@@ -256,6 +303,16 @@ Item {
     function normalizeClockStyle(value) {
         var next = String(value || "native").toLowerCase()
         return ["native", "neon", "matrix", "lcd"].indexOf(next) >= 0 ? next : "native"
+    }
+
+    function normalizeDockClosedContent(value) {
+        var next = String(value || "ellipsis").toLowerCase()
+        return ["workspace", "ellipsis", "clock", "glyph"].indexOf(next) >= 0 ? next : "ellipsis"
+    }
+
+    function normalizeDockGlyph(value) {
+        var glyph = Array.from(String(value || "✦")).slice(0, 4).join("")
+        return glyph.length > 0 ? glyph : "✦"
     }
 
     function normalizedLayout(layout) {
@@ -982,6 +1039,7 @@ Item {
             manifest: root.manifest
             workspaceOverrideEnabled: root.workspaceMode !== "native"
             workspaceSpecOverride: root.workspaceSpec
+            clockStyle: root.clockStyle
         }
     }
 
@@ -1040,6 +1098,55 @@ Item {
         }
     }
 
+    Timer {
+        id: autoHideTimer
+        interval: root.autoHideDelayMs
+        repeat: false
+        onTriggered: root.hideAutoHideBar()
+    }
+
+    component OmagenBarRevealEdge: PanelWindow {
+        id: revealEdgePanel
+        property var bar: root
+        property bool edgeHovered: false
+
+        screen: null
+        visible: bar.autoHide && bar.autoHideHidden
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "pretty-omagen-bar-reveal"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+
+        anchors {
+            top: bar.position === "top" || bar.vertical
+            bottom: bar.position === "bottom" || bar.vertical
+            left: bar.position === "left" || !bar.vertical
+            right: bar.position === "right" || !bar.vertical
+        }
+        implicitWidth: bar.vertical ? bar.barSize : 0
+        implicitHeight: bar.vertical ? 0 : Style.space(4)
+
+        HoverHandler {
+            onHoveredChanged: {
+                revealEdgePanel.edgeHovered = hovered
+                if (hovered) {
+                    bar.autoHideRevealHoverCount++
+                    bar.showAutoHideBar()
+                } else {
+                    bar.autoHideRevealHoverCount = Math.max(0, bar.autoHideRevealHoverCount - 1)
+                    bar.syncAutoHide()
+                }
+            }
+            Component.onDestruction: {
+                if (!revealEdgePanel.edgeHovered)
+                    return
+                bar.autoHideRevealHoverCount = Math.max(0, bar.autoHideRevealHoverCount - 1)
+                bar.syncAutoHide()
+            }
+        }
+    }
+
     FileView {
         path: root.stateHome + "/omarchy/current"
         watchChanges: true
@@ -1072,6 +1179,16 @@ Item {
                 required property var modelData
                 screen: modelData
                 visible: !root.nativeDefaultClone
+            }
+        }
+    }
+
+    Variants {
+        model: Quickshell.screens
+        delegate: Component {
+            OmagenBarRevealEdge {
+                required property var modelData
+                screen: modelData
             }
         }
     }

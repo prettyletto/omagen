@@ -9,6 +9,9 @@ Item {
 
     property var bar: null
     property var clock: null
+    // Keep the native slot geometry and interaction target unchanged while
+    // making every Omagen face a restrained 75% of that footprint.
+    readonly property real visualScale: 0.75
 
     readonly property string style: Model.normalizeStyle(bar ? bar.clockStyle : "native")
     readonly property string value: clock && clock.displayText !== undefined
@@ -22,6 +25,8 @@ Item {
     Loader {
         id: faceLoader
         anchors.fill: parent
+        scale: root.visualScale
+        transformOrigin: Item.Center
         active: root.style !== "native"
         sourceComponent: root.style === "neon"
             ? neonFace

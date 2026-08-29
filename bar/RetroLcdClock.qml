@@ -16,11 +16,13 @@ Item {
     readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
     // Keep vertical LCD rows on the same stride as the native clock widget.
     readonly property int lineHeight: vertical ? Style.bar.iconSlot : barSize
-    readonly property color lcdColor: Color.accent
+    // The LCD remains accent-colored on an opaque surface, but its text and
+    // scan lines must follow the native sampled foreground on transparency.
+    readonly property color lcdColor: bar && bar.transparent ? bar.barForeground : Color.accent
     readonly property var lines: String(value || "").split("\n")
     readonly property real textSize: vertical
-        ? Math.max(9, Math.min(15, lineHeight * 0.50))
-        : Math.max(13, Math.min(27, barSize * 0.76))
+        ? Math.max(9, Math.min(13, lineHeight * 0.46))
+        : Math.max(12, Math.min(20, barSize * 0.68))
 
     implicitWidth: vertical
         ? barSize

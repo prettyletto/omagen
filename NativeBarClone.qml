@@ -31,6 +31,9 @@ Item {
   // popup machinery, while the parent may replace exactly one widget.
   property bool workspaceOverrideEnabled: false
   property var workspaceSpecOverride: ({})
+  // The Default clone keeps the native clock item and interaction contract,
+  // while this value selects an optional Omagen visual face over it.
+  property string clockStyle: "native"
   readonly property url workspaceOverrideSource: Qt.resolvedUrl("WorkspacePresentation.qml")
   // Mirrors the on-disk `bar-off` flag so the user can hide the bar without
   // killing the entire shell. Hidden panels stay mapped but park off-screen
@@ -74,7 +77,14 @@ Item {
   property color foreground: themeForeground
   property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
   property bool foregroundAnimationEnabled: true
-  property color background: Color.bar.background
+  // Omagen suppresses the shared native bar with bar.background-alpha=0
+  // while a replacement is selected. The clone owns its own PanelWindow, so
+  // recover the raw bar color and keep it opaque unless the user explicitly
+  // toggles this bar transparent.
+  readonly property string rawBarBackground: String(Color.shellValues["bar.background"] || "")
+  property color background: root.rawBarBackground !== ""
+    ? Color.flatColor(root.rawBarBackground, Color.background)
+    : Color.background
   property color urgent: Color.bar.active
 
   Behavior on barForeground { enabled: root.foregroundAnimationEnabled; ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -1579,21 +1589,45 @@ Item {
     // plugin enabled/disabled, etc.). Reading the `widgets` property creates
     // the binding dependency — the wrapped function call alone wouldn't.
     readonly property var registryComponent: {
-      var w = root.barWidgetRegistry.widgets
+      // Plugin bars are created before Quattro's host injection pass fills in
+      // barWidgetRegistry. During that short window the default property is
+      // an empty object, not a registry with a `widgets` map. Keep native
+      // slots empty until the real registry arrives instead of throwing from
+      // the binding and stranding the clock without its component.
+      var registry = root.barWidgetRegistry
+      var w = registry && registry.widgets ? registry.widgets : ({})
       if (customType) return null
       var registryName = root.canonicalWidgetId(moduleName)
-      return w[registryName] ? w[registryName].component : null
+      return w[registryName] && w[registryName].component ? w[registryName].component : null
     }
     readonly property bool qmlCustom: customType === "qml"
     readonly property bool commandCustom: customType === "command"
-    readonly property bool registered: !workspaceOverride && registryComponent !== null
-    readonly property int activeLoaderStatus: workspaceOverride ? workspaceLoader.status : registryLoader.status
-    readonly property string activeLoaderError: (workspaceOverride ? workspaceLoader : registryLoader).status === Loader.Error
-      ? (workspaceOverride ? workspaceLoader : registryLoader).errorString() : ""
+    // The plugin clone can be instantiated before Quattro's first-party
+    // registry has published its components. Keep the native clock alive from
+    // Omarchy's own source during that short handoff instead of showing only
+    // the clone's background. The registry component wins automatically as
+    // soon as it becomes available.
+    readonly property bool nativeClockFallback: !customType && !workspaceOverride
+      && moduleName === "omarchy.clock" && !registryComponent
+    readonly property bool styledClock: !customType && !workspaceOverride
+      && moduleName === "omarchy.clock" && root.clockStyle !== "native"
+    readonly property bool registered: !workspaceOverride && !!registryComponent
+    readonly property int activeLoaderStatus: workspaceOverride ? workspaceLoader.status
+      : registered ? registryLoader.status
+      : nativeClockFallback ? nativeClockLoader.status
+      : qmlCustom ? qmlLoader.status : componentLoader.status
+    readonly property string activeLoaderError: {
+      var activeLoader = workspaceOverride ? workspaceLoader
+        : registered ? registryLoader
+        : nativeClockFallback ? nativeClockLoader
+        : qmlCustom ? qmlLoader : componentLoader
+      return activeLoader.status === Loader.Error ? activeLoader.errorString() : ""
+    }
     readonly property var activeItem: {
       if (workspaceOverride) return workspaceLoader.item
       if (registered) return registryLoader.item
       if (qmlCustom) return qmlLoader.item
+      if (nativeClockFallback) return nativeClockLoader.item
       return componentLoader.item
     }
     readonly property bool hovered: moduleHover.hovered
@@ -1609,7 +1643,12 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    implicitWidth: activeItem && activeItem.visible ? (root.vertical ? root.barSize : activeItem.implicitWidth) : 0
+    // Styled faces are presentation-only. Keep the native item dimensions so
+    // center anchoring, popup targets, and vertical rail sizing do not change
+    // when a face is selected.
+    implicitWidth: activeItem && activeItem.visible
+      ? (root.vertical ? root.barSize : activeItem.implicitWidth)
+      : 0
     implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
     width: implicitWidth
     height: implicitHeight
@@ -1635,7 +1674,7 @@ Item {
 
     Loader {
       id: componentLoader
-      active: !slot.qmlCustom && !slot.registered
+      active: !slot.qmlCustom && !slot.registered && !slot.nativeClockFallback
       sourceComponent: slot.commandCustom ? customCommandModuleComponent : emptyModuleComponent
       anchors.fill: parent
       opacity: slot.dragSource ? 0.22 : 1.0
@@ -1643,6 +1682,23 @@ Item {
         slot.injectProps()
         Qt.callLater(slot.injectProps)
       }
+    }
+
+    Loader {
+      id: nativeClockLoader
+      active: slot.nativeClockFallback
+      anchors.fill: parent
+      opacity: slot.styledClock ? 0 : (slot.dragSource ? 0.22 : 1.0)
+      source: slot.nativeClockFallback && root.omarchyPath
+        ? root.omarchyPath + "/shell/plugins/panels/clock/BarWidget.qml" : ""
+      onLoaded: {
+        slot.injectProps()
+        Qt.callLater(slot.injectProps)
+        if (styledClockLoader.item && "clock" in styledClockLoader.item)
+          styledClockLoader.item.clock = item
+      }
+      onStatusChanged: if (status === Loader.Error)
+        console.warn("native clock fallback failed", errorString())
     }
 
     Loader {
@@ -1664,13 +1720,33 @@ Item {
       active: slot.registered
       sourceComponent: slot.registered ? slot.registryComponent : null
       anchors.fill: parent
-      opacity: slot.dragSource ? 0.22 : 1.0
+      opacity: slot.styledClock ? 0 : (slot.dragSource ? 0.22 : 1.0)
       onLoaded: {
         slot.injectProps()
         Qt.callLater(slot.injectProps)
+        if (styledClockLoader.item && "clock" in styledClockLoader.item)
+          styledClockLoader.item.clock = item
       }
       onStatusChanged: if (status === Loader.Error)
         console.warn("native bar clone widget failed", slot.moduleName, errorString())
+    }
+
+    // Keep the native clock alive underneath this face. It remains the
+    // source of formatted text, popup ownership, click targets, and sizing;
+    // this loader only paints the selected Omagen treatment above it.
+    Loader {
+      id: styledClockLoader
+      active: slot.styledClock
+      anchors.fill: parent
+      opacity: slot.dragSource ? 0.22 : 1.0
+      source: slot.styledClock ? Qt.resolvedUrl("bar/ClockStyleWidget.qml") : ""
+      onLoaded: {
+        if (!item) return
+        if ("bar" in item) item.bar = root
+        if ("clock" in item) item.clock = slot.activeItem
+      }
+      onStatusChanged: if (status === Loader.Error)
+        console.warn("native bar clone styled clock failed", errorString())
     }
 
     Loader {
