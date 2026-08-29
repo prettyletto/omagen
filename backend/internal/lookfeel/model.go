@@ -89,7 +89,7 @@ func Catalog() []CatalogEntry {
 		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 3},
 		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
 		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 3},
-		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a segmented ribbon, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 4},
+		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a compact floating bar, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 5},
 	}
 }
 
@@ -170,7 +170,7 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = natureBar()
 		composition.Animations = natureMotion()
 	case PresetOriental:
-		composition.PresetRevision = 4
+		composition.PresetRevision = 5
 		composition.Window = orientalWindow()
 		composition.Shell = orientalShell()
 		composition.Bar = orientalBar()
@@ -563,16 +563,17 @@ func natureBar() session.BarStyle {
 }
 
 func orientalBar() session.BarStyle {
-	// Split sections keep the native widget order while giving the Japanese
-	// workspace rail a deliberate, ink-on-lacquer silhouette.
-	style := replacementBar("ribbon", "kanji", nil)
+	// Keep Oriental's Japanese workspace identity without the louder segmented
+	// ribbon treatment. The compact floating composition lets the surface
+	// hierarchy and classical clock carry the theme's quieter character.
+	style := replacementBar("float", "kanji", nil)
 	spec := style.Spec
 	spec.Clock.Style = "classical"
-	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "glass", "background", .90, 10
-	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .28, 1, "raised"
-	spec.Geometry.Density, spec.Geometry.SectionGap, spec.Geometry.Radius = "comfortable", 14, 10
+	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "glass", "background", .86, 6
+	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .18, 1, "flat"
+	spec.Geometry.Density, spec.Geometry.Radius = "compact", 12
 	spec.Motion = bar.Motion{Preset: "smooth", DurationMs: 220, Easing: "out_cubic"}
-	style.Density = "comfortable"
+	style.Density = "compact"
 	return style
 }
 

@@ -1651,13 +1651,16 @@ Item {
       if (hint !== undefined && hint !== null && hint > 0) return Math.round(hint)
       return Math.max(Style.space(10), Math.round((root.vertical ? slot.height : slot.width) * 0.55))
     }
-    // Styled faces are presentation-only. Keep the native item dimensions so
-    // center anchoring, popup targets, and vertical rail sizing do not change
-    // when a face is selected.
-    implicitWidth: activeItem && activeItem.visible
-      ? (root.vertical ? root.barSize : activeItem.implicitWidth)
+    // Styled faces are presentation-only and keep the native clock as their
+    // interaction/popup owner. On horizontal bars, however, the styled face
+    // must own the measured width: the native clock's compact time-only width
+    // clips longer weekday/date formats such as "Saturday 18:00".
+    readonly property var layoutItem: styledClock && styledClockLoader.item
+      ? styledClockLoader.item : activeItem
+    implicitWidth: layoutItem && layoutItem.visible
+      ? (root.vertical ? root.barSize : layoutItem.implicitWidth)
       : 0
-    implicitHeight: activeItem && activeItem.visible ? activeItem.implicitHeight : 0
+    implicitHeight: layoutItem && layoutItem.visible ? layoutItem.implicitHeight : 0
     width: implicitWidth
     height: implicitHeight
     z: modulePointer.dragging ? 100 : 0

@@ -1,0 +1,1548 @@
+{
+  "collection_schema_version": 1,
+  "format": "omagen.look-feel.recipe",
+  "source_command": "omagen look-feel export <preset>",
+  "recipes": [
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "omarchy-native",
+      "name": "Omarchy Native",
+      "author": "Omagen",
+      "version": 1,
+      "description": "Preserve native Omarchy surfaces and terminal opacity",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "omarchy-native",
+        "preset_revision": 1,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "solid",
+          "border_size": -1,
+          "border_size_mode": "default",
+          "border_speed": 36,
+          "shape": "native",
+          "spacing": "native",
+          "depth": "native",
+          "active_style": "native",
+          "inactive_style": "native"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "flat",
+          "detail": "native",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "native",
+          "attention": "semantic",
+          "form": "continuous",
+          "visibility": "native"
+        },
+        "animations": {
+          "version": 1,
+          "preset": "native",
+          "window": "native",
+          "window_open": "popin",
+          "window_close": "popin",
+          "window_move": "native",
+          "window_amount": 87,
+          "window_opacity": 100,
+          "window_speed": 4,
+          "workspace": "native",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 18,
+          "special_workspace": "inherit",
+          "focus": "native",
+          "layers": "native",
+          "curve": "bezier",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "glass-blur",
+      "name": "Glass Blur",
+      "author": "Omagen",
+      "version": 8,
+      "description": "Soft frosted depth, floating glass, an LCD clock, dot workspaces, and gliding motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "glass-blur",
+        "preset_revision": 8,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "blend",
+          "border_size": -1,
+          "border_size_mode": "default",
+          "border_speed": 36,
+          "shape": "rounded",
+          "spacing": "airy",
+          "depth": "shadow",
+          "active_style": "frosted_light",
+          "inactive_style": "frosted_light"
+        },
+        "shell": {
+          "preset": "glass",
+          "surface": "layered",
+          "detail": "edge",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "semantic",
+          "form": "continuous",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "floating",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "float",
+            "engine": "auto",
+            "topology": "floating",
+            "position": "top",
+            "surface": {
+              "treatment": "glass",
+              "role": "background",
+              "opacity": 0.82,
+              "blur": 12,
+              "border_role": "accent",
+              "border_opacity": 0.35,
+              "border_width": 1,
+              "shadow": "floating"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 8,
+              "outer_margin": 8,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 14,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "dots"
+            },
+            "clock": {
+              "style": "lcd"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "smooth",
+              "duration_ms": 220,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "smooth",
+          "window": "smooth",
+          "window_open": "popin",
+          "window_close": "popin",
+          "window_move": "smooth",
+          "window_amount": 82,
+          "window_opacity": 100,
+          "window_speed": 4,
+          "workspace": "slidefade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 22,
+          "special_workspace": "fade",
+          "focus": "smooth",
+          "layers": "fade",
+          "curve": "glass",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preset",
+          "opacity": 0.82,
+          "cell_mode": "painted"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "focused",
+      "name": "Focused",
+      "author": "Omagen",
+      "version": 3,
+      "description": "Grounded windows, a practical clock dock, numbered workspaces, and immediate motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "focused",
+        "preset_revision": 3,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "solid",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "rounded",
+          "spacing": "native",
+          "depth": "shadow",
+          "active_style": "native",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "contrast",
+          "detail": "focus",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "dark",
+          "density": "comfortable",
+          "attention": "accent",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "dock",
+              "visibility": "auto-hide",
+              "reveal": "edge",
+              "expansion": "hover",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "dock",
+            "engine": "omagen",
+            "topology": "dock",
+            "position": "top",
+            "surface": {
+              "treatment": "preset",
+              "role": "dark",
+              "opacity": 1,
+              "blur": 0,
+              "border_role": "none",
+              "border_opacity": 0,
+              "border_width": 1,
+              "shadow": "floating"
+            },
+            "geometry": {
+              "density": "native",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 16,
+              "length_mode": "content",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "auto_hide",
+              "exclusive_zone": "reserve",
+              "hover_expand": true,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "numbers"
+            },
+            "clock": {
+              "style": "native"
+            },
+            "dock": {
+              "closed": "clock",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "native",
+              "duration_ms": 180,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "snappy",
+          "window": "snappy",
+          "window_open": "popin",
+          "window_close": "popin",
+          "window_move": "quick",
+          "window_amount": 97,
+          "window_opacity": 100,
+          "window_speed": 1,
+          "workspace": "fade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 5,
+          "special_workspace": "inherit",
+          "focus": "quick",
+          "layers": "fade",
+          "curve": "precision",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "cyberpunk-glitch",
+      "name": "Cyberpunk Glitch",
+      "author": "Omagen",
+      "version": 7,
+      "description": "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "cyberpunk-glitch",
+        "preset_revision": 7,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "neon",
+          "border_size": 4,
+          "border_size_mode": "fixed",
+          "border_speed": 28,
+          "shape": "rounded",
+          "spacing": "native",
+          "depth": "shadow",
+          "active_style": "native",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "layered",
+          "detail": "edge",
+          "tooltip": "accent",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "dark",
+          "density": "comfortable",
+          "attention": "accent",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "floating",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "focus",
+              "workspace": "segmented"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "orbit",
+            "engine": "omagen",
+            "topology": "floating",
+            "position": "top",
+            "surface": {
+              "treatment": "glass",
+              "role": "background",
+              "opacity": 0.88,
+              "blur": 8,
+              "border_role": "accent",
+              "border_opacity": 0.7,
+              "border_width": 1,
+              "shadow": "floating"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 10,
+              "outer_margin": 10,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 18,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "roman"
+            },
+            "clock": {
+              "style": "neon"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "cyberpunk",
+              "duration_ms": 140,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "cyberpunk",
+          "window": "digital",
+          "window_open": "gnomed",
+          "window_close": "slide",
+          "window_move": "digital",
+          "window_amount": 94,
+          "window_opacity": 82,
+          "window_speed": 2,
+          "workspace": "slide",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 12,
+          "special_workspace": "slidevert",
+          "focus": "digital",
+          "layers": "slide",
+          "curve": "digital",
+          "border": "static",
+          "border_speed": 36,
+          "glitch": "medium",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "spectral-shift",
+      "name": "Spectral Shift",
+      "author": "Omagen",
+      "version": 2,
+      "description": "Prismatic shell signals, a segmented ribbon, lettered workspaces, an LCD instrument face, and cinematic refraction",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "spectral-shift",
+        "preset_revision": 2,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "blend",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "soft",
+          "spacing": "native",
+          "depth": "shadow",
+          "active_style": "native",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "layered",
+          "detail": "edge",
+          "tooltip": "accent",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "sections",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "ribbon",
+            "engine": "omagen",
+            "topology": "sections",
+            "position": "top",
+            "surface": {
+              "treatment": "glass",
+              "role": "dark",
+              "opacity": 0.9,
+              "blur": 6,
+              "border_role": "accent",
+              "border_opacity": 0.4,
+              "border_width": 1,
+              "shadow": "raised"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 2,
+              "widget_gap": 0,
+              "radius": 10,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "letters"
+            },
+            "clock": {
+              "style": "lcd"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "smooth",
+              "duration_ms": 190,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "cinematic",
+          "window_open": "popin",
+          "window_close": "fade",
+          "window_move": "smooth",
+          "window_amount": 88,
+          "window_opacity": 100,
+          "window_speed": 3,
+          "workspace": "slidefade",
+          "workspace_axis": "vertical",
+          "workspace_travel": 16,
+          "special_workspace": "slide",
+          "focus": "smooth",
+          "layers": "slide",
+          "curve": "bezier",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "screen_effect": {
+            "id": "spectral-shift",
+            "strength": "medium",
+            "duration_ms": 500,
+            "triggers": [
+              "window-open",
+              "window-close",
+              "workspace",
+              "panel"
+            ],
+            "coalesce": true
+          },
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "phosphor-terminal",
+      "name": "Phosphor Terminal",
+      "author": "Omagen",
+      "version": 3,
+      "description": "Compact CRT instrumentation, a minimal bar, terminal workspaces, and finite synchronization",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "phosphor-terminal",
+        "preset_revision": 3,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "split_top",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "subtle",
+          "spacing": "compact",
+          "depth": "flat",
+          "active_style": "native",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "contrast",
+          "detail": "framed",
+          "tooltip": "native",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "minimal",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "minimal",
+            "engine": "omagen",
+            "topology": "minimal",
+            "position": "top",
+            "surface": {
+              "treatment": "metal",
+              "role": "dark",
+              "opacity": 0.94,
+              "blur": 0,
+              "border_role": "foreground",
+              "border_opacity": 0.35,
+              "border_width": 1,
+              "shadow": "none"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 0,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": true,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "A1",
+                "B2",
+                "C3",
+                "D4",
+                "E5"
+              ]
+            },
+            "clock": {
+              "style": "matrix"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "subtle",
+              "duration_ms": 120,
+              "easing": "out_quart"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "minimal",
+          "window_open": "fade",
+          "window_close": "fade",
+          "window_move": "none",
+          "window_amount": 100,
+          "window_opacity": 100,
+          "window_speed": 1,
+          "workspace": "fade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 5,
+          "special_workspace": "inherit",
+          "focus": "quick",
+          "layers": "fade",
+          "curve": "precision",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "screen_effect": {
+            "id": "phosphor-scan",
+            "strength": "medium",
+            "duration_ms": 850,
+            "triggers": [
+              "window-open",
+              "window-close",
+              "workspace",
+              "panel",
+              "notification",
+              "urgent"
+            ],
+            "coalesce": true
+          },
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "monolith",
+      "name": "Monolith",
+      "author": "Omagen",
+      "version": 3,
+      "description": "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "monolith",
+        "preset_revision": 3,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "split_bottom",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "subtle",
+          "spacing": "compact",
+          "depth": "flat",
+          "active_style": "native",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "contrast",
+          "detail": "framed",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "islands",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "islands",
+            "engine": "omagen",
+            "topology": "islands",
+            "position": "top",
+            "surface": {
+              "treatment": "opaque",
+              "role": "dark",
+              "opacity": 1,
+              "blur": 0,
+              "border_role": "foreground",
+              "border_opacity": 0.35,
+              "border_width": 1,
+              "shadow": "none"
+            },
+            "geometry": {
+              "density": "native",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 0,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "W1",
+                "W2",
+                "W3",
+                "W4",
+                "W5"
+              ]
+            },
+            "clock": {
+              "style": "gothic"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "none",
+              "duration_ms": 0,
+              "easing": "linear"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "minimal",
+          "window": "minimal",
+          "window_open": "fade",
+          "window_close": "fade",
+          "window_move": "none",
+          "window_amount": 100,
+          "window_opacity": 100,
+          "window_speed": 1,
+          "workspace": "fade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 5,
+          "special_workspace": "inherit",
+          "focus": "quick",
+          "layers": "fade",
+          "curve": "precision",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "elastic-orbit",
+      "name": "Elastic Orbit",
+      "author": "Omagen",
+      "version": 2,
+      "description": "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "elastic-orbit",
+        "preset_revision": 2,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "blend",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "pill",
+          "spacing": "airy",
+          "depth": "shadow",
+          "active_style": "native",
+          "inactive_style": "shadow"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "layered",
+          "detail": "focus",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "comfortable",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "floating",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "orbit",
+            "engine": "omagen",
+            "topology": "floating",
+            "position": "top",
+            "surface": {
+              "treatment": "metal",
+              "role": "background",
+              "opacity": 0.96,
+              "blur": 0,
+              "border_role": "accent",
+              "border_opacity": 0.42,
+              "border_width": 1,
+              "shadow": "raised"
+            },
+            "geometry": {
+              "density": "comfortable",
+              "thickness": 0,
+              "edge_offset": 10,
+              "outer_margin": 10,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 18,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "○",
+                "◔",
+                "◑",
+                "◕",
+                "●"
+              ]
+            },
+            "clock": {
+              "style": "lcd"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "expressive",
+              "duration_ms": 260,
+              "easing": "in_out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "spring",
+          "window_open": "popin",
+          "window_close": "popin",
+          "window_move": "spring",
+          "window_amount": 86,
+          "window_opacity": 100,
+          "window_speed": 4,
+          "workspace": "slidefade",
+          "workspace_axis": "vertical",
+          "workspace_travel": 18,
+          "special_workspace": "slidefade",
+          "focus": "smooth",
+          "layers": "fade",
+          "curve": "spring",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "nature",
+      "name": "Nature",
+      "author": "Omagen",
+      "version": 3,
+      "description": "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "nature",
+        "preset_revision": 3,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "blend",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "soft",
+          "spacing": "airy",
+          "depth": "shadow",
+          "active_style": "frosted_light",
+          "inactive_style": "frosted_light"
+        },
+        "shell": {
+          "preset": "glass",
+          "surface": "layered",
+          "detail": "framed",
+          "tooltip": "native",
+          "notifications": "native"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "comfortable",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "islands",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "islands",
+            "engine": "omagen",
+            "topology": "islands",
+            "position": "top",
+            "surface": {
+              "treatment": "glass",
+              "role": "background",
+              "opacity": 0.88,
+              "blur": 8,
+              "border_role": "accent",
+              "border_opacity": 0.25,
+              "border_width": 1,
+              "shadow": "none"
+            },
+            "geometry": {
+              "density": "comfortable",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 12,
+              "widget_gap": 0,
+              "radius": 12,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "",
+                "",
+                "",
+                "",
+                ""
+              ]
+            },
+            "clock": {
+              "style": "classical"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "smooth",
+              "duration_ms": 240,
+              "easing": "in_out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "spring",
+          "window_open": "popin",
+          "window_close": "popin",
+          "window_move": "spring",
+          "window_amount": 90,
+          "window_opacity": 100,
+          "window_speed": 4,
+          "workspace": "slidefade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 14,
+          "special_workspace": "fade",
+          "focus": "smooth",
+          "layers": "fade",
+          "curve": "spring",
+          "border": "native",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "oriental",
+      "name": "Oriental",
+      "author": "Omagen",
+      "version": 5,
+      "description": "Kanagawa-inspired night surfaces, a compact floating bar, a quiet classical clock, Japanese workspaces, and ink-brush motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "oriental",
+        "preset_revision": 5,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "split_top",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "soft",
+          "spacing": "airy",
+          "depth": "flat",
+          "active_style": "native",
+          "inactive_style": "frosted_rich"
+        },
+        "shell": {
+          "preset": "glass",
+          "surface": "layered",
+          "detail": "framed",
+          "tooltip": "accent",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "floating",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "float",
+            "engine": "auto",
+            "topology": "floating",
+            "position": "top",
+            "surface": {
+              "treatment": "glass",
+              "role": "background",
+              "opacity": 0.86,
+              "blur": 6,
+              "border_role": "accent",
+              "border_opacity": 0.18,
+              "border_width": 1,
+              "shadow": "flat"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 8,
+              "outer_margin": 8,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 12,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "kanji"
+            },
+            "clock": {
+              "style": "classical"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "smooth",
+              "duration_ms": 220,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "cinematic",
+          "window_open": "slide",
+          "window_close": "fade",
+          "window_move": "smooth",
+          "window_amount": 88,
+          "window_opacity": 100,
+          "window_speed": 4,
+          "workspace": "slidefade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 16,
+          "special_workspace": "fade",
+          "focus": "smooth",
+          "layers": "fade",
+          "curve": "glass",
+          "border": "static",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    }
+  ]
+}

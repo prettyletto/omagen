@@ -42,7 +42,13 @@ Item {
         return total
     }
 
-    readonly property real horizontalWidth: Math.max(64, lineWidth(lines[0] || "06:53"))
+    // Date/weekday formats fall back to Text because they are not valid
+    // matrix glyphs. Measure that fallback text itself so it can expand past
+    // the compact time-only width instead of eliding the date.
+    readonly property real fallbackWidth: fallbackText.implicitWidth + 12
+    readonly property real horizontalWidth: renderable
+        ? Math.max(64, lineWidth(lines[0] || "06:53"))
+        : Math.max(64, Math.ceil(fallbackWidth))
     implicitWidth: vertical ? barSize : horizontalWidth
     implicitHeight: vertical
         ? Math.max(lineHeight, lines.length * lineHeight)
@@ -107,6 +113,7 @@ Item {
     }
 
     Text {
+        id: fallbackText
         visible: !root.renderable
         anchors.fill: parent
         text: root.value
@@ -114,6 +121,7 @@ Item {
         font.family: root.bar ? root.bar.fontFamily : Style.font.family
         font.pixelSize: root.vertical ? Math.max(9, root.lineHeight * 0.42) : Math.max(11, root.barSize * 0.56)
         font.bold: true
+        wrapMode: Text.NoWrap
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight

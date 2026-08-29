@@ -26,7 +26,7 @@ Item {
 
     implicitWidth: vertical
         ? barSize
-        : Math.max(78, Math.min(220, String(value || "06:53").length * textSize * 0.64 + 18))
+        : Math.max(78, Math.ceil(lcdText.implicitWidth + 16))
     implicitHeight: vertical
         ? Math.max(lineHeight, Math.max(1, lines.length) * lineHeight)
         : Math.max(barSize, textSize + 8)
