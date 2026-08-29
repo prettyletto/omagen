@@ -21,6 +21,12 @@ BarWidget {
     property var activeTrayAnchor: null
     property var submenuStack: []
     property bool menuLevelSettling: false
+    // Only the chevron and drawer area control expansion. Pinned items must
+    // remain stationary and clickable while the drawer is collapsed; making
+    // the whole tray hover-sensitive causes a pinned item to move away from
+    // the pointer as soon as expansion starts.
+    property int drawerHoverCount: 0
+    property bool trayHoverActive: false
     // `bar.foreground` is Quattro's static theme foreground. Native bar
     // widgets paint with `bar.barForeground`, which is replaced by
     // omarchy-bar-text-color while the surface is translucent. Keep tray
@@ -173,6 +179,20 @@ BarWidget {
         onTriggered: compactTrayRoot.menuLevelSettling = false
     }
 
+    // The native tray keeps its drawer hover region continuous while the
+    // revealed icons move into place. Give the pointer the same small grace
+    // period when crossing from the chevron to a drawer icon; otherwise the
+    // animated geometry can report an exit for one frame and close the tray
+    // before the icon receives the click.
+    Timer {
+        id: drawerCollapseTimer
+        interval: 220
+        onTriggered: {
+            if (!compactTrayRoot.trayHoverActive)
+                compactTrayRoot.expanded = false
+        }
+    }
+
     function resetTrayMenu() {
         menuLevelSettling = false
         menuLevelSettleTimer.stop()
@@ -223,11 +243,27 @@ BarWidget {
         managePopupOpen = false
     }
 
-    // Match native Quattro: the drawer follows the pointer, while the
-    // click remains available as an explicit toggle for touchpads and
-    // keyboard-driven pointer users.
+    function setDrawerHover(hovered) {
+        if (hovered) {
+            drawerCollapseTimer.stop()
+            drawerHoverCount += 1
+            expanded = true
+            return
+        }
+
+        drawerHoverCount = Math.max(0, drawerHoverCount - 1)
+    }
+
+    // Keep the drawer open while the pointer crosses from the revealed
+    // drawer icons to pinned icons. The drawer/chevron handlers above open
+    // the tray, but this outer handler owns dismissal only after the pointer
+    // has actually left the complete tray surface.
     HoverHandler {
-        onHoveredChanged: compactTrayRoot.expanded = hovered
+        onHoveredChanged: {
+            compactTrayRoot.trayHoverActive = hovered
+            if (hovered) drawerCollapseTimer.stop()
+            else drawerCollapseTimer.restart()
+        }
     }
 
     Rectangle {
@@ -284,6 +320,13 @@ BarWidget {
                     mouse.accepted = true
             }
         }
+
+        // Keep hover ownership on the drawer affordance. Pinned tray items
+        // are deliberately outside this handler so hovering them cannot
+        // change their position underneath the pointer.
+        HoverHandler {
+            onHoveredChanged: compactTrayRoot.setDrawerHover(hovered)
+        }
     }
 
     Row {
@@ -296,6 +339,10 @@ BarWidget {
         anchors.verticalCenter: parent.verticalCenter
         spacing: 0
         visible: !compactTrayRoot.vertical && compactTrayRoot.expanded && compactTrayRoot.drawerCount > 0
+
+        HoverHandler {
+            onHoveredChanged: compactTrayRoot.setDrawerHover(hovered)
+        }
 
         Repeater {
             model: compactTrayRoot.drawerItems
@@ -418,6 +465,10 @@ BarWidget {
         anchors.bottom: compactTrayChevron.top
         spacing: 0
         visible: compactTrayRoot.vertical && compactTrayRoot.expanded
+
+        HoverHandler {
+            onHoveredChanged: compactTrayRoot.setDrawerHover(hovered)
+        }
 
         Repeater {
             model: compactTrayRoot.drawerItems

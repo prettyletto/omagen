@@ -78,7 +78,9 @@ Item {
         Style.barScaleWithFont,
         Style.fontScale
     )
-    readonly property real barOpacity: root.barSpec.surface && root.barSpec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.opacity))) : 1
+    readonly property real barOpacity: ["preset", "opaque"].indexOf(String(root.barSpec.surface && root.barSpec.surface.treatment || "preset")) >= 0
+        ? 1
+        : (root.barSpec.surface && root.barSpec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.barSpec.surface.opacity))) : 1)
     readonly property int barRadius: root.barSpec.geometry && root.barSpec.geometry.radius !== undefined ? Number(root.barSpec.geometry.radius) : 0
     readonly property int barEdgeOffset: root.barSpec.geometry && root.barSpec.geometry.edge_offset !== undefined ? Math.max(0, Number(root.barSpec.geometry.edge_offset)) : 0
     readonly property int barOuterMargin: root.barSpec.geometry && root.barSpec.geometry.outer_margin !== undefined ? Math.max(0, Number(root.barSpec.geometry.outer_margin)) : 0

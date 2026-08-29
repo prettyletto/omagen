@@ -274,7 +274,7 @@ func (s BarSpec) Validate() error {
 	if !oneOf(string(s.Engine), string(EngineAuto), string(EngineNative), string(EngineOmagen)) {
 		return fmt.Errorf("invalid bar engine %q", s.Engine)
 	}
-	if !oneOf(s.Preset, "native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail", "custom") {
+	if !oneOf(s.Preset, "native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail", "orbit", "ribbon", "custom") {
 		return fmt.Errorf("invalid bar preset %q", s.Preset)
 	}
 	if !oneOf(string(s.Topology), "continuous", "floating", "sections", "islands", "dock", "split", "minimal", "notch", "rail") {
@@ -332,7 +332,7 @@ func (s BarSpec) Validate() error {
 	if s.Workspace.Mode == "glyphs" && len(s.Workspace.Glyphs) == 0 {
 		return fmt.Errorf("custom workspace glyphs are empty")
 	}
-	if !oneOf(s.Clock.Style, "native", "neon", "matrix", "lcd") {
+	if !oneOf(s.Clock.Style, "native", "neon", "matrix", "lcd", "classical", "gothic") {
 		return fmt.Errorf("invalid clock style %q", s.Clock.Style)
 	}
 	if !oneOf(s.Dock.Closed, "workspace", "ellipsis", "clock", "glyph") {
@@ -416,7 +416,7 @@ func Compile(spec BarSpec) (CompileResult, error) {
 }
 
 func Presets() []string {
-	return []string{"native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail"}
+	return []string{"native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail", "orbit", "ribbon"}
 }
 
 func Preset(name string) (BarSpec, error) {
@@ -425,24 +425,24 @@ func Preset(name string) (BarSpec, error) {
 	switch name {
 	case "native":
 	case "float":
-		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyFloating, "background", .88, "foreground", .3, 1, "raised"
+		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyFloating, "background", 1, "foreground", .3, 1, "raised"
 		s.Geometry.Density = "compact"
 		s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.Radius = 8, 8, 14
 	case "float-expanded":
 		// Keep the native three-section composition and native tray drawer,
 		// changing only the host surface: a centered floating pill whose tray
 		// expands leftward from the right edge on hover.
-		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyFloating, "background", .88, "foreground", .3, 1, "raised"
+		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyFloating, "background", 1, "foreground", .3, 1, "raised"
 		s.Geometry.Density = "native"
 		s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.Radius = 8, 8, 14
 		s.Behavior.HoverExpand = true
 	case "sections":
-		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth = TopologySections, "dark", .9, "accent", .35, 1
+		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth = TopologySections, "dark", 1, "accent", .35, 1
 		s.Geometry.SectionGap, s.Geometry.Radius = 10, 14
 	case "islands":
 		s.Topology, s.Engine, s.Surface.Role, s.Surface.Opacity, s.Surface.Blur, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyIslands, EngineOmagen, "native", 1, 0, "foreground", .35, 1, "none"
 	case "dock":
-		s.Topology, s.Engine, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyDock, EngineOmagen, "dark", .9, 1, "floating"
+		s.Topology, s.Engine, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyDock, EngineOmagen, "dark", 1, 1, "floating"
 		s.Geometry.LengthMode, s.Geometry.Alignment, s.Geometry.Radius, s.Behavior.Visibility, s.Behavior.HoverExpand = "content", "center", 16, "auto_hide", true
 	case "minimal":
 		s.Topology, s.Engine = TopologyMinimal, EngineOmagen
@@ -456,6 +456,17 @@ func Preset(name string) (BarSpec, error) {
 		s.Topology, s.Engine, s.Surface.Role, s.Geometry.Radius = TopologyNotch, EngineOmagen, "dark", 14
 	case "rail":
 		s.Topology, s.Engine, s.Position, s.Surface.Role = TopologyRail, EngineOmagen, PositionLeft, "dark"
+	case "orbit":
+		s.Topology, s.Engine = TopologyFloating, EngineOmagen
+		s.Surface = Surface{Treatment: "preset", Role: "background", Opacity: 1, BorderRole: "accent", BorderOpacity: .42, BorderWidth: 1, Shadow: "raised"}
+		s.Geometry.Density = "compact"
+		s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.Radius = 10, 10, 18
+		s.Motion = Motion{Preset: "smooth", DurationMs: 220, Easing: "out_cubic"}
+	case "ribbon":
+		s.Topology, s.Engine = TopologySections, EngineOmagen
+		s.Surface = Surface{Treatment: "preset", Role: "dark", Opacity: 1, BorderRole: "accent", BorderOpacity: .36, BorderWidth: 1, Shadow: "flat"}
+		s.Geometry.SectionGap, s.Geometry.Radius = 2, 10
+		s.Motion = Motion{Preset: "subtle", DurationMs: 180, Easing: "out_cubic"}
 	default:
 		return BarSpec{}, fmt.Errorf("unknown bar preset %q", name)
 	}

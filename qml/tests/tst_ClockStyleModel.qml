@@ -8,6 +8,8 @@ TestCase {
         compare(ClockStyleModel.normalizeStyle("neon"), "neon")
         compare(ClockStyleModel.normalizeStyle("matrix"), "matrix")
         compare(ClockStyleModel.normalizeStyle("lcd"), "lcd")
+        compare(ClockStyleModel.normalizeStyle("classical"), "classical")
+        compare(ClockStyleModel.normalizeStyle("gothic"), "gothic")
         compare(ClockStyleModel.normalizeStyle("missing"), "native")
         compare(ClockStyleModel.normalizeStyle(null), "native")
     }

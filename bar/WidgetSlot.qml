@@ -24,13 +24,15 @@ Item {
     readonly property bool compactTray: !!bar && moduleName === "omarchy.tray"
         && (bar.topology === "islands"
             || bar.topology === "dock"
-            || (bar.topology === "floating" && bar.density === "compact")
+            || (bar.topology === "floating" && bar.density === "compact"
+                && String(bar.spec && bar.spec.preset || "") === "float")
             || (bar.topology === "minimal" && bar.vertical))
     // Keep the native clock mounted as the active item. StyledClockWidget is
     // presentation-only and paints above it, so the native calendar, IPC,
     // format cycling, timezone action, and popout identity remain untouched.
     readonly property bool styledClock: !!bar && moduleName === "omarchy.clock"
         && bar.clockStyle !== "native"
+    readonly property bool clockSlot: !!bar && moduleName === "omarchy.clock"
     readonly property bool workspacePresentation: !!bar && moduleName === "omarchy.workspaces"
         && bar.workspacePresentationActive
     readonly property bool dragSource: !!bar && bar.barDragSource === slot
@@ -102,9 +104,53 @@ Item {
         }
     }
 
-    onBarChanged: registerIfReady()
+    function injectProps(target) {
+        if (!target) return
+        if ("bar" in target) target.bar = bar
+        if ("moduleName" in target) target.moduleName = slot.moduleName
+        if ("settings" in target) target.settings = slot.settings
+    }
+
+    function injectActiveProps() {
+        injectProps(loader.item)
+        injectProps(nativeClockLoader.item)
+    }
+
+    // The registry can finish loading after the bar receives shell.json, and
+    // shell.json can refresh inline settings without rebuilding slots. Reapply
+    // the values in both cases so the clock never renders its native
+    // date-plus-time fallback just because it mounted one turn too early.
+    onBarChanged: {
+        registerIfReady()
+        injectActiveProps()
+    }
+    onSettingsChanged: injectActiveProps()
     Component.onCompleted: registerIfReady()
     Component.onDestruction: unregisterIfReady()
+
+    function toggleClockFormat() {
+        if (!clockSlot || !bar || !activeItem || !("settings" in activeItem)) return false
+
+        var source = activeItem.settings && typeof activeItem.settings === "object"
+            ? activeItem.settings : slot.settings
+        var next = ({})
+        for (var key in source) if (key !== "id") next[key] = source[key]
+
+        var formatKey = bar.vertical ? "verticalFormat" : "format"
+        var altKey = bar.vertical ? "verticalFormatAlt" : "formatAlt"
+        var timeOnly = bar.vertical ? "HH\n—\nmm" : "HH:mm"
+        var dateAndTime = bar.vertical ? "dd\nMMM\n'W'ww\n''yy" : "dddd HH:mm"
+        var current = String(next[formatKey] || timeOnly)
+        next[formatKey] = current === timeOnly ? dateAndTime : timeOnly
+        next[altKey] = dateAndTime
+
+        var entry = { id: slot.moduleName }
+        for (var setting in next) entry[setting] = next[setting]
+        activeItem.settings = entry
+        if (bar.shell && typeof bar.shell.updateEntryInline === "function")
+            bar.shell.updateEntryInline(slot.moduleName, entry)
+        return true
+    }
 
     BorderSurface {
         visible: slot.dragSource
@@ -160,9 +206,7 @@ Item {
         sourceComponent: slot.registryComponent
         onLoaded: {
             if (!item) return
-            if ("bar" in item) item.bar = bar
-            if ("moduleName" in item) item.moduleName = slot.moduleName
-            if ("settings" in item) item.settings = slot.settings
+            slot.injectProps(item)
             if (styledClockLoader.item && "clock" in styledClockLoader.item) styledClockLoader.item.clock = item
         }
     }
@@ -176,9 +220,7 @@ Item {
             ? bar.omarchyPath + "/shell/plugins/panels/clock/BarWidget.qml" : ""
         onLoaded: {
             if (!item) return
-            if ("bar" in item) item.bar = bar
-            if ("moduleName" in item) item.moduleName = slot.moduleName
-            if ("settings" in item) item.settings = slot.settings
+            slot.injectProps(item)
         }
         onStatusChanged: if (status === Loader.Error)
             console.warn("native clock fallback failed", errorString())
@@ -254,7 +296,7 @@ Item {
         readonly property real dragThreshold: Style.space(4)
 
         anchors.fill: parent
-        acceptedButtons: Qt.LeftButton
+        acceptedButtons: slot.clockSlot ? (Qt.LeftButton | Qt.RightButton) : Qt.LeftButton
         enabled: !!bar && !slot.compactTray && slot.visible && slot.width > 0 && slot.height > 0
         propagateComposedEvents: true
         cursorShape: dragging ? Qt.ClosedHandCursor
@@ -309,6 +351,10 @@ Item {
         onClicked: function(mouse) {
             if (suppressClick) {
                 suppressClick = false
+                mouse.accepted = true
+                return
+            }
+            if (mouse.button === Qt.RightButton && slot.toggleClockFormat()) {
                 mouse.accepted = true
                 return
             }

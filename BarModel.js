@@ -14,6 +14,12 @@ function entrySettings(entry) {
     if (key === "id") continue
     copy[key] = entry[key]
   }
+  if (entryId(entry) === "omarchy.clock") {
+    if (copy.format === undefined || copy.format === null || String(copy.format) === "") copy.format = "HH:mm"
+    if (copy.formatAlt === undefined || copy.formatAlt === null || String(copy.formatAlt) === "") copy.formatAlt = "dddd HH:mm"
+    if (copy.verticalFormat === undefined || copy.verticalFormat === null || String(copy.verticalFormat) === "") copy.verticalFormat = "HH\n—\nmm"
+    if (copy.verticalFormatAlt === undefined || copy.verticalFormatAlt === null || String(copy.verticalFormatAlt) === "") copy.verticalFormatAlt = "dd\nMMM\n'W'ww\n''yy"
+  }
   return copy
 }
 

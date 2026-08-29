@@ -21,6 +21,8 @@ Item {
     case "split": return Qt.resolvedUrl("presets/SplitBarPreset.qml")
     case "notch": return Qt.resolvedUrl("presets/NotchBarPreset.qml")
     case "rail": return Qt.resolvedUrl("presets/RailBarPreset.qml")
+    case "orbit": return Qt.resolvedUrl("presets/OrbitBarPreset.qml")
+    case "ribbon": return Qt.resolvedUrl("presets/SegmentedRibbonBarPreset.qml")
     default: return Qt.resolvedUrl("presets/CustomBarPreset.qml")
     }
   }

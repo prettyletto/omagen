@@ -32,7 +32,11 @@ Item {
             ? neonFace
             : root.style === "matrix"
                 ? matrixFace
-                : root.style === "lcd" ? lcdFace : null
+                : root.style === "lcd"
+                    ? lcdFace
+                    : root.style === "classical"
+                        ? classicalFace
+                        : root.style === "gothic" ? gothicFace : null
     }
 
     Component {
@@ -56,6 +60,24 @@ Item {
     Component {
         id: lcdFace
         RetroLcdClock {
+            bar: root.bar
+            value: root.value
+            vertical: root.vertical
+        }
+    }
+
+    Component {
+        id: classicalFace
+        ClassicalClock {
+            bar: root.bar
+            value: root.value
+            vertical: root.vertical
+        }
+    }
+
+    Component {
+        id: gothicFace
+        GothicClock {
             bar: root.bar
             value: root.value
             vertical: root.vertical

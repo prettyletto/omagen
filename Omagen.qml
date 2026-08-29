@@ -534,17 +534,35 @@ Item {
         livePanelOpen = true;
         opened = false;
 
-        // Once Live Canvas is active, changing direction only reapplies the
-        // candidate through the existing preview/rollback transaction. It does
-        // not create or discard the optional Demo workspace.
+        // An active Demo and a normal Live Canvas entry both apply the
+        // selected direction through the existing preview transaction. The
+        // preview controller deduplicates a later Test Live click when the
+        // candidate has not changed.
         if (demoActive) {
             const overrides = liveCanvasPanel.overridesForVariant(variant);
+            root.prepareLiveBar();
             previewController.start(variant, overrides, root.previewStyles(variant), Object.keys(overrides).length > 0);
             return;
         }
 
         testLive(variant);
     }
+
+    // Test Live is the explicit commit point for a candidate bar. The shell's
+    // native bar setting is user-owned and may still contain the persisted
+    // transparency toggle, but a live candidate must start with a visible
+    // surface. The bar's double-click gesture can turn transparency back on.
+    function prepareLiveBar() {
+        if (!root.shell || typeof root.shell.mutateShellConfig !== "function")
+            return;
+        if (!root.shell.barConfig || root.shell.barConfig.transparent !== true)
+            return;
+        root.shell.mutateShellConfig(function(config) {
+            if (!config.bar || typeof config.bar !== "object") config.bar = {};
+            config.bar.transparent = false;
+        });
+    }
+
     function testLive(variant) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
         errorMessage = "";
@@ -552,6 +570,7 @@ Item {
         livePanelOpen = true;
         opened = false;
         const overrides = liveCanvasPanel.overridesForVariant(variant);
+        root.prepareLiveBar();
         previewController.start(variant, overrides, root.previewStyles(variant), Object.keys(overrides).length > 0);
     }
     function refreshProtocol() {
@@ -622,6 +641,7 @@ Item {
         liveCanvasActive = true;
         livePanelOpen = true;
         opened = false;
+        root.prepareLiveBar();
         previewController.start(variant, effectiveOverrides, root.previewStyles(variant), Object.keys(effectiveOverrides).length > 0);
     }
     function suggestedThemeName() {
@@ -963,10 +983,9 @@ Item {
             root.livePanelOpen = true
             root.opened = false
             root.route = "workspace"
-            // Continue is the first user action in the session. Make that
-            // action land in the real desktop with Source already applied;
-            // the user should not need a second click just to enter the
-            // default direction.
+            // Continue opens Live Canvas on Source and applies it once. A
+            // later Test Live click with no edits is deduplicated by the
+            // preview controller instead of replacing the same bar again.
             root.enterLiveCanvas("source")
             root.refreshProtocol()
         }

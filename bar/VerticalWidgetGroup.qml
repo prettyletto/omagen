@@ -17,8 +17,14 @@ Column {
     required property var entries
     property bool active: true
     property bool centerSlots: false
+    // Keep delegates mounted while a compact composition hides the group.
+    // Clamping the group's height avoids rebuilding panel-owning widgets.
+    property bool collapseContents: false
     readonly property string groupRegion: region
     spacing: 0
+    height: collapseContents ? 0 : childrenRect.height
+    clip: collapseContents
+    enabled: !collapseContents
     Repeater {
         model: active ? entries : []
         delegate: Item {

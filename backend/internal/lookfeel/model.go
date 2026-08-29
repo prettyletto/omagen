@@ -83,7 +83,7 @@ func Catalog() []CatalogEntry {
 		{ID: PresetNative, Name: "Omarchy Native", Description: "Preserve native Omarchy surfaces and terminal opacity", Revision: 1},
 		{ID: PresetGlassBlur, Name: "Glass Blur", Description: "Soft frosted depth, floating glass, dot workspaces, and gliding motion", Revision: 7},
 		{ID: PresetFocused, Name: "Focused", Description: "Grounded windows, numbered workspaces, a practical dock, and immediate motion", Revision: 2},
-		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 6},
+		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 7},
 		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, lettered workspaces, and cinematic refraction", Revision: 1},
 		{ID: PresetPhosphor, Name: "Phosphor Terminal", Description: "Compact instrumentation, terminal workspaces, and finite CRT synchronization", Revision: 1},
 		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, minimal motion, and a quiet workspace rail", Revision: 1},
@@ -133,7 +133,7 @@ func Resolve(preset string) (Composition, error) {
 		// ownership of a user's terminal opacity configuration.
 		composition.Terminal = DefaultTerminalTranslucency()
 	case PresetCyberpunk:
-		composition.PresetRevision = 6
+		composition.PresetRevision = 7
 		composition.Window = cyberpunkWindow()
 		composition.Shell = cyberpunkShell()
 		composition.Bar = cyberpunkBar()
@@ -447,11 +447,11 @@ func focusedBar() session.BarStyle {
 }
 
 func cyberpunkBar() session.BarStyle {
-	spec, err := bar.Preset("islands")
+	spec, err := bar.Preset("orbit")
 	if err != nil {
 		spec = bar.Default()
 	}
-	spec.Preset = "islands"
+	spec.Preset = "orbit"
 	spec.Surface.Treatment = "glass"
 	spec.Surface.Opacity = 0.88
 	spec.Surface.Blur = 8
@@ -462,9 +462,10 @@ func cyberpunkBar() session.BarStyle {
 	spec.Motion.Preset = "cyberpunk"
 	spec.Motion.DurationMs = 140
 	spec.Motion.Easing = "out_cubic"
-	// Workspace presentation is the sole Cyberpunk revision-6 change. Keep all
-	// material, geometry, motion, and signal values byte-for-byte stable.
+	// Keep the cyberpunk material, geometry, motion, and signal values stable
+	// while using the orbital composition and a seven-segment clock face.
 	spec.Workspace = bar.WorkspacePresentation{Mode: "roman"}
+	spec.Clock.Style = "neon"
 	spec = spec.Normalize()
 	profile := barprofile.Profile{
 		SchemaVersion:  barprofile.SchemaVersion,
@@ -472,11 +473,11 @@ func cyberpunkBar() session.BarStyle {
 		Implementation: barprofile.ImplementationReplacement,
 		Bar:            json.RawMessage(`{"id":"pretty.omagen.bar"}`),
 		Behavior: barprofile.Behavior{
-			Form: "islands", Visibility: "always", Reveal: "edge", Expansion: "focus", Workspace: "segmented", Islands: true,
+			Form: "floating", Visibility: "always", Reveal: "edge", Expansion: "focus", Workspace: "segmented",
 		},
 	}
 	return session.BarStyle{
-		Surface: "dark", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands",
+		Surface: "dark", Density: "comfortable", Attention: "accent", Form: "docked", Visibility: "native",
 		Profile: &profile, Spec: &spec,
 	}
 }

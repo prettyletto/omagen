@@ -48,7 +48,9 @@ PanelWindow {
     readonly property color foregroundColor: root.barColors.text || root.foregroundFor(String(root.surfaceSpec.role || root.barStyle.surface || "native"))
     readonly property color activeColor: root.barColors.active || (root.barStyle.attention === "accent" ? Color.accent : Color.urgent)
     readonly property color borderColor: String(root.surfaceSpec.border_role || "none") === "accent" ? Color.accent : Color.foreground
-    readonly property real barOpacity: root.surfaceSpec.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.surfaceSpec.opacity))) : 1
+    readonly property real barOpacity: ["preset", "opaque"].indexOf(String(root.surfaceSpec.treatment || "preset")) >= 0
+        ? 1
+        : (root.surfaceSpec.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.surfaceSpec.opacity))) : 1)
     readonly property real borderOpacity: root.surfaceSpec.border_opacity !== undefined ? Math.max(0, Math.min(1, Number(root.surfaceSpec.border_opacity))) : 0
     readonly property int borderWidth: root.surfaceSpec.border_width !== undefined ? Math.max(0, Number(root.surfaceSpec.border_width)) : 0
     readonly property int barRadius: root.geometrySpec.radius !== undefined ? Math.max(0, Number(root.geometrySpec.radius)) : 0

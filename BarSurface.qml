@@ -43,8 +43,17 @@ PanelWindow {
     readonly property int surfaceHeight: bar.vertical
         ? (fullWidth || islandsFullLength ? 0 : contentHeight)
         : bar.barSize
-    readonly property bool compactTrayEnabled: bar.floatingCompact && !bar.vertical
-    readonly property bool compactVerticalTrayEnabled: bar.floatingCompact && bar.vertical
+    // Only the original Float preset owns the detached compact-tray surface.
+    // Orbit is a single centered composition; giving it the generic tray cap
+    // creates a second dock-like pill beside the orbit and makes the compact
+    // state look like two overlapping bars.
+    readonly property bool detachedCompactTray: bar.floatingCompact
+        && String(bar.spec && bar.spec.preset || "") === "float"
+    readonly property bool compactTrayEnabled: detachedCompactTray && !bar.vertical
+    readonly property bool compactVerticalTrayEnabled: detachedCompactTray && bar.vertical
+    property bool hostHoverActive: false
+    property bool surfaceHoverActive: false
+    property bool hoverReported: false
     readonly property int compactTrayCollapsedWidth: compactTraySlot.activeItem
         && "collapsedWidth" in compactTraySlot.activeItem
         ? compactTraySlot.activeItem.collapsedWidth
@@ -73,6 +82,15 @@ PanelWindow {
     WlrLayershell.layer: WlrLayer.Top
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
 
+    function updateHoverState() {
+        if (!bar) return
+        var active = hostHoverActive || surfaceHoverActive
+        if (hoverReported === active) return
+        hoverReported = active
+        bar.hoverCount = Math.max(0, bar.hoverCount + (active ? 1 : -1))
+        bar.barHovered = bar.hoverCount > 0
+    }
+
     anchors {
         top: topEdge || bar.vertical
         bottom: bottomEdge || bar.vertical
@@ -96,14 +114,14 @@ PanelWindow {
     ScreenMoveRemap { id: remapGuard; window: panel }
 
     HoverHandler {
+        id: hostHover
         onHoveredChanged: {
-            bar.hoverCount = Math.max(0, bar.hoverCount + (hovered ? 1 : -1))
-            bar.barHovered = bar.hoverCount > 0
+            panel.hostHoverActive = hovered
+            panel.updateHoverState()
         }
         Component.onDestruction: {
-            if (!hovered) return
-            bar.hoverCount = Math.max(0, bar.hoverCount - 1)
-            bar.barHovered = bar.hoverCount > 0
+            panel.hostHoverActive = false
+            panel.updateHoverState()
         }
     }
 
@@ -245,6 +263,24 @@ PanelWindow {
     Item {
         id: surfaceFrame
         z: 1
+
+        // The panel is the stable edge host, but some layer-shell/input
+        // paths only report hover reliably over the painted item. Track both
+        // surfaces as one token so entering the capsule cannot be delayed by
+        // a missed edge-host transition, and leaving either cannot leave the
+        // global bar hover count stuck high.
+        HoverHandler {
+            id: surfaceHover
+            onHoveredChanged: {
+                panel.surfaceHoverActive = hovered
+                panel.updateHoverState()
+            }
+            Component.onDestruction: {
+                panel.surfaceHoverActive = false
+                panel.updateHoverState()
+            }
+        }
+
         // PanelWindow remains monitor-edge sized for placement and input.
         // Paint the compact surface from the panel's actual geometry,
         // rather than the transient content item's initial 0×0 size.
@@ -270,6 +306,10 @@ PanelWindow {
             : bar.dock ? bar.dockThickness : bar.barSize
 
         Behavior on width {
+            // Do not animate PanelWindow geometry for Orbit. Resizing a
+            // layer-shell surface on every animation frame makes hover
+            // expansion compete with compositor relayout and can stall the
+            // desktop on some Wayland/Hyprland setups.
             enabled: bar.dock
             NumberAnimation { duration: 280; easing.type: Easing.OutCubic }
         }
