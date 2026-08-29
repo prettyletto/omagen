@@ -27,7 +27,7 @@ func TestWriteLookFeelMetadataRoundTrips(t *testing.T) {
 	if err := json.Unmarshal(data, &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Preset != lookfeel.PresetGlassBlur || got.PresetRevision != 7 || got.Customized["window"] {
+	if got.Preset != lookfeel.PresetGlassBlur || got.PresetRevision != 8 || got.Customized["window"] {
 		t.Fatalf("metadata = %#v", got)
 	}
 }

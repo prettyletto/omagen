@@ -81,15 +81,15 @@ func (c Composition) LookFeelDocument() session.LookFeelDocument {
 func Catalog() []CatalogEntry {
 	return []CatalogEntry{
 		{ID: PresetNative, Name: "Omarchy Native", Description: "Preserve native Omarchy surfaces and terminal opacity", Revision: 1},
-		{ID: PresetGlassBlur, Name: "Glass Blur", Description: "Soft frosted depth, floating glass, dot workspaces, and gliding motion", Revision: 7},
-		{ID: PresetFocused, Name: "Focused", Description: "Grounded windows, numbered workspaces, a practical dock, and immediate motion", Revision: 2},
+		{ID: PresetGlassBlur, Name: "Glass Blur", Description: "Soft frosted depth, floating glass, an LCD clock, dot workspaces, and gliding motion", Revision: 8},
+		{ID: PresetFocused, Name: "Focused", Description: "Grounded windows, a practical clock dock, numbered workspaces, and immediate motion", Revision: 3},
 		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 7},
-		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, lettered workspaces, and cinematic refraction", Revision: 1},
-		{ID: PresetPhosphor, Name: "Phosphor Terminal", Description: "Compact instrumentation, terminal workspaces, and finite CRT synchronization", Revision: 1},
-		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, minimal motion, and a quiet workspace rail", Revision: 1},
-		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded expanded surfaces, orbital workspaces, and spring motion", Revision: 1},
-		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, grounded translucent sections, growing workspaces, and gentle spring motion", Revision: 1},
-		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, Japanese workspaces, and quiet ink-brush motion", Revision: 1},
+		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, a segmented ribbon, lettered workspaces, an LCD instrument face, and cinematic refraction", Revision: 2},
+		{ID: PresetPhosphor, Name: "Phosphor Terminal", Description: "Compact CRT instrumentation, a minimal bar, terminal workspaces, and finite synchronization", Revision: 3},
+		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 3},
+		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
+		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 3},
+		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a segmented ribbon, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 3},
 	}
 }
 
@@ -112,7 +112,7 @@ func Resolve(preset string) (Composition, error) {
 	case PresetNative:
 		// The defaults above are intentionally a no-op for native Omarchy.
 	case PresetGlassBlur:
-		composition.PresetRevision = 7
+		composition.PresetRevision = 8
 		composition.Window = glassWindow()
 		composition.Shell = glassShell()
 		composition.Bar = glassBar()
@@ -124,7 +124,7 @@ func Resolve(preset string) (Composition, error) {
 			CellMode:      TerminalCellPainted,
 		}
 	case PresetFocused:
-		composition.PresetRevision = 2
+		composition.PresetRevision = 3
 		composition.Window = focusedWindow()
 		composition.Shell = focusedShell()
 		composition.Bar = focusedBar()
@@ -140,31 +140,37 @@ func Resolve(preset string) (Composition, error) {
 		composition.Animations = session.MotionPreset("cyberpunk")
 		composition.Terminal = DefaultTerminalTranslucency()
 	case PresetSpectral:
+		composition.PresetRevision = 2
 		composition.Window = spectralWindow()
 		composition.Shell = spectralShell()
 		composition.Bar = spectralBar()
 		composition.Animations = spectralMotion()
 	case PresetPhosphor:
+		composition.PresetRevision = 3
 		composition.Window = phosphorWindow()
 		composition.Shell = phosphorShell()
 		composition.Bar = phosphorBar()
 		composition.Animations = phosphorMotion()
 	case PresetMonolith:
+		composition.PresetRevision = 3
 		composition.Window = monolithWindow()
 		composition.Shell = monolithShell()
 		composition.Bar = monolithBar()
 		composition.Animations = session.MotionPreset("minimal")
 	case PresetOrbit:
+		composition.PresetRevision = 2
 		composition.Window = orbitWindow()
 		composition.Shell = orbitShell()
 		composition.Bar = orbitBar()
 		composition.Animations = orbitMotion()
 	case PresetNature:
+		composition.PresetRevision = 3
 		composition.Window = natureWindow()
 		composition.Shell = natureShell()
 		composition.Bar = natureBar()
 		composition.Animations = natureMotion()
 	case PresetOriental:
+		composition.PresetRevision = 3
 		composition.Window = orientalWindow()
 		composition.Shell = orientalShell()
 		composition.Bar = orientalBar()
@@ -385,6 +391,7 @@ func glassBar() session.BarStyle {
 		spec = bar.Default()
 	}
 	spec.Preset = "float"
+	spec.Clock.Style = "lcd"
 	spec.Surface.Treatment = "glass"
 	spec.Surface.Opacity = 0.82
 	spec.Surface.Blur = 12
@@ -429,6 +436,7 @@ func focusedBar() session.BarStyle {
 		spec = bar.Default()
 	}
 	spec.Preset = "dock"
+	spec.Dock.Closed = "clock"
 	spec.Workspace = bar.WorkspacePresentation{Mode: "numbers"}
 	spec = spec.Normalize()
 	profile := barprofile.Profile{
@@ -499,8 +507,9 @@ func replacementBar(preset, workspace string, glyphs []string) session.BarStyle 
 }
 
 func spectralBar() session.BarStyle {
-	style := replacementBar("split", "letters", nil)
+	style := replacementBar("ribbon", "letters", nil)
 	spec := style.Spec
+	spec.Clock.Style = "lcd"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "glass", "dark", .90, 6
 	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .4, 1, "raised"
 	spec.Geometry.Density = "compact"
@@ -510,8 +519,9 @@ func spectralBar() session.BarStyle {
 }
 
 func phosphorBar() session.BarStyle {
-	style := replacementBar("sections", "glyphs", []string{"A1", "B2", "C3", "D4", "E5"})
+	style := replacementBar("minimal", "glyphs", []string{"A1", "B2", "C3", "D4", "E5"})
 	spec := style.Spec
+	spec.Clock.Style = "matrix"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity = "metal", "dark", .94
 	spec.Geometry.Density = "compact"
 	spec.Motion = bar.Motion{Preset: "subtle", DurationMs: 120, Easing: "out_quart"}
@@ -520,7 +530,8 @@ func phosphorBar() session.BarStyle {
 }
 
 func monolithBar() session.BarStyle {
-	style := replacementBar("rail", "glyphs", []string{"W1", "W2", "W3", "W4", "W5"})
+	style := replacementBar("islands", "glyphs", []string{"W1", "W2", "W3", "W4", "W5"})
+	style.Spec.Clock.Style = "gothic"
 	style.Spec.Surface.Treatment, style.Spec.Surface.Role, style.Spec.Surface.Opacity = "opaque", "dark", 1
 	style.Spec.Motion = bar.Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
 	style.Density = "compact"
@@ -528,7 +539,8 @@ func monolithBar() session.BarStyle {
 }
 
 func orbitBar() session.BarStyle {
-	style := replacementBar("float-expanded", "glyphs", []string{"○", "◔", "◑", "◕", "●"})
+	style := replacementBar("orbit", "glyphs", []string{"○", "◔", "◑", "◕", "●"})
+	style.Spec.Clock.Style = "lcd"
 	style.Spec.Surface.Treatment, style.Spec.Surface.Role, style.Spec.Surface.Opacity = "metal", "background", .96
 	style.Spec.Geometry.Density = "comfortable"
 	style.Spec.Motion = bar.Motion{Preset: "expressive", DurationMs: 260, Easing: "in_out_cubic"}
@@ -539,7 +551,8 @@ func orbitBar() session.BarStyle {
 func natureBar() session.BarStyle {
 	// Use single-cell Nerd Font botanical icons so Nature's workspace identity
 	// stays legible in the native 20px slots without emoji/fallback mixing.
-	style := replacementBar("sections", "glyphs", []string{"", "", "", "", ""})
+	style := replacementBar("islands", "glyphs", []string{"", "", "", "", ""})
+	style.Spec.Clock.Style = "classical"
 	style.Spec.Surface.Treatment, style.Spec.Surface.Role, style.Spec.Surface.Opacity, style.Spec.Surface.Blur = "glass", "background", .88, 8
 	style.Spec.Surface.BorderRole, style.Spec.Surface.BorderOpacity, style.Spec.Surface.BorderWidth = "accent", .25, 1
 	style.Spec.Geometry.Density, style.Spec.Geometry.SectionGap, style.Spec.Geometry.Radius = "comfortable", 12, 12
@@ -551,8 +564,9 @@ func natureBar() session.BarStyle {
 func orientalBar() session.BarStyle {
 	// Split sections keep the native widget order while giving the Japanese
 	// workspace rail a deliberate, ink-on-lacquer silhouette.
-	style := replacementBar("split", "kanji", nil)
+	style := replacementBar("ribbon", "kanji", nil)
 	spec := style.Spec
+	spec.Clock.Style = "classical"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "glass", "background", .90, 10
 	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .28, 1, "raised"
 	spec.Geometry.Density, spec.Geometry.SectionGap, spec.Geometry.Radius = "comfortable", 14, 10

@@ -68,6 +68,23 @@ plugin directory, rescans the shell, and restarts the shell for development.
 Use it while the desktop is idle because the shell watches the installed QML
 files.
 
+To install a branch checkout for testers without requiring Go, use the
+branch bootstrap from that branch. The checked-in backend is used as-is:
+
+~~~sh
+curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash
+~~~
+
+The bootstrap clones `nightly` into a temporary directory, runs
+`dev-install.sh --skip-build`, and removes the checkout after installation.
+Set `OMAGEN_TEST_BRANCH` and `OMAGEN_TEST_REPOSITORY` to test a different
+branch or fork. The bootstrap replaces both installed Omagen plugin packages
+and restarts the shell.
+
+The regular `install.sh` still builds the backend by default. Pass
+`--skip-build` only when the checked-in binary is the intended artifact, as in
+the tester bootstrap.
+
 The normal user installation remains the Omarchy plugin-manager command from
 the root [README](../README.md). Do not ask users to build Go or run this
 development helper.

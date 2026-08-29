@@ -22,13 +22,39 @@ Watch the full walkthrough on [YouTube](https://youtu.be/Af06-XsdBHA).
 Install and enable Omagen through Omarchy:
 
 ```sh
-omarchy plugin add https://github.com/prettyletto/omarchy-themegen.git --enable --yes
+omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
 ```
 
 That is the complete user installation. Omarchy clones the plugin, validates
 its manifest, enables it, and places the widget in its declared default bar
 section. Go is not required because the runtime backend is bundled with the
 plugin.
+
+### Test the nightly branch
+
+The plugin manager follows the repository's default branch. To test the
+current `nightly` branch instead, run this single command:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash
+```
+
+The bootstrap clones `nightly` into a temporary directory, installs both
+Omagen plugin packages, rescans and restarts the shell, and removes the
+temporary checkout. It uses the checked-in backend binary, so Go is not
+required. This replaces the currently installed `pretty.omagen` and
+`pretty.omagen.bar` files; use it on a test machine or when you are ready to
+switch back with the normal plugin-manager command.
+
+To test another branch or fork, set the source variables before piping the
+script:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | \
+  OMAGEN_TEST_BRANCH=my-branch \
+  OMAGEN_TEST_REPOSITORY=https://github.com/your-name/omagen.git \
+  bash
+```
 
 ## How it works
 

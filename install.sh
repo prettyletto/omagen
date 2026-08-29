@@ -21,20 +21,34 @@ done
 
 usage() {
     cat <<EOF
-Usage: $0
+Usage: $0 [--skip-build]
+
+Options:
+  --skip-build  Install the checked-in backend binary without compiling Go.
 EOF
 }
+
+BUILD_BACKEND=1
 
 for arg in "$@"; do
     case "$arg" in
         -h|--help) usage; exit 0 ;;
+        --skip-build) BUILD_BACKEND=0 ;;
         *) usage >&2; exit 2 ;;
     esac
 done
 
-echo "Building Omagen backend..."
-mkdir -p "$SRC_DIR/bin"
-"$SRC_DIR/scripts/build-backend.sh" "$SRC_DIR/bin/omagen"
+if ((BUILD_BACKEND)); then
+    echo "Building Omagen backend..."
+    mkdir -p "$SRC_DIR/bin"
+    "$SRC_DIR/scripts/build-backend.sh" "$SRC_DIR/bin/omagen"
+else
+    [[ -x "$SRC_DIR/bin/omagen" ]] || {
+        echo "Checked-in backend binary is missing or not executable: $SRC_DIR/bin/omagen" >&2
+        exit 1
+    }
+    echo "Using checked-in Omagen backend (Go build skipped)."
+fi
 
 echo "Installing Omagen..."
 mkdir -p "$DEST_DIR"
