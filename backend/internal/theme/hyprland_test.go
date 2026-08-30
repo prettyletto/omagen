@@ -434,6 +434,53 @@ func TestWriteHyprlandCompilesMotionLabDocument(t *testing.T) {
 	}
 }
 
+func TestWriteHyprlandEmitsNativeFamilyWindowOverrides(t *testing.T) {
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", Accent: "#aa33cc"}
+	animations := session.DefaultAnimationsStyle()
+	animations.WindowOpen = "slide"
+	animations.WindowClose = "fade"
+	animations.WindowAmount = 74
+	animations.WindowSpeed = 7
+
+	dir := t.TempDir()
+	if err := WriteHyprlandWithAnimations(dir, p, "solid", 2, "native", "native", "native", "native", "native", 36, animations); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		`hl.animation({ leaf = "windows", enabled = true, speed = 7`,
+		`leaf = "windowsIn", enabled = true, speed = 7, bezier = "easeOutQuint", style = "slide"`,
+		`leaf = "windowsOut", enabled = false`,
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("Native family override missing %q:\n%s", want, text)
+		}
+	}
+}
+
+func TestWriteHyprlandEmitsCurveOnlyMotionEdits(t *testing.T) {
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", Accent: "#aa33cc"}
+	animations := session.DefaultAnimationsStyle()
+	animations.Curve = "glass"
+
+	dir := t.TempDir()
+	if err := WriteHyprlandWithAnimations(dir, p, "solid", 2, "native", "native", "native", "native", "native", 36, animations); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	if !strings.Contains(text, `hl.curve("omagenGlass"`) {
+		t.Fatalf("curve-only edit was dropped from generated hyprland.lua:\n%s", text)
+	}
+}
+
 func TestWriteHyprlandCompilesDistinctLookFeelMotionIdentities(t *testing.T) {
 	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc", Blue: "#4488dd", Magenta: "#cc55ee"}
 	tests := []struct {

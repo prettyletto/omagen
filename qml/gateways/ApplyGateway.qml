@@ -8,7 +8,7 @@ Item {
     signal applied(string sessionId, string generationId, string variant, string themeName)
     signal applyFailed(string message)
 
-    function apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource) {
+    function apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPresetName) {
         const args = [root.executable, "apply", sessionId, generationId, variant, name]
         if (generateUnlock)
             args.push("--unlock")
@@ -16,6 +16,8 @@ Item {
             args.push("--live-preview")
         if (replaceSource)
             args.push("--replace-source")
+        if (saveLookFeelPresetName && String(saveLookFeelPresetName).trim() !== "")
+            args.push("--save-look-feel-preset", String(saveLookFeelPresetName).trim())
         command.exec(args)
     }
 

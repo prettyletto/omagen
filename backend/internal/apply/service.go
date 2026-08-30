@@ -11,6 +11,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/lookfeel"
 	"github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/theme"
@@ -168,6 +169,22 @@ func (s *Service) Apply(r Request) (Result, error) {
 	record, err := s.sessions.Load(r.SessionID)
 	if err != nil {
 		return Result{}, fmt.Errorf("load session: %w", err)
+	}
+	if strings.TrimSpace(r.SaveLookFeelPresetName) != "" {
+		lf := lookfeel.Composition{
+			SchemaVersion:  lookfeel.SchemaVersion,
+			Preset:         record.LookFeel.Preset,
+			PresetRevision: record.LookFeel.PresetRevision,
+			Customized:     record.LookFeel.Customized,
+			Window:         record.DesktopStyle,
+			Shell:          record.ShellStyle,
+			Bar:            record.BarStyle,
+			Animations:     record.AnimationsStyle,
+			Terminal:       record.TerminalTranslucency,
+		}
+		if _, err := lookfeel.SaveLocal(r.SaveLookFeelPresetName, lf); err != nil {
+			return Result{}, fmt.Errorf("save Look & Feel preset: %w", err)
+		}
 	}
 	if record.ApplyPhase == session.ApplyPhaseCommitted {
 		if err := s.finishCommitted(r.SessionID); err != nil {

@@ -120,7 +120,7 @@ function chooseMotionPreset(value, name) {
     var next = motionBase(value)
     next.preset = name
     next.window = "native"; next.windowOpen = "popin"; next.windowClose = "popin"; next.windowMove = "native"; next.windowAmount = 87; next.windowOpacity = 100; next.windowSpeed = 4
-    next.workspace = "native"; next.workspaceAxis = "horizontal"; next.workspaceTravel = 18; next.specialWorkspace = "inherit"; next.focus = "native"; next.layers = "native"; next.curve = "bezier"; next.glitch = "none"; next.screenEffect = null
+    next.workspace = "native"; next.workspaceAxis = "horizontal"; next.workspaceTravel = 18; next.specialWorkspace = "inherit"; next.focus = "native"; next.layers = "native"; next.curve = "bezier"; next.border = "native"; next.borderSpeed = 36; next.glitch = "none"; next.screenEffect = null
     if (name === "snappy") {
         next.window = "snappy"; next.workspace = "fade"; next.windowMove = "quick"; next.windowAmount = 97; next.windowSpeed = 1; next.workspaceTravel = 5; next.focus = "quick"; next.layers = "fade"; next.curve = "precision"
     } else if (name === "smooth") {
@@ -134,9 +134,6 @@ function chooseMotionPreset(value, name) {
     } else if (name === "cyberpunk") {
         next.window = "digital"; next.windowOpen = "gnomed"; next.windowClose = "slide"; next.windowMove = "digital"; next.workspace = "slide"; next.windowAmount = 94; next.windowOpacity = 82; next.windowSpeed = 2; next.workspaceTravel = 12; next.specialWorkspace = "slidevert"; next.focus = "digital"; next.layers = "slide"; next.curve = "digital"; next.border = "static"; next.glitch = "medium"
     }
-    if (next.reducedMotion) {
-        next.window = "none"; next.workspace = "none"; next.border = "static"; next.glitch = "none"; next.screenEffect = null
-    }
     return next
 }
 
@@ -144,9 +141,6 @@ function chooseAnimations(value, group, key) {
     var next = motionBase(value)
     next[group] = key
     next.preset = "custom"
-    if (next.reducedMotion) {
-        next.window = "none"; next.workspace = "none"; next.border = "static"; next.glitch = "none"; next.screenEffect = null
-    }
     return next
 }
 

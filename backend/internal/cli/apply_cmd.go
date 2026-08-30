@@ -9,7 +9,7 @@ import (
 
 func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
 	if len(args) < 4 {
-		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview] [--replace-source] [--run <adapters>] [--skip <adapters>]")
+		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview] [--replace-source] [--save-look-feel-preset <name>] [--run <adapters>] [--skip <adapters>]")
 	}
 	variant, err := generation.ParseVariant(args[2])
 	if err != nil {
@@ -51,6 +51,12 @@ func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) i
 			request.AllowTrustedHooks = true
 		case "--replace-source":
 			request.DestinationPolicy = "replace-source"
+		case "--save-look-feel-preset":
+			if i+1 >= len(args) || args[i+1] == "" {
+				return fail(stderr, 2, "usage: --save-look-feel-preset requires a name")
+			}
+			request.SaveLookFeelPresetName = args[i+1]
+			i++
 		default:
 			return fail(stderr, 2, "unknown apply option: %s", arg)
 		}

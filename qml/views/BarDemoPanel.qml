@@ -153,6 +153,8 @@ PanelWindow {
 			return index === 0 ? "\uDB85\uDCFB" : String(index + 1)
 		if (mode === "dots")
 			return index === 0 ? "●" : "○"
+		if (mode === "kanji")
+			return ["一", "二", "三", "四", "五"][index] || String(index + 1)
 		if (mode === "roman")
 			return ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"][index] || String(index + 1)
 		if (mode === "letters")

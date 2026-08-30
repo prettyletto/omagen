@@ -23,6 +23,21 @@ function baseSize(density, vertical, nativeHorizontal, nativeVertical, scaleWith
     return Math.max(1, Math.round(value * scale))
 }
 
+function optionLabel(density, vertical, nativeHorizontal, nativeVertical, scaleWithFont, fontScale, structuralPadding) {
+    var key = String(density || "native")
+    var label = key === "compact" ? "Compact" : key === "comfortable" ? "Comfortable" : "Default"
+    if (key === "native")
+        return label + " · native"
+
+    var padding = Number(structuralPadding || 0)
+    var rendered = baseSize(key, vertical, nativeHorizontal, nativeVertical, scaleWithFont, fontScale) + padding
+    var nativeSize = baseSize("native", vertical, nativeHorizontal, nativeVertical, scaleWithFont, fontScale) + padding
+    var suffix = rendered + " px"
+    if (rendered === nativeSize)
+        suffix += " · same as native"
+    return label + " · " + suffix
+}
+
 function isVertical(spec) {
     var position = String(spec && spec.position || "top")
     return position === "left" || position === "right"

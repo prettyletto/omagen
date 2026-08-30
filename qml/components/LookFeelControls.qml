@@ -235,7 +235,7 @@ Item {
 
                         Text {
                             width: parent.width
-                            text: "Revision " + modelData.revision + " · " + root.conciseDescription(modelData.description)
+                            text: (modelData.local ? "Local preset · " : "Revision " + modelData.revision + " · ") + root.conciseDescription(modelData.description)
                             color: cardTextColor
                             opacity: root.selectedPreset === modelData.id ? 0.86 : 0.68
                             font.family: Style.font.family

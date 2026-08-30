@@ -901,12 +901,12 @@
       "id": "monolith",
       "name": "Monolith",
       "author": "Omagen",
-      "version": 3,
+      "version": 4,
       "description": "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail",
       "recipe": {
         "schema_version": 1,
         "preset": "monolith",
-        "preset_revision": 3,
+        "preset_revision": 4,
         "customized": {
           "animations": false,
           "bar": false,
@@ -916,7 +916,7 @@
         },
         "window": {
           "border_style": "split_bottom",
-          "border_size": 2,
+          "border_size": 3,
           "border_size_mode": "fixed",
           "border_speed": 36,
           "shape": "subtle",
@@ -1229,12 +1229,12 @@
       "id": "nature",
       "name": "Nature",
       "author": "Omagen",
-      "version": 3,
+      "version": 4,
       "description": "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion",
       "recipe": {
         "schema_version": 1,
         "preset": "nature",
-        "preset_revision": 3,
+        "preset_revision": 4,
         "customized": {
           "animations": false,
           "bar": false,
@@ -1251,7 +1251,7 @@
           "spacing": "airy",
           "depth": "shadow",
           "active_style": "frosted_light",
-          "inactive_style": "frosted_light"
+          "inactive_style": "frosted_balanced"
         },
         "shell": {
           "preset": "glass",
@@ -1533,6 +1533,334 @@
           "curve": "glass",
           "border": "static",
           "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "gothic-cathedral",
+      "name": "Gothic Cathedral",
+      "author": "Omagen",
+      "version": 1,
+      "description": "Ceremonial dark surfaces, stained-glass depth, a long cloister bar, and deliberate cinematic motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "gothic-cathedral",
+        "preset_revision": 1,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "split_top",
+          "border_size": 3,
+          "border_size_mode": "fixed",
+          "border_speed": 36,
+          "shape": "soft",
+          "spacing": "airy",
+          "depth": "flat",
+          "active_style": "native",
+          "inactive_style": "frosted_rich"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "contrast",
+          "detail": "framed",
+          "tooltip": "accent",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "comfortable",
+          "attention": "semantic",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "floating",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "hover",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "float-expanded",
+            "engine": "auto",
+            "topology": "floating",
+            "position": "top",
+            "surface": {
+              "treatment": "metal",
+              "role": "dark",
+              "opacity": 0.96,
+              "blur": 0,
+              "border_role": "foreground",
+              "border_opacity": 0.32,
+              "border_width": 1,
+              "shadow": "raised"
+            },
+            "geometry": {
+              "density": "comfortable",
+              "thickness": 0,
+              "edge_offset": 10,
+              "outer_margin": 10,
+              "inner_padding": 0,
+              "section_gap": 8,
+              "widget_gap": 0,
+              "radius": 18,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": true,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "✠",
+                "◆",
+                "◈",
+                "◇",
+                "✦"
+              ]
+            },
+            "clock": {
+              "style": "gothic"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "none",
+              "duration_ms": 0,
+              "easing": "linear"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "cinematic",
+          "window_open": "slide",
+          "window_close": "fade",
+          "window_move": "smooth",
+          "window_amount": 76,
+          "window_opacity": 100,
+          "window_speed": 5,
+          "workspace": "slidefade",
+          "workspace_axis": "vertical",
+          "workspace_travel": 28,
+          "special_workspace": "fade",
+          "focus": "smooth",
+          "layers": "fade",
+          "curve": "bezier",
+          "border": "static",
+          "border_speed": 36,
+          "glitch": "none",
+          "reduced_motion": false
+        },
+        "terminal": {
+          "schema_version": 1,
+          "mode": "preserve",
+          "opacity": 1,
+          "cell_mode": "background"
+        }
+      }
+    },
+    {
+      "schema_version": 1,
+      "kind": "omagen.look-feel.recipe",
+      "id": "acid-pulse",
+      "name": "Acid Pulse",
+      "author": "Omagen",
+      "version": 1,
+      "description": "Reactive spinning borders, chemical workspace glyphs, a segmented dark bar, and sharp fluid motion",
+      "recipe": {
+        "schema_version": 1,
+        "preset": "acid-pulse",
+        "preset_revision": 1,
+        "customized": {
+          "animations": false,
+          "bar": false,
+          "shell": false,
+          "terminal": false,
+          "window": false
+        },
+        "window": {
+          "border_style": "spin",
+          "border_size": 2,
+          "border_size_mode": "fixed",
+          "border_speed": 72,
+          "shape": "soft",
+          "spacing": "airy",
+          "depth": "shadow",
+          "active_style": "frosted_balanced",
+          "inactive_style": "shadow_only"
+        },
+        "shell": {
+          "preset": "default",
+          "surface": "layered",
+          "detail": "edge",
+          "tooltip": "accent",
+          "notifications": "accent"
+        },
+        "bar": {
+          "surface": "native",
+          "density": "compact",
+          "attention": "accent",
+          "form": "docked",
+          "visibility": "native",
+          "profile": {
+            "schema_version": 1,
+            "ownership": "overlay",
+            "implementation": "replacement",
+            "bar": {
+              "id": "pretty.omagen.bar"
+            },
+            "behavior": {
+              "form": "sections",
+              "visibility": "always",
+              "reveal": "edge",
+              "expansion": "none",
+              "workspace": "native"
+            }
+          },
+          "spec": {
+            "version": 2,
+            "preset": "ribbon",
+            "engine": "omagen",
+            "topology": "sections",
+            "position": "top",
+            "surface": {
+              "treatment": "metal",
+              "role": "dark",
+              "opacity": 0.96,
+              "blur": 0,
+              "border_role": "accent",
+              "border_opacity": 0.65,
+              "border_width": 2,
+              "shadow": "raised"
+            },
+            "geometry": {
+              "density": "compact",
+              "thickness": 0,
+              "edge_offset": 0,
+              "outer_margin": 0,
+              "inner_padding": 0,
+              "section_gap": 4,
+              "widget_gap": 0,
+              "radius": 8,
+              "length_mode": "full",
+              "length_value": 0,
+              "alignment": "center"
+            },
+            "attention": {
+              "mode": "semantic"
+            },
+            "behavior": {
+              "visibility": "always",
+              "exclusive_zone": "reserve",
+              "hover_expand": false,
+              "hide_delay_ms": 5000,
+              "reveal_delay_ms": 50,
+              "edge_sensor": 3,
+              "keep_visible_while_popup_open": true
+            },
+            "regions": {
+              "left": {
+                "mode": "native"
+              },
+              "center": {
+                "mode": "native"
+              },
+              "right": {
+                "mode": "native"
+              }
+            },
+            "workspace": {
+              "mode": "glyphs",
+              "glyphs": [
+                "⊹",
+                "⊕",
+                "◉",
+                "⊗",
+                "✦"
+              ]
+            },
+            "clock": {
+              "style": "native"
+            },
+            "dock": {
+              "closed": "ellipsis",
+              "glyph": "✦"
+            },
+            "motion": {
+              "preset": "expressive",
+              "duration_ms": 160,
+              "easing": "out_cubic"
+            }
+          }
+        },
+        "animations": {
+          "version": 1,
+          "preset": "custom",
+          "window": "smooth",
+          "window_open": "popin",
+          "window_close": "fade",
+          "window_move": "smooth",
+          "window_amount": 92,
+          "window_opacity": 94,
+          "window_speed": 3,
+          "workspace": "slidefade",
+          "workspace_axis": "horizontal",
+          "workspace_travel": 12,
+          "special_workspace": "fade",
+          "focus": "quick",
+          "layers": "fade",
+          "curve": "precision",
+          "border": "spin",
+          "border_speed": 72,
           "glitch": "none",
           "reduced_motion": false
         },

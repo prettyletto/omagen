@@ -33,7 +33,15 @@ func Export(preset string) (Manifest, error) {
 	}
 	entry, ok := catalogEntry(preset)
 	if !ok {
-		return Manifest{}, fmt.Errorf("preset %q has no catalog metadata", preset)
+		store, storeErr := NewLocalStore()
+		if storeErr != nil {
+			return Manifest{}, storeErr
+		}
+		local, localErr := store.readManifest(preset + ".json")
+		if localErr != nil {
+			return Manifest{}, fmt.Errorf("preset %q has no catalog metadata", preset)
+		}
+		return local, local.Validate()
 	}
 	manifest := Manifest{
 		SchemaVersion: ManifestSchemaVersion, Kind: ManifestKind,

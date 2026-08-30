@@ -2,6 +2,10 @@ package lookfeel
 
 import (
 	"encoding/json"
+	"errors"
+	"io/fs"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -11,17 +15,75 @@ import (
 
 func TestCatalogContainsStableInitialPresets(t *testing.T) {
 	entries := Catalog()
-	if len(entries) != 10 {
-		t.Fatalf("catalog length = %d, want 10", len(entries))
+	if len(entries) != 12 {
+		t.Fatalf("catalog length = %d, want 12", len(entries))
 	}
-	want := []string{PresetNative, PresetGlassBlur, PresetFocused, PresetCyberpunk, PresetSpectral, PresetPhosphor, PresetMonolith, PresetOrbit, PresetNature, PresetOriental}
+	want := []string{PresetNative, PresetGlassBlur, PresetFocused, PresetCyberpunk, PresetSpectral, PresetPhosphor, PresetMonolith, PresetOrbit, PresetNature, PresetOriental, PresetGothic, PresetAcid}
 	for index, id := range want {
 		if entries[index].ID != id {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 3 || entries[7].Revision != 2 || entries[8].Revision != 3 || entries[9].Revision != 5 {
+	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 4 || entries[7].Revision != 2 || entries[8].Revision != 4 || entries[9].Revision != 5 || entries[10].Revision != 1 || entries[11].Revision != 1 {
 		t.Fatalf("catalog order = %#v", entries)
+	}
+}
+
+func TestLocalPresetRoundTripAndCatalogMetadata(t *testing.T) {
+	dir := t.TempDir()
+	store := NewLocalStoreAt(dir)
+	composition, err := Resolve(PresetNature)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := store.Save("My Quiet Glass", composition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if entry.ID != "local-my-quiet-glass" || !entry.Local {
+		t.Fatalf("saved entry = %#v", entry)
+	}
+	resolved, err := store.Resolve(entry.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.Preset != entry.ID || resolved.PresetRevision != 1 || !resolved.Customized["window"] || resolved.Bar.Spec == nil {
+		t.Fatalf("resolved local recipe = %#v", resolved)
+	}
+	entries, err := store.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name != "My Quiet Glass" {
+		t.Fatalf("local catalog = %#v", entries)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "local-my-quiet-glass.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Save("my quiet glass", composition); !errors.Is(err, fs.ErrExist) {
+		t.Fatalf("duplicate save error = %v, want fs.ErrExist", err)
+	}
+}
+
+func TestLocalPresetResolvesAndExportsThroughDefaultStore(t *testing.T) {
+	config := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", config)
+	store := NewLocalStoreAt(filepath.Join(config, "omagen", localPresetDirectory))
+	composition, err := Resolve(PresetGlassBlur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entry, err := store.Save("Saved Glass", composition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := Resolve(entry.ID)
+	if err != nil || resolved.Preset != entry.ID {
+		t.Fatalf("Resolve(%q) = %#v, %v", entry.ID, resolved, err)
+	}
+	manifest, err := Export(entry.ID)
+	if err != nil || manifest.ID != entry.ID || manifest.Author != "Local" {
+		t.Fatalf("Export(%q) = %#v, %v", entry.ID, manifest, err)
 	}
 }
 
@@ -147,10 +209,12 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	}{
 		{PresetSpectral, "letters", "ribbon", "lcd", "spectral-shift", 2},
 		{PresetPhosphor, "glyphs", "minimal", "matrix", "phosphor-scan", 3},
-		{PresetMonolith, "glyphs", "islands", "gothic", "none", 3},
+		{PresetMonolith, "glyphs", "islands", "gothic", "none", 4},
 		{PresetOrbit, "glyphs", "orbit", "lcd", "none", 2},
-		{PresetNature, "glyphs", "islands", "classical", "none", 3},
+		{PresetNature, "glyphs", "islands", "classical", "none", 4},
 		{PresetOriental, "kanji", "float", "classical", "none", 5},
+		{PresetGothic, "glyphs", "float-expanded", "gothic", "none", 1},
+		{PresetAcid, "glyphs", "ribbon", "native", "none", 1},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -173,7 +237,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if nature.PresetRevision != 3 || nature.Bar.Spec.Preset != "islands" || nature.Bar.Spec.Topology != bar.TopologyIslands || !reflect.DeepEqual(nature.Bar.Spec.Workspace.Glyphs, []string{"", "", "", "", ""}) || nature.Animations.Curve != "spring" || nature.Shell.Preset != session.ShellPresetGlass {
+	if nature.PresetRevision != 4 || nature.Window.Active != "frosted_light" || nature.Window.Inactive != "frosted_balanced" || nature.Bar.Spec.Preset != "islands" || nature.Bar.Spec.Topology != bar.TopologyIslands || !reflect.DeepEqual(nature.Bar.Spec.Workspace.Glyphs, []string{"", "", "", "", ""}) || nature.Animations.Curve != "spring" || nature.Shell.Preset != session.ShellPresetGlass {
 		t.Fatalf("nature identity = %#v", nature)
 	}
 	oriental, err := Resolve(PresetOriental)
@@ -194,6 +258,48 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	}
 	if oriental.Animations.EffectiveScreenEffect().ID != "none" {
 		t.Fatalf("oriental unexpectedly enables a screen effect: %#v", oriental.Animations.EffectiveScreenEffect())
+	}
+}
+
+func TestResolveGothicAndAcidHaveDistinctPortableIdentities(t *testing.T) {
+	gothic, err := Resolve(PresetGothic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gothic.PresetRevision != 1 || gothic.Window.BorderStyle != "split_top" || gothic.Window.BorderSize != 3 || gothic.Window.Shape != "soft" || gothic.Window.Active != "native" || gothic.Window.Inactive != "frosted_rich" {
+		t.Fatalf("gothic window identity = %#v", gothic.Window)
+	}
+	if gothic.Shell.Surface != "contrast" || gothic.Shell.Detail != "framed" || gothic.Shell.Tooltip != "accent" || gothic.Shell.Notifications != "accent" {
+		t.Fatalf("gothic shell identity = %#v", gothic.Shell)
+	}
+	if gothic.Bar.Spec == nil || gothic.Bar.Spec.Preset != "float-expanded" || gothic.Bar.Spec.Topology != bar.TopologyFloating || gothic.Bar.Spec.Clock.Style != "gothic" || gothic.Bar.Spec.Surface.Treatment != "metal" || gothic.Bar.Spec.Behavior.HoverExpand != true || gothic.Bar.Profile == nil || gothic.Bar.Profile.Behavior.Expansion != "hover" {
+		t.Fatalf("gothic bar identity = %#v", gothic.Bar)
+	}
+	if gothic.Animations.Preset != "custom" || gothic.Animations.Window != "cinematic" || gothic.Animations.WindowOpen != "slide" || gothic.Animations.WindowClose != "fade" || gothic.Animations.WorkspaceAxis != "vertical" || gothic.Animations.Border != "static" || gothic.Animations.EffectiveScreenEffect().ID != "none" {
+		t.Fatalf("gothic motion identity = %#v", gothic.Animations)
+	}
+	if err := gothic.Validate(); err != nil {
+		t.Fatal(err)
+	}
+
+	acid, err := Resolve(PresetAcid)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if acid.PresetRevision != 1 || acid.Window.BorderStyle != "spin" || acid.Window.BorderSize != 2 || acid.Window.BorderSpeed != 72 || acid.Window.Active != "frosted_balanced" || acid.Window.Inactive != "shadow_only" {
+		t.Fatalf("acid window identity = %#v", acid.Window)
+	}
+	if acid.Shell.Surface != "layered" || acid.Shell.Detail != "edge" || acid.Shell.Tooltip != "accent" || acid.Shell.Notifications != "accent" {
+		t.Fatalf("acid shell identity = %#v", acid.Shell)
+	}
+	if acid.Bar.Spec == nil || acid.Bar.Spec.Preset != "ribbon" || acid.Bar.Spec.Topology != bar.TopologySections || acid.Bar.Spec.Clock.Style != "native" || acid.Bar.Spec.Surface.Treatment != "metal" || acid.Bar.Spec.Surface.BorderWidth != 2 || acid.Bar.Spec.Workspace.Mode != "glyphs" || !reflect.DeepEqual(acid.Bar.Spec.Workspace.Glyphs, []string{"⊹", "⊕", "◉", "⊗", "✦"}) {
+		t.Fatalf("acid bar identity = %#v", acid.Bar)
+	}
+	if acid.Animations.Preset != "custom" || acid.Animations.WindowOpacity != 94 || acid.Animations.Border != "spin" || acid.Animations.BorderSpeed != 72 || acid.Animations.Glitch != "none" || acid.Animations.EffectiveScreenEffect().ID != "none" {
+		t.Fatalf("acid motion identity = %#v", acid.Animations)
+	}
+	if err := acid.Validate(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -227,7 +333,7 @@ func TestPortableManifestExportsAndImportsResolvedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if manifest.Kind != ManifestKind || manifest.ID != PresetNature || manifest.Name != "Nature" || manifest.Version != 3 {
+	if manifest.Kind != ManifestKind || manifest.ID != PresetNature || manifest.Name != "Nature" || manifest.Version != 4 {
 		t.Fatalf("manifest metadata = %#v", manifest)
 	}
 	payload, err := json.Marshal(manifest)
