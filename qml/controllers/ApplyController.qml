@@ -30,6 +30,7 @@ Item {
     property bool pendingAfterDemo: false
     property bool pendingCapture: false
     property bool pendingReplaceSource: false
+    property string pendingLookFeelPresetName: ""
     property bool pendingPreview: false
     property bool pendingCloseDemo: false
     property bool pendingAbortAfterDemo: false
@@ -60,7 +61,7 @@ Item {
         return outcome === "started" || outcome === "queued"
     }
 
-    function apply(variant, name, generateUnlock, capturePreview, replaceSource) {
+    function apply(variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName) {
         if (!root.workspaceReady || root.busy || root.previewBusy || root.cancelBusy || root.demoBusy)
             return
 
@@ -73,6 +74,7 @@ Item {
         root.pendingUnlock = generateUnlock === true
         root.pendingCapture = capturePreview === true
         root.pendingReplaceSource = replaceSource === true
+        root.pendingLookFeelPresetName = saveLookFeelPreset === true ? String(lookFeelPresetName || "").trim() : ""
         root.pendingPreview = true
         root.pendingCloseDemo = false
 
@@ -116,6 +118,7 @@ Item {
         root.pendingAfterDemo = false
         root.pendingCapture = false
         root.pendingReplaceSource = false
+        root.pendingLookFeelPresetName = ""
         root.pendingPreview = false
         root.pendingCloseDemo = false
         root.pendingAbortAfterDemo = false
@@ -179,7 +182,8 @@ Item {
             root.pendingName,
             root.pendingUnlock,
             false,
-            root.pendingReplaceSource
+            root.pendingReplaceSource,
+            root.pendingLookFeelPresetName
         )
         return true
     }
@@ -260,6 +264,7 @@ Item {
         const generateUnlock = root.pendingUnlock
         const capturePreview = root.pendingCapture
         const replaceSource = root.pendingReplaceSource
+        const saveLookFeelPresetName = root.pendingLookFeelPresetName
         root.clearPending()
         // Demo capture hides Omagen while the screenshot is taken, but the
         // permanent Go/theme-set phase stays behind the applying modal until
@@ -272,7 +277,8 @@ Item {
             name,
             generateUnlock,
             capturePreview,
-            replaceSource
+            replaceSource,
+            saveLookFeelPresetName
         )
         return true
     }

@@ -302,13 +302,10 @@ func NormalizeAnimationsStyle(s AnimationsStyle) AnimationsStyle {
 	if s.Glitch == "flicker" {
 		s.Glitch = "medium"
 	}
-	if s.ReducedMotion {
-		s.Window = "none"
-		s.Workspace = "none"
-		s.Border = "static"
-		s.Glitch = "none"
-		s.ScreenEffect = nil
-	}
+	// Reduced motion is an accessibility gate, not a destructive edit to the
+	// staged MotionSpec. The Hyprland writer suppresses motion while this flag
+	// is enabled; retaining the user's fields lets them come back unchanged
+	// when the flag is turned off.
 	return s
 }
 

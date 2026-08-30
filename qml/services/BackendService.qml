@@ -95,8 +95,8 @@ Item {
     function applyPreview(sessionId, generationId, variant, colorOverrides, styles) {
         previewGateway.apply(sessionId, generationId, variant, colorOverrides, styles)
     }
-    function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource) {
-        applyGateway.apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource)
+    function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPresetName) {
+        applyGateway.apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPresetName)
     }
     function openDemo(sessionId) { demoGateway.open(sessionId) }
     function openWindowDemo(sessionId) { demoGateway.openWindow(sessionId) }

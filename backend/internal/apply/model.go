@@ -14,6 +14,7 @@ type Request struct {
 	WaitMode                string
 	AllowTrustedHooks       bool
 	DestinationPolicy       string
+	SaveLookFeelPresetName  string
 }
 type Result struct {
 	SessionID                 string             `json:"session_id"`

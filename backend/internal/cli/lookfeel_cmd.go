@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 
@@ -9,14 +10,18 @@ import (
 
 func runLookFeel(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		return fail(stderr, 2, "usage: omagen look-feel {list|resolve <preset>|export <preset>|import <manifest.json>}")
+		return fail(stderr, 2, "usage: omagen look-feel {list|resolve <preset>|save <name> <composition.json>|export <preset>|import <manifest.json>}")
 	}
 	switch args[0] {
 	case "list":
 		if len(args) != 1 {
 			return fail(stderr, 2, "usage: omagen look-feel list")
 		}
-		return writeJSON(stdout, stderr, lookfeel.Catalog())
+		catalog, err := lookfeel.CatalogWithLocal()
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, catalog)
 	case "resolve":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen look-feel resolve <preset>")
@@ -26,6 +31,19 @@ func runLookFeel(args []string, stdout, stderr io.Writer) int {
 			return fail(stderr, 2, "%v", err)
 		}
 		return writeJSON(stdout, stderr, composition)
+	case "save":
+		if len(args) != 3 {
+			return fail(stderr, 2, "usage: omagen look-feel save <name> <composition.json>")
+		}
+		var composition lookfeel.Composition
+		if err := json.Unmarshal([]byte(args[2]), &composition); err != nil {
+			return fail(stderr, 2, "decode Look & Feel composition: %v", err)
+		}
+		entry, err := lookfeel.SaveLocal(args[1], composition)
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, entry)
 	case "export":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen look-feel export <preset>")

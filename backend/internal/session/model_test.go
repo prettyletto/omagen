@@ -90,6 +90,24 @@ func TestLegacyMotionFieldsKeepNativeDefaultsAndRemainValid(t *testing.T) {
 	}
 }
 
+func TestReducedMotionPreservesStagedMotionFields(t *testing.T) {
+	original := MotionPreset("cyberpunk")
+	original.ReducedMotion = true
+
+	withReducedMotion := NormalizeAnimationsStyle(original)
+	if !withReducedMotion.Valid() {
+		t.Fatalf("reduced-motion document is invalid after normalization: %#v", withReducedMotion)
+	}
+	if withReducedMotion.Window != original.Window || withReducedMotion.WindowOpen != original.WindowOpen || withReducedMotion.WindowClose != original.WindowClose || withReducedMotion.WindowAmount != original.WindowAmount || withReducedMotion.WindowOpacity != original.WindowOpacity || withReducedMotion.WindowSpeed != original.WindowSpeed || withReducedMotion.Workspace != original.Workspace || withReducedMotion.Border != original.Border || withReducedMotion.Glitch != original.Glitch || withReducedMotion.ScreenEffect != original.ScreenEffect {
+		t.Fatalf("reduced-motion normalization erased staged choices: got %#v, want %#v", withReducedMotion, original)
+	}
+
+	withReducedMotion.ReducedMotion = false
+	if restored := NormalizeAnimationsStyle(withReducedMotion); restored.Window != original.Window || restored.Workspace != original.Workspace || restored.Border != original.Border || restored.Glitch != original.Glitch {
+		t.Fatalf("turning reduced motion off did not restore staged choices: got %#v, want %#v", restored, original)
+	}
+}
+
 func TestShellPresetsKeepPresetValuesSeparateFromExplicitOverrides(t *testing.T) {
 	glass := NormalizeShellStyle(ShellStyle{
 		Preset: ShellPresetGlass,

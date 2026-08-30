@@ -6,7 +6,9 @@ package lookfeel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/prettyletto/omagen/backend/internal/bar"
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
@@ -26,6 +28,8 @@ const (
 	PresetOrbit     = "elastic-orbit"
 	PresetNature    = "nature"
 	PresetOriental  = "oriental"
+	PresetGothic    = "gothic-cathedral"
+	PresetAcid      = "acid-pulse"
 )
 
 const (
@@ -67,6 +71,7 @@ type CatalogEntry struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	Revision    int    `json:"revision"`
+	Local       bool   `json:"local,omitempty"`
 }
 
 func (c Composition) LookFeelDocument() session.LookFeelDocument {
@@ -86,10 +91,12 @@ func Catalog() []CatalogEntry {
 		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 7},
 		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, a segmented ribbon, lettered workspaces, an LCD instrument face, and cinematic refraction", Revision: 2},
 		{ID: PresetPhosphor, Name: "Phosphor Terminal", Description: "Compact CRT instrumentation, a minimal bar, terminal workspaces, and finite synchronization", Revision: 3},
-		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 3},
+		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 4},
 		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
-		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 3},
+		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 4},
 		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a compact floating bar, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 5},
+		{ID: PresetGothic, Name: "Gothic Cathedral", Description: "Ceremonial dark surfaces, stained-glass depth, a long cloister bar, and deliberate cinematic motion", Revision: 1},
+		{ID: PresetAcid, Name: "Acid Pulse", Description: "Reactive spinning borders, chemical workspace glyphs, a segmented dark bar, and sharp fluid motion", Revision: 1},
 	}
 }
 
@@ -152,7 +159,7 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = phosphorBar()
 		composition.Animations = phosphorMotion()
 	case PresetMonolith:
-		composition.PresetRevision = 3
+		composition.PresetRevision = 4
 		composition.Window = monolithWindow()
 		composition.Shell = monolithShell()
 		composition.Bar = monolithBar()
@@ -164,7 +171,7 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = orbitBar()
 		composition.Animations = orbitMotion()
 	case PresetNature:
-		composition.PresetRevision = 3
+		composition.PresetRevision = 4
 		composition.Window = natureWindow()
 		composition.Shell = natureShell()
 		composition.Bar = natureBar()
@@ -175,7 +182,28 @@ func Resolve(preset string) (Composition, error) {
 		composition.Shell = orientalShell()
 		composition.Bar = orientalBar()
 		composition.Animations = orientalMotion()
+	case PresetGothic:
+		composition.PresetRevision = 1
+		composition.Window = gothicWindow()
+		composition.Shell = gothicShell()
+		composition.Bar = gothicBar()
+		composition.Animations = gothicMotion()
+	case PresetAcid:
+		composition.PresetRevision = 1
+		composition.Window = acidWindow()
+		composition.Shell = acidShell()
+		composition.Bar = acidBar()
+		composition.Animations = acidMotion()
 	default:
+		store, storeErr := NewLocalStore()
+		if storeErr != nil {
+			return Composition{}, storeErr
+		}
+		if local, localErr := store.Resolve(preset); localErr == nil {
+			return local, nil
+		} else if !errors.Is(localErr, os.ErrNotExist) {
+			return Composition{}, localErr
+		}
 		return Composition{}, fmt.Errorf("unknown Look & Feel preset %q", preset)
 	}
 
@@ -292,7 +320,7 @@ func phosphorWindow() session.DesktopStyle {
 func monolithWindow() session.DesktopStyle {
 	style := session.DefaultDesktopStyle()
 	style.BorderStyle = "split_bottom"
-	style.BorderSizeMode, style.BorderSize = "fixed", 2
+	style.BorderSizeMode, style.BorderSize = "fixed", 3
 	style.Shape, style.Spacing, style.Depth, style.Inactive = "subtle", "compact", "flat", "shadow_only"
 	return style
 }
@@ -310,7 +338,25 @@ func natureWindow() session.DesktopStyle {
 	style.BorderStyle = "blend"
 	style.BorderSizeMode, style.BorderSize = "fixed", 2
 	style.Shape, style.Spacing, style.Depth = "soft", "airy", "shadow"
-	style.Active, style.Inactive = "frosted_light", "frosted_light"
+	style.Active, style.Inactive = "frosted_light", "frosted_balanced"
+	return style
+}
+
+func gothicWindow() session.DesktopStyle {
+	style := session.DefaultDesktopStyle()
+	style.BorderStyle = "split_top"
+	style.BorderSizeMode, style.BorderSize = "fixed", 3
+	style.Shape, style.Spacing, style.Depth = "soft", "airy", "flat"
+	style.Active, style.Inactive = "native", "frosted_rich"
+	return style
+}
+
+func acidWindow() session.DesktopStyle {
+	style := session.DefaultDesktopStyle()
+	style.BorderStyle = "spin"
+	style.BorderSizeMode, style.BorderSize, style.BorderSpeed = "fixed", 2, 72
+	style.Shape, style.Spacing, style.Depth = "soft", "airy", "shadow"
+	style.Active, style.Inactive = "frosted_balanced", "shadow_only"
 	return style
 }
 
@@ -372,6 +418,20 @@ func orientalShell() session.ShellStyle {
 	style := session.DefaultShellStyle()
 	style.Preset = session.ShellPresetGlass
 	style.Surface, style.Detail = "layered", "framed"
+	style.Tooltip, style.Notifications = "accent", "accent"
+	return style
+}
+
+func gothicShell() session.ShellStyle {
+	style := session.DefaultShellStyle()
+	style.Surface, style.Detail = "contrast", "framed"
+	style.Tooltip, style.Notifications = "accent", "accent"
+	return style
+}
+
+func acidShell() session.ShellStyle {
+	style := session.DefaultShellStyle()
+	style.Surface, style.Detail = "layered", "edge"
 	style.Tooltip, style.Notifications = "accent", "accent"
 	return style
 }
@@ -577,6 +637,33 @@ func orientalBar() session.BarStyle {
 	return style
 }
 
+func gothicBar() session.BarStyle {
+	style := replacementBar("float-expanded", "glyphs", []string{"✠", "◆", "◈", "◇", "✦"})
+	spec := style.Spec
+	spec.Clock.Style = "gothic"
+	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "metal", "dark", .96, 0
+	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "foreground", .32, 1, "raised"
+	spec.Geometry.Density, spec.Geometry.EdgeOffset, spec.Geometry.OuterMargin, spec.Geometry.Radius = "comfortable", 10, 10, 18
+	spec.Motion = bar.Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
+	style.Density = "comfortable"
+	if style.Profile != nil {
+		style.Profile.Behavior.Expansion = "hover"
+	}
+	return style
+}
+
+func acidBar() session.BarStyle {
+	style := replacementBar("ribbon", "glyphs", []string{"⊹", "⊕", "◉", "⊗", "✦"})
+	spec := style.Spec
+	spec.Clock.Style = "native"
+	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "metal", "dark", .96, 0
+	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .65, 2, "raised"
+	spec.Geometry.Density, spec.Geometry.SectionGap, spec.Geometry.Radius = "compact", 4, 8
+	spec.Motion = bar.Motion{Preset: "expressive", DurationMs: 160, Easing: "out_cubic"}
+	style.Attention, style.Density = "accent", "compact"
+	return style
+}
+
 func spectralMotion() session.AnimationsStyle {
 	style := session.MotionPreset("cinematic")
 	style.Preset, style.WindowClose, style.WindowMove = "custom", "fade", "smooth"
@@ -624,6 +711,28 @@ func orientalMotion() session.AnimationsStyle {
 	style.Workspace, style.WorkspaceAxis, style.WorkspaceTravel = "slidefade", "horizontal", 16
 	style.Special, style.Focus, style.Layers = "fade", "smooth", "fade"
 	style.Curve, style.Border, style.Glitch = "glass", "static", "none"
+	return style
+}
+
+func gothicMotion() session.AnimationsStyle {
+	style := session.MotionPreset("cinematic")
+	style.Preset = "custom"
+	style.Window, style.WindowOpen, style.WindowClose = "cinematic", "slide", "fade"
+	style.WindowMove, style.WindowAmount, style.WindowSpeed = "smooth", 76, 5
+	style.Workspace, style.WorkspaceAxis, style.WorkspaceTravel = "slidefade", "vertical", 28
+	style.Special, style.Focus, style.Layers = "fade", "smooth", "fade"
+	style.Border, style.Glitch = "static", "none"
+	return style
+}
+
+func acidMotion() session.AnimationsStyle {
+	style := session.MotionPreset("smooth")
+	style.Preset = "custom"
+	style.Window, style.WindowOpen, style.WindowClose = "smooth", "popin", "fade"
+	style.WindowMove, style.WindowAmount, style.WindowOpacity, style.WindowSpeed = "smooth", 92, 94, 3
+	style.Workspace, style.WorkspaceAxis, style.WorkspaceTravel = "slidefade", "horizontal", 12
+	style.Special, style.Focus, style.Layers = "fade", "quick", "fade"
+	style.Curve, style.Border, style.BorderSpeed, style.Glitch = "precision", "spin", 72, "none"
 	return style
 }
 

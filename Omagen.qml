@@ -184,16 +184,24 @@ Item {
     function normalizeEditedTerminalTranslucency(value) {
         return root.normalizeTerminalTranslucency(root.mergeStyleDocument(root.terminalTranslucency, value))
     }
+    function nativeLookFeelRecipe() {
+        return root.normalizedLookFeelRecipe({
+            window: { borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" },
+            shell: { preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) },
+            bar: { surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null },
+            animations: { version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false },
+            terminal: { schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" }
+        })
+    }
     function refreshLookFeelCustomized() {
-        if (!root.lookFeelRecipe)
-            return
+        var recipe = root.lookFeelRecipe || root.nativeLookFeelRecipe()
         var next = root.copyLookFeelDocument(root.lookFeel)
         next.customized = {
-            window: root.styleJson(root.desktopStyle) !== root.styleJson(root.lookFeelRecipe.window),
-            shell: root.styleJson(root.shellStyle) !== root.styleJson(root.lookFeelRecipe.shell),
-            bar: root.styleJson(root.barStyle) !== root.styleJson(root.lookFeelRecipe.bar),
-            animations: root.styleJson(root.animationsStyle) !== root.styleJson(root.lookFeelRecipe.animations),
-            terminal: root.styleJson(root.terminalTranslucency) !== root.styleJson(root.lookFeelRecipe.terminal)
+            window: root.styleJson(root.desktopStyle) !== root.styleJson(recipe.window),
+            shell: root.styleJson(root.shellStyle) !== root.styleJson(recipe.shell),
+            bar: root.styleJson(root.barStyle) !== root.styleJson(recipe.bar),
+            animations: root.styleJson(root.animationsStyle) !== root.styleJson(recipe.animations),
+            terminal: root.styleJson(root.terminalTranslucency) !== root.styleJson(recipe.terminal)
         }
         root.lookFeel = next
     }
@@ -753,8 +761,8 @@ Item {
         if (filename === "") return "Omagen Theme"
         return filename.split(/\s+/).map(function(word) { return word.length ? word.charAt(0).toUpperCase() + word.slice(1) : word }).join(" ")
     }
-    function applyTheme(variant, name, generateUnlock, capturePreview, replaceSource) {
-        applyController.apply(variant, name, generateUnlock, capturePreview, replaceSource === true)
+    function applyTheme(variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName) {
+        applyController.apply(variant, name, generateUnlock, capturePreview, replaceSource === true, saveLookFeelPreset === true, lookFeelPresetName)
     }
 
     function startDemo(variant) {
@@ -821,8 +829,30 @@ Item {
         return true
     }
 
-    function wizardBack() { return wizardController.requestBack() }
-    function wizardNext() { return wizardController.requestNext() }
+    // Freeze the four advanced documents at the wizard boundary. The root is
+    // the staged-document owner; taking fresh copies here prevents a Demo
+    // round trip from exposing editor-owned nested objects or an in-flight
+    // preview response as the next Advanced view's source of truth.
+    function commitAdvancedStylesForNavigation() {
+        if (wizardController.advancedChoice !== "customize")
+            return
+        root.shellStyle = root.normalizeEditedShellStyle(root.shellStyle)
+        root.desktopStyle = root.normalizeEditedDesktopStyle(root.desktopStyle)
+        root.barStyle = root.normalizeEditedBarStyle(root.barStyle)
+        root.animationsStyle = root.normalizeEditedAnimationsStyle(root.animationsStyle)
+        root.refreshLookFeelCustomized()
+    }
+
+    function wizardBack() {
+        if (wizardController.step === 3)
+            root.commitAdvancedStylesForNavigation()
+        return wizardController.requestBack()
+    }
+    function wizardNext() {
+        if (wizardController.step === 2)
+            root.commitAdvancedStylesForNavigation()
+        return wizardController.requestNext()
+    }
     function chooseWizardAdvanced(choice) { return wizardController.chooseAdvanced(choice) }
     function chooseWizardLookFeel() { return wizardController.chooseLookFeel() }
     function skipWizardLookFeel() { return wizardController.skipLookFeel() }
@@ -901,6 +931,10 @@ Item {
         opened = !shouldClose;
         applyController.reset();
         lookFeelController.reset();
+        // Refresh after a successful Apply so a newly saved local recipe is
+        // immediately available if the user starts another session without
+        // restarting the plugin.
+        lookFeelController.list();
         generationController.reset();
         previewController.reset();
         demoController.reset();
@@ -1826,8 +1860,9 @@ Item {
             root.terminalTranslucency = root.normalizeEditedTerminalTranslucency(terminal)
             root.refreshLookFeelCustomized()
         }
-        onApplyRequested: function(variant, name, generateUnlock, capturePreview, replaceSource) {
-            root.applyTheme(variant, name, generateUnlock, capturePreview, replaceSource)
+        onApplyRequested: function(variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName) {
+            root.errorMessage = ""
+            root.applyTheme(variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName)
         }
     }
 

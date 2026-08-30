@@ -66,6 +66,12 @@ TestCase {
         compare(BarSizing.collapsedClockExtent(0, 30, 14), 30)
     }
 
+    function test_barSizeLabelsDoNotPromiseASeparateNativePixelValue() {
+        compare(BarSizing.optionLabel("native", false, 22, 24), "Default · native")
+        compare(BarSizing.optionLabel("compact", false, 22, 24), "Compact · 22 px · same as native")
+        compare(BarSizing.optionLabel("comfortable", false, 22, 24), "Comfortable · 30 px")
+    }
+
     function test_barPresetDensityIsNotInheritedFromThePreviousPreset() {
         compare(BarSizing.presetDensity("native"), "native")
         compare(BarSizing.presetDensity("float"), "compact")

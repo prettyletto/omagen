@@ -84,13 +84,14 @@ become part of the generated preview and applied theme.
 Look & Feel recipes are named compositions of those same Advanced controls,
 not a parallel styling implementation. The authored catalog contains Glass
 Blur, Focused, Cyberpunk Glitch, Spectral Shift, Phosphor Terminal, Monolith,
-Elastic Orbit, Nature, and Oriental; Omarchy Native remains a protected no-op
-baseline. Oriental is the Kanagawa-inspired recipe: Japanese Kanji workspace
-labels, a compact floating bar, warm frosted windows, and quiet directional
-motion without a screen shader.
+Elastic Orbit, Nature, Oriental, Gothic Cathedral, and Acid Pulse; Omarchy
+Native remains a protected no-op baseline. Oriental is the Kanagawa-inspired
+recipe: Japanese Kanji workspace labels, a compact floating bar, warm frosted
+windows, and quiet directional motion without a screen shader. Gothic Cathedral
+uses ceremonial framing and stained-glass depth, while Acid Pulse uses reactive
+spinning borders and a segmented chemical-instrument bar.
 Each recipe also carries its workspace presentation. Cyberpunk retains its
-existing 4 px neon/digital/RGB-tear behavior and changes only to Roman workspace
-labels in revision 6.
+existing 4 px neon/digital/RGB-tear behavior and Roman workspace labels.
 
 Spectral Shift and Phosphor Terminal use finite Hyprland screen shaders. The
 Advanced Animations page exposes effect family, Low/Medium/Strong intensity,

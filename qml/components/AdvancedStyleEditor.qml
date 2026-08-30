@@ -142,10 +142,12 @@ Item {
         if (group === "surface") spec.surface.role = key
         if (group === "density") {
             spec.geometry.density = key
-            // Selecting a named size returns control to the density preset.
-            // An explicit thickness belongs to the advanced override and must
-            // not silently mask Compact/Default/Comfortable.
-            spec.geometry.thickness = 0
+            // Selecting a named size normally returns control to the density
+            // preset. If the host's native token is already the canonical
+            // compact size, retain the named choice as a small explicit
+            // override so Compact is not a no-op in the editor. Presets still
+            // use their original density-only documents.
+            spec.geometry.thickness = root.barDensitySizeOverride(key, spec)
         }
         if (group === "attention") spec.attention.mode = key
         next.spec = spec
@@ -286,7 +288,8 @@ Item {
             Style.bar.sizeHorizontal,
             Style.bar.sizeVertical,
             Style.barScaleWithFont,
-            Style.fontScale
+            Style.fontScale,
+            root.barStructuralPadding(spec)
         )
     }
 
@@ -334,9 +337,32 @@ Item {
 
     function barSizeOptionTitle(key) {
         var spec = root.barSpec()
-        var label = key === "compact" ? "Compact" : key === "comfortable" ? "Comfortable" : "Default"
-        var renderedSize = root.barBaseSizeForDensity(key, spec) + root.barStructuralPadding(spec)
-        return label + " · " + renderedSize + " px"
+        var label = BarSizing.optionLabel(
+            key,
+            root.barIsVertical(spec),
+            Style.bar.sizeHorizontal,
+            Style.bar.sizeVertical,
+            Style.barScaleWithFont,
+            Style.fontScale,
+            root.barStructuralPadding(spec)
+        )
+        // Some Quattro installations already use the compact token as their
+        // native bar height (22/24 px). Keep the built-in presets unchanged,
+        // but make the editor's Compact action an actual user customization
+        // instead of presenting two controls that resolve identically.
+        var nativeSize = root.barBaseSizeForDensity("native", spec)
+        var compactSize = root.barBaseSizeForDensity("compact", spec)
+        if (key === "compact" && compactSize === nativeSize)
+            return "Compact · " + Math.max(1, nativeSize - 2) + " px"
+        return label
+    }
+
+    function barDensitySizeOverride(density, spec) {
+        if (String(density || "native") !== "compact")
+            return 0
+        var nativeSize = root.barBaseSizeForDensity("native", spec)
+        var compactSize = root.barBaseSizeForDensity("compact", spec)
+        return compactSize === nativeSize ? Math.max(1, nativeSize - 2) : 0
     }
 
     function barSizeOptionsWithPixels() {
@@ -803,6 +829,13 @@ Item {
 
         StackLayout {
             Layout.fillWidth: true
+            // StackLayout can report the largest child implicit height even
+            // when only one editor page is visible. That made the outer
+            // Live Canvas Flickable scroll into a blank tail after the
+            // shorter Window/Shell pages. Size the layout from the active
+            // page explicitly so End stops at the last real control.
+            Layout.preferredHeight: root.activeTab === 0 ? windowPage.implicitHeight : root.activeTab === 1 ? shellPage.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationPage.implicitHeight
+            Layout.minimumHeight: 0
             currentIndex: root.activeTab
             implicitHeight: root.activeTab === 0 ? windowPage.implicitHeight : root.activeTab === 1 ? shellPage.implicitHeight : root.activeTab === 2 ? barColumn.implicitHeight : animationPage.implicitHeight
 
@@ -1032,6 +1065,7 @@ Item {
                     id: animationsEditor
                     width: parent.width
                     animationsStyle: root.animationsStyle
+                    windowBorderStyle: root.desktopStyle.borderStyle || "solid"
                     foregroundColor: root.foregroundColor
                     backgroundColor: root.backgroundColor
                     accentColor: root.accentColor

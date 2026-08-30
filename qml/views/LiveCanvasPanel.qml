@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
@@ -108,7 +109,7 @@ PanelWindow {
     signal lookFeelCatalogRetryRequested()
     signal lookFeelResetRequested(string scope)
     signal terminalIntentChanged(var terminal)
-    signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview, bool replaceSource)
+    signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview, bool replaceSource, bool saveLookFeelPreset, string lookFeelPresetName)
 
     // Wizard signals are intent-only. The panel does not own navigation,
     // session cleanup, preview requests, or backend commands.
@@ -155,13 +156,14 @@ PanelWindow {
 
     function selectedPresetLabel() {
         const selected = String(root.lookFeel.preset || "omarchy-native")
-        if (selected === "omarchy-native")
-            return "Keep native"
+        const customized = root.lookFeel.customized || ({})
+        const isCustomized = Object.keys(customized).some(function(key) { return customized[key] === true })
+        let base = selected === "omarchy-native" ? "Keep native" : selected
         for (let index = 0; index < root.lookFeelCatalog.length; index++) {
             if (root.lookFeelCatalog[index].id === selected)
-                return root.lookFeelCatalog[index].name || selected
+                base = root.lookFeelCatalog[index].name || selected
         }
-        return selected
+        return isCustomized ? "Custom (based on " + base + ")" : base
     }
 
     function copyOverrideColors(value) {
@@ -264,6 +266,30 @@ PanelWindow {
             anchors.fill: parent
             enabled: true
             onCloseRequested: root.hideRequested()
+            onMoveRequested: function(dx, dy) {
+                if (dy !== 0)
+                    scrollArea.scrollBy(dy > 0 ? Style.space(36) : -Style.space(36))
+            }
+
+            // PanelKeyCatcher owns focus so Escape and the arrow keys work
+            // even when no editor control is focused. Forward page travel
+            // here as well; otherwise PageUp/PageDown never reaches the
+            // Flickable below and the lower Advanced controls appear absent.
+            Keys.onPressed: function(event) {
+                if (event.key === Qt.Key_PageDown) {
+                    scrollArea.scrollBy(scrollArea.height * 0.85)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_PageUp) {
+                    scrollArea.scrollBy(-scrollArea.height * 0.85)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Home) {
+                    scrollArea.scrollBy(-scrollArea.contentHeight)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_End) {
+                    scrollArea.scrollBy(scrollArea.contentHeight)
+                    event.accepted = true
+                }
+            }
         }
 
         ColumnLayout {
@@ -304,14 +330,38 @@ PanelWindow {
                 flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.StopAtBounds
                 interactive: contentHeight > height
+                focus: true
+                activeFocusOnTab: true
+
+                function scrollBy(delta) {
+                    cancelFlick()
+                    const maximum = Math.max(0, contentHeight - height)
+                    contentY = Math.max(0, Math.min(maximum, contentY + delta))
+                }
+
+                Keys.onPressed: function(event) {
+                    if (event.key === Qt.Key_PageDown) {
+                        scrollBy(height * 0.85)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_PageUp) {
+                        scrollBy(-height * 0.85)
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Down) {
+                        scrollBy(Style.space(36))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Up) {
+                        scrollBy(-Style.space(36))
+                        event.accepted = true
+                    }
+                }
+
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
                 WheelHandler {
                     onWheel: function(event) {
                         if (!scrollArea.interactive || event.angleDelta.y === 0)
                             return
-                        scrollArea.cancelFlick()
-                        const maximum = Math.max(0, scrollArea.contentHeight - scrollArea.height)
-                        scrollArea.contentY = Math.max(0, Math.min(maximum, scrollArea.contentY - event.angleDelta.y / 2))
+                        scrollArea.scrollBy(-event.angleDelta.y / 2)
                         event.accepted = true
                     }
                 }
@@ -321,6 +371,12 @@ PanelWindow {
                     x: Style.space(1)
                     y: Style.space(2)
                     width: scrollArea.width - Style.space(2)
+                    // Flickable does not size its content item from implicit
+                    // size. Keep the layout's actual height in sync so the
+                    // Advanced editor exposes its complete Window/Shell/Bar/
+                    // Animations content instead of reporting only the
+                    // visible viewport height.
+                    height: implicitHeight
                     spacing: Style.space(10)
 
                     Item {
@@ -422,6 +478,7 @@ PanelWindow {
                             onStylesChanged: function(nextShell, nextDesktop, nextBar, nextAnimations) {
                                 root.advancedStylesChanged(nextShell, nextDesktop, nextBar, nextAnimations)
                             }
+                            onSectionChanged: scrollArea.contentY = 0
                         }
                     }
 
@@ -537,10 +594,11 @@ PanelWindow {
         id: themeNameDialog
         anchors.fill: parent
         busy: root.applyBusy
+        errorMessage: root.errorMessage
         themeEditMode: root.sourceThemeName !== ""
         sourceThemeName: root.sourceThemeName
-        onConfirmed: function(name, generateUnlock, capturePreview, replaceSource) {
-            root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview, replaceSource)
+        onConfirmed: function(name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName) {
+            root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName)
         }
     }
 

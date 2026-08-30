@@ -321,7 +321,10 @@ func WriteHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle
 		b.WriteString("\n-- Blur translucent native Quickshell surfaces for the Shell Glass preset.\n")
 		b.WriteString("hl.layer_rule({ name = \"omagen-shell-glass-backdrop-blur\", match = { namespace = \"^((omarchy-(bar|menu|image-selector|emojis|clipboard|keyboard-panel|notifications|osd|polkit|lock-preview|network-qr|reminders))|omagen-shell-demo|omagen-live-canvas)$\" }, blur = true, blur_popups = true, ignore_alpha = 0.20 })\n")
 	}
-	if animations.Window != "native" || animations.WindowOpacity != 100 || animations.Workspace != "native" || animations.Special != "inherit" || animations.Focus != "native" || animations.Layers != "native" || animations.WindowMove != "native" || animations.Glitch != "none" || animations.ScreenEffect != nil || animations.ReducedMotion {
+	// A custom curve is meaningful even when every motion family is still
+	// Native. Keep it in the writer gate so a curve-only edit is not silently
+	// treated as the untouched native document.
+	if animations.Window != "native" || animations.WindowOpen != "popin" || animations.WindowClose != "popin" || animations.WindowAmount != 87 || animations.WindowOpacity != 100 || animations.WindowSpeed != 4 || animations.Workspace != "native" || animations.Special != "inherit" || animations.Focus != "native" || animations.Layers != "native" || animations.WindowMove != "native" || animations.Glitch != "none" || animations.ScreenEffect != nil || animations.ReducedMotion || animations.Curve != "bezier" {
 		writeAnimationSettings(&b, animations, p, screenEffect, screenEffectShaderName)
 	}
 	if (borderStyle == "spin" || borderStyle == "neon") && animations.Border != "static" && !animations.ReducedMotion {
@@ -373,7 +376,7 @@ func writeAnimationSettings(b *strings.Builder, animations session.AnimationsSty
 		fmt.Fprintf(b, "hl.animation({ leaf = \"windows\", enabled = true, speed = %s, bezier = %q })\n", speed, bezier)
 		fmt.Fprintf(b, "hl.animation({ leaf = \"windowsIn\", enabled = true, speed = %s, bezier = %q, style = \"popin 87%%\" })\n", speed, bezier)
 		fmt.Fprintf(b, "hl.animation({ leaf = \"windowsOut\", enabled = true, speed = %s, bezier = \"linear\", style = \"popin 87%%\" })\n", speed)
-	} else if animations.Window != "native" {
+	} else if animations.Window != "native" || !legacyCompact {
 		// Preset documents carry their actual response value. Do not replace a
 		// Cyberpunk or Focused value with a family-wide hardcoded speed: that made
 		// different recipes serialize differently while rendering the same motion.

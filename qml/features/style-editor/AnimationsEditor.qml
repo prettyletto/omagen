@@ -14,6 +14,13 @@ Item {
     property color foregroundColor: Color.foreground
     property color backgroundColor: Color.background
     property color accentColor: Color.accent
+    property string windowBorderStyle: "solid"
+    readonly property bool borderMotionAvailable: ["spin", "neon"].indexOf(root.windowBorderStyle) >= 0
+    // Axis and travel only affect Hyprland's spatial workspace styles. Native
+    // and Fade deliberately do not consume them, so make that dependency
+    // visible instead of presenting controls that appear editable but cannot
+    // change the generated theme.
+    readonly property bool workspaceSlideControlsAvailable: ["slide", "slidefade", "spring"].indexOf(String(root.animationsStyle.workspace || "")) >= 0
     signal styleEdited(var animationsStyle)
 
     readonly property var motionPresetOptions: [
@@ -61,6 +68,8 @@ Item {
     }
 
     function chooseAnimations(group, key) {
+        if (group === "border" && !root.borderMotionAvailable)
+            return
         root.styleEdited(AnimationStyle.chooseAnimations(root.animationsStyle, group, key))
     }
 
@@ -91,8 +100,8 @@ Item {
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
         Text { Layout.fillWidth: true; text: "WORKSPACES"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
         GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.workspaceAnimationOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Workspace switching transition owned by Hyprland."; selected: root.animationsStyle.workspace === modelData.key; onClicked: root.chooseAnimations("workspace", modelData.key) } } }
-        GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "horizontal", title: "Horizontal" }, { key: "vertical", title: "Vertical" }]; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Direction for slide and slide-fade travel."; selected: root.animationsStyle.workspaceAxis === modelData.key; onClicked: root.chooseAnimations("workspaceAxis", modelData.key) } } }
-        Components.ShellRangeField { Layout.fillWidth: true; label: "Workspace travel"; description: "Percentage of the screen used by slide and slide-fade transitions."; value: String(root.animationsStyle.workspaceTravel || 18); fallback: 18; minimum: 5; maximum: 100; step: 1; decimals: 0; suffix: "%"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("workspaceTravel", value); onResetRequested: root.editMotionNumber("workspaceTravel", fallback) }
+        GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "horizontal", title: "Horizontal" }, { key: "vertical", title: "Vertical" }]; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; opacity: root.workspaceSlideControlsAvailable ? 1 : 0.48; enabled: root.workspaceSlideControlsAvailable; title: modelData.title; description: root.workspaceSlideControlsAvailable ? "Direction for slide and slide-fade travel." : "Choose Workspace → Slide or Slide + fade first."; selected: root.animationsStyle.workspaceAxis === modelData.key; onClicked: root.chooseAnimations("workspaceAxis", modelData.key) } } }
+        Components.ShellRangeField { Layout.fillWidth: true; opacity: root.workspaceSlideControlsAvailable ? 1 : 0.48; enabled: root.workspaceSlideControlsAvailable; label: "Workspace travel"; description: root.workspaceSlideControlsAvailable ? "Percentage of the screen used by slide and slide-fade transitions." : "Choose Workspace → Slide or Slide + fade first."; value: String(root.animationsStyle.workspaceTravel || 18); fallback: 18; minimum: 5; maximum: 100; step: 1; decimals: 0; suffix: "%"; integer: true; modified: Number(value) !== fallback; onValueEdited: root.editMotionNumber("workspaceTravel", value); onResetRequested: root.editMotionNumber("workspaceTravel", fallback) }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
         Text { Layout.fillWidth: true; text: "FOCUS / SHELL"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
         GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "native", title: "Focus · Native" }, { key: "quick", title: "Focus · Quick" }, { key: "smooth", title: "Focus · Smooth" }, { key: "digital", title: "Focus · Digital" }, { key: "none", title: "Focus · Off" }]; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: modelData.key === "digital" ? "A mechanical neon border, shadow, and dim response without retriggering the desktop shader." : "Focus fade, dim, and shadow transitions."; selected: root.animationsStyle.focus === modelData.key; onClicked: root.chooseAnimations("focus", modelData.key) } } }
@@ -100,7 +109,8 @@ Item {
         GridLayout { Layout.fillWidth: true; columns: 2; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: [{ key: "native", title: "Layers · Native" }, { key: "fade", title: "Layers · Fade" }, { key: "slide", title: "Layers · Slide" }, { key: "none", title: "Layers · Off" }]; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Hyprland layer/shell entrance and exit motion."; selected: root.animationsStyle.layers === modelData.key; onClicked: root.chooseAnimations("layers", modelData.key) } } }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
         Text { Layout.fillWidth: true; text: "BORDER MOTION"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
-        GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.borderAnimationOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: "Animated focus-border treatment."; selected: root.animationsStyle.border === modelData.key; onClicked: root.chooseAnimations("border", modelData.key) } } }
+        Text { Layout.fillWidth: true; text: root.borderMotionAvailable ? "Border Motion is active for Spin and Neon Window Border Style." : "Border Motion is available only when Window → Border Style is Spin or Neon."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+        GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(7); rowSpacing: Style.space(7); Repeater { model: root.borderAnimationOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; opacity: root.borderMotionAvailable ? 1 : 0.48; enabled: root.borderMotionAvailable; title: modelData.title; description: root.borderMotionAvailable ? "Animated focus-border treatment." : "Choose Spin or Neon in Window → Border Style first."; selected: root.animationsStyle.border === modelData.key; onClicked: root.chooseAnimations("border", modelData.key) } } }
         Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; Layout.topMargin: Style.space(4); color: Util.alpha(root.foregroundColor, 0.16) }
         Text { Layout.fillWidth: true; text: "SCREEN EFFECT"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
         Text { Layout.fillWidth: true; text: "Finite Hyprland screen shaders. They activate only around selected events, restore the previous shader afterward, and remain idle between signals."; color: root.foregroundColor; opacity: 0.58; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
