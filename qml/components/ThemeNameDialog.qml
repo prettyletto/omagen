@@ -126,7 +126,6 @@ Item {
                     font.pixelSize: Style.font.bodySmall
                     maximumLength: 64
                     text: root.lookFeelPresetName
-                    placeholderText: "Look & Feel preset name"
                     enabled: !root.busy
                     onTextChanged: root.lookFeelPresetName = text
                     Keys.onReturnPressed: root.submit()
