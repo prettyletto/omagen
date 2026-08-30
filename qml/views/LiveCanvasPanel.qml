@@ -36,15 +36,13 @@ PanelWindow {
     property var lookFeelRecipe: null
     property var lookFeelCatalog: []
     property bool lookFeelBusy: false
+    property bool lookFeelCatalogLoading: false
+    property string lookFeelCatalogError: ""
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property real terminalPresetOpacity: 0.82
     property bool applyRecoveryRequired: false
-    property bool protocolCanBack: false
-    property bool protocolCanForward: false
-    property bool protocolBusy: false
-    property string protocolMessage: ""
     property string errorMessage: ""
-    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.protocolBusy || root.lookFeelBusy
+    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy
     readonly property string operationTitle: root.generationBusy
         ? "Preparing Live Canvas…"
         : root.previewBusy
@@ -55,7 +53,7 @@ PanelWindow {
                     ? (root.demoActive ? "Closing Live Canvas…" : "Opening Live Canvas…")
                     : root.cancelBusy
                         ? "Restoring original desktop…"
-                        : "Updating history…"
+                        : "Ready"
     readonly property string operationDetail: root.generationBusy
         ? "Building the palette directions before the canvas can be edited."
         : root.previewBusy
@@ -68,7 +66,7 @@ PanelWindow {
                     ? "Waiting for the Live Canvas workspace transition to finish."
                     : root.cancelBusy
                         ? "Restoring the original theme and closing this session."
-                        : "Reapplying the selected history checkpoint."
+                        : ""
     property string selectedVariant: "source"
     property string monitorName: ""
     property string suggestedThemeName: ""
@@ -116,10 +114,9 @@ PanelWindow {
     signal colorTestLiveRequested(string variant, var overrides, var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
     signal advancedStylesChanged(var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
     signal lookFeelPresetRequested(string preset)
+    signal lookFeelCatalogRetryRequested()
     signal lookFeelResetRequested(string scope)
     signal terminalIntentChanged(var terminal)
-    signal protocolBackRequested()
-    signal protocolForwardRequested()
     signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
 
     function copyColors() {
@@ -789,6 +786,8 @@ PanelWindow {
                 visible: root.extraConfigsEnabled && root.lookFeelEditorOpen
                 Layout.fillWidth: true
                 catalog: root.lookFeelCatalog
+                catalogLoading: root.lookFeelCatalogLoading
+                catalogError: root.lookFeelCatalogError
                 lookFeel: root.lookFeel
                 recipe: root.lookFeelRecipe
                 terminalTranslucency: root.terminalTranslucency
@@ -798,6 +797,7 @@ PanelWindow {
                 accentColor: root.accentColor
                 busy: root.lookFeelBusy
                 onPresetRequested: root.lookFeelPresetRequested(preset)
+                onCatalogRetryRequested: root.lookFeelCatalogRetryRequested()
                 onResetRequested: root.lookFeelResetRequested(scope)
                 onTerminalChanged: root.terminalIntentChanged(terminal)
             }
@@ -903,17 +903,6 @@ PanelWindow {
                 visible: root.errorMessage !== ""
                 text: root.errorMessage
                 color: Color.urgent
-                wrapMode: Text.WordWrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-
-            Text {
-                Layout.fillWidth: true
-                visible: root.protocolMessage !== ""
-                text: root.protocolMessage
-                color: root.foregroundColor
-                opacity: 0.65
                 wrapMode: Text.WordWrap
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
@@ -1067,19 +1056,8 @@ PanelWindow {
                     Layout.fillWidth: true
                     spacing: Style.space(5)
 
-                    Components.ProtocolNavigationControls {
-                        Layout.fillWidth: true
-                        caption: root.colorEditorOpen ? "UNDO" : "HISTORY"
-                        canBack: root.protocolCanBack
-                        canForward: root.protocolCanForward
-                        busy: root.protocolBusy
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onBackRequested: root.protocolBackRequested()
-                        onForwardRequested: root.protocolForwardRequested()
-                    }
-
                     Button {
-                        Layout.preferredWidth: Style.space(72)
+                        Layout.fillWidth: true
                         text: "Hide"
                         foreground: root.foregroundColor
                         bordered: true

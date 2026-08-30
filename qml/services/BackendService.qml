@@ -59,10 +59,6 @@ Item {
     signal demoCloseFailed(string message)
     signal demoCaptured(string sessionId, string previewPath)
     signal demoCaptureFailed(string message)
-    signal protocolSnapshotLoaded(string sessionId, var snapshot)
-    signal protocolSnapshotFailed(string sessionId, string message)
-    signal protocolNavigationCompleted(string sessionId, var navigation)
-    signal protocolNavigationFailed(string sessionId, string message)
 
     function beginSession(shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency) {
         sessionGateway.beginSession(shellStyle, desktopStyle, barStyle, animationsStyle, lookFeel, terminalTranslucency)
@@ -100,9 +96,6 @@ Item {
     function reflowDemo(sessionId) { demoGateway.reflow(sessionId) }
     function closeDemo(sessionId) { demoGateway.close(sessionId) }
     function captureDemoPreview(sessionId) { demoGateway.capture(sessionId) }
-    function inspectProtocol(sessionId) { protocolGateway.inspect(sessionId) }
-    function navigateProtocolBack(sessionId) { protocolGateway.back(sessionId) }
-    function navigateProtocolForward(sessionId) { protocolGateway.forward(sessionId) }
 
     Gateways.BackendCommand {
         id: pingCommand
@@ -191,12 +184,4 @@ Item {
         onCaptureFailed: function(message) { root.demoCaptureFailed(message) }
     }
 
-    Gateways.ProtocolGateway {
-        id: protocolGateway
-        executable: root.executable
-        onSnapshotLoaded: function(sessionId, snapshot) { root.protocolSnapshotLoaded(sessionId, snapshot) }
-        onSnapshotFailed: function(sessionId, message) { root.protocolSnapshotFailed(sessionId, message) }
-        onNavigationCompleted: function(sessionId, navigation) { root.protocolNavigationCompleted(sessionId, navigation) }
-        onNavigationFailed: function(sessionId, message) { root.protocolNavigationFailed(sessionId, message) }
-    }
 }

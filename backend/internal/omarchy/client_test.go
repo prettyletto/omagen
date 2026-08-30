@@ -285,7 +285,7 @@ func TestApplyThemePreviewUsesStudioDriverWithNoHookPolicy(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	bin := t.TempDir()
 	driver := filepath.Join(bin, "studio-theme-set")
-	contents := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/studio-driver-args\"\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\n"
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$HOME/studio-driver-args\"\nprintf '%s\\n' \"$OMAGEN_ACTIVATION_ID\" > \"$HOME/studio-driver-activation\"\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\n"
 	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -309,6 +309,13 @@ func TestApplyThemePreviewUsesStudioDriverWithNoHookPolicy(t *testing.T) {
 	}
 	if got := string(args); got != "preview\nnew\n--no-hooks\n" {
 		t.Fatalf("studio driver args=%q", got)
+	}
+	activation, err := os.ReadFile(filepath.Join(home, "studio-driver-activation"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(activation)); got != "preview.log" {
+		t.Fatalf("activation id=%q", got)
 	}
 	data, err := os.ReadFile(filepath.Join(current, "theme.name"))
 	if err != nil {
@@ -584,6 +591,94 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 			t.Fatalf("detached post-commit work did not finish: log=%q logErr=%v markerErr=%v", logData, logErr, finishedErr)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestStudioThemeSetPreviewUsesInstantBackgroundHandoff(t *testing.T) {
+	home := t.TempDir()
+	omarchyPath := t.TempDir()
+	commandBin := t.TempDir()
+	runtimeDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OMARCHY_PATH", omarchyPath)
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("PATH", commandBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := os.MkdirAll(filepath.Join(omarchyPath, "shell"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(omarchyPath, "shell/shell.qml"), []byte("Item {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(omarchyPath, "themes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	candidate := filepath.Join(home, ".config/omarchy/themes/candidate")
+	for _, root := range []string{
+		filepath.Join(current, "theme/backgrounds"),
+		filepath.Join(candidate, "backgrounds"),
+	} {
+		if err := os.MkdirAll(root, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, root := range []string{filepath.Join(current, "theme"), candidate} {
+		if err := os.WriteFile(filepath.Join(root, "colors.toml"), []byte("[colors]\nprimary = '#ffffff'\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, "shell.toml"), []byte("[bar]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme/backgrounds/bg.png"), []byte("old-background"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(candidate, "backgrounds/bg.png"), []byte("new-background"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(current, "theme/backgrounds/bg.png"), filepath.Join(current, "background")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	writeCommand := func(name, body string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(commandBin, name), []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeCommand("omarchy-theme-set-templates", "exit 0")
+	writeCommand("omarchy-shell", "printf '%s\\n' \"$@\" >> \"$HOME/commands.log\"")
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source path")
+	}
+	driver := filepath.Join(filepath.Dir(currentFile), "../../../bin/studio-theme-set")
+	started := time.Now()
+	output, err := exec.Command(driver, "preview", "candidate", "--no-hooks", "--scope", "theme,shell,background", "--wait", "none", "--run", "none").CombinedOutput()
+	if err != nil {
+		t.Fatalf("studio-theme-set preview: %v: %s", err, output)
+	}
+	if elapsed := time.Since(started); elapsed >= 400*time.Millisecond {
+		t.Fatalf("unchanged-background preview took %v", elapsed)
+	}
+	commands, err := os.ReadFile(filepath.Join(home, "commands.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(commands), "shell\napplyTheme\n") {
+		t.Fatalf("preview did not use direct shell theme apply: %q", commands)
+	}
+	if !strings.Contains(string(commands), "background\nsetInstant\n") {
+		t.Fatalf("preview did not use instant background handoff: %q", commands)
+	}
+	if strings.Contains(string(commands), "background\nthemeTransition\n") {
+		t.Fatalf("preview started an unchanged-background transition: %q", commands)
 	}
 }
 

@@ -49,10 +49,6 @@ Item {
     property alias pendingDemo: demoController.pendingDemo
     property alias pendingWindowDemo: demoController.pendingWindowDemo
     property bool recoveryBusy: false
-    property alias protocolBusy: protocolController.busy
-    property alias protocolCanBack: protocolController.canBack
-    property alias protocolCanForward: protocolController.canForward
-    property alias protocolMessage: protocolController.message
     property string route: "unknown"
     property var resumableSession: null
     property string sourceImage: ""
@@ -66,6 +62,8 @@ Item {
     property var lookFeelRecipe: null
     property alias lookFeelCatalog: lookFeelController.catalog
     property alias lookFeelBusy: lookFeelController.busy
+    property alias lookFeelCatalogLoading: lookFeelController.catalogLoading
+    property alias lookFeelCatalogError: lookFeelController.catalogError
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property string errorMessage: ""
     readonly property var signalAnimationsStyle: session.active
@@ -573,39 +571,6 @@ Item {
         root.prepareLiveBar();
         previewController.start(variant, overrides, root.previewStyles(variant), Object.keys(overrides).length > 0);
     }
-    function refreshProtocol() {
-        protocolController.refresh();
-    }
-    function navigateProtocol(direction) {
-        protocolController.navigate(direction);
-    }
-    function applyProtocolState(state) {
-        if (!state || !state.variant || !session.hasPalette(state.variant))
-            return;
-        session.selectVariant(state.variant);
-        if (state.style_overrides) {
-            root.shellStyle = root.normalizeShellStyle(state.style_overrides.shell || ({}));
-            root.desktopStyle = root.normalizeDesktopStyle(state.style_overrides.desktop || ({}));
-            root.barStyle = root.normalizeBarStyle(state.style_overrides.bar || ({}));
-            root.animationsStyle = root.normalizeAnimationsStyle(state.style_overrides.animations || ({}));
-            var protocolLookFeel = state.style_overrides.look_feel || ({});
-            root.lookFeel = {
-                schemaVersion: Number(protocolLookFeel.schema_version || protocolLookFeel.schemaVersion || 1),
-                preset: protocolLookFeel.preset || "omarchy-native",
-                presetRevision: Number(protocolLookFeel.preset_revision || protocolLookFeel.presetRevision || 1),
-                customized: protocolLookFeel.customized || ({})
-            };
-            var protocolTerminal = state.style_overrides.terminal || ({});
-            root.terminalTranslucency = {
-                schemaVersion: Number(protocolTerminal.schema_version || protocolTerminal.schemaVersion || 1),
-                mode: protocolTerminal.mode || "preserve",
-                opacity: Number(protocolTerminal.opacity !== undefined ? protocolTerminal.opacity : 1),
-                cellMode: protocolTerminal.cell_mode || protocolTerminal.cellMode || "background"
-            };
-        }
-        liveCanvasPanel.setStagedColors(state.color_overrides || {}, state.variant);
-    }
-
     function previewStyles(variant) {
         if (!root.extraConfigsEnabled)
             return null;
@@ -748,11 +713,7 @@ Item {
         cancelReturnRoute = "workspace";
         resumableSession = null;
         recoveryBusy = false;
-        protocolController.reset();
     }
-
-    onOpenedChanged: if (opened && route === "workspace") Qt.callLater(root.refreshProtocol)
-    onRouteChanged: if (opened && route === "workspace") Qt.callLater(root.refreshProtocol)
 
     State.SessionState {
         id: session
@@ -936,25 +897,6 @@ Item {
         onErrorRaised: root.errorMessage = message
     }
 
-    Controllers.ProtocolController {
-        id: protocolController
-        backend: backend
-        session: session
-        workspaceReady: session.workspaceReady
-        previewBusy: previewController.busy
-        cancelBusy: root.cancelBusy
-        applyBusy: applyController.busy
-    }
-
-    Connections {
-        target: protocolController
-
-        function onNavigationCompleted(navigation) {
-            root.applyProtocolState(navigation.state)
-            root.refreshProtocol()
-        }
-    }
-
     Controllers.GenerationController {
         id: generationController
         backend: backend
@@ -987,7 +929,6 @@ Item {
             // later Test Live click with no edits is deduplicated by the
             // preview controller instead of replacing the same bar again.
             root.enterLiveCanvas("source")
-            root.refreshProtocol()
         }
 
         function onDiscarded(sessionId, generationId) {
@@ -1090,8 +1031,6 @@ Item {
                 return
             if (applyController.handlePreviewApplied())
                 return
-            root.refreshProtocol()
-
             // Shell and Bar Demos are QML-only reader surfaces. They do not own
             // a backend workspace or demo-state.json, so previewing them must
             // not enter the window/full-demo reflow path.
@@ -1303,6 +1242,8 @@ Item {
         onWorkflowModeSelected: function(mode) {
             root.workflowMode = mode;
             root.extraConfigsEnabled = mode === "in-depth";
+            if (root.extraConfigsEnabled)
+                lookFeelController.list();
         }
         onContinueRequested: root.continueFromSetup()
         onCancelRequested: root.cancelSession()
@@ -1416,6 +1357,8 @@ Item {
         lookFeelRecipe: root.lookFeelRecipe
         lookFeelCatalog: root.lookFeelCatalog
         lookFeelBusy: root.lookFeelBusy
+        lookFeelCatalogLoading: root.lookFeelCatalogLoading
+        lookFeelCatalogError: root.lookFeelCatalogError
         terminalTranslucency: root.terminalTranslucency
         terminalPresetOpacity: root.lookFeelRecipe && root.lookFeelRecipe.terminal
             ? Number(root.lookFeelRecipe.terminal.opacity || 0.82) : 0.82
@@ -1425,10 +1368,6 @@ Item {
         animationsStyle: root.animationsStyle
         glitchEnabled: root.cyberpunkSignalActive
         glitchEpoch: root.shellGlitchEpoch
-        protocolCanBack: root.protocolCanBack
-        protocolCanForward: root.protocolCanForward
-        protocolBusy: root.protocolBusy
-        protocolMessage: root.protocolMessage
         errorMessage: root.errorMessage
         selectedVariant: session.selectedVariant
         monitorName: root.liveCanvasMonitor
@@ -1448,6 +1387,7 @@ Item {
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
         onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
+        onLookFeelCatalogRetryRequested: lookFeelController.list()
         onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
             root.shellStyle = root.normalizeEditedShellStyle(shellStyle)
             root.desktopStyle = root.normalizeEditedDesktopStyle(desktopStyle)
@@ -1461,8 +1401,6 @@ Item {
             root.terminalTranslucency = root.normalizeEditedTerminalTranslucency(terminal)
             root.refreshLookFeelCustomized()
         }
-        onProtocolBackRequested: root.navigateProtocol("back")
-        onProtocolForwardRequested: root.navigateProtocol("forward")
         onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
             root.applyTheme(variant, name, generateUnlock, capturePreview)
         }

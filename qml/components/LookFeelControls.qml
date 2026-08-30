@@ -15,6 +15,8 @@ Item {
     property var recipe: null
     property var terminalTranslucency: ({ mode: "preserve", opacity: 1, cellMode: "background" })
     property real presetOpacity: 0.82
+    property bool catalogLoading: false
+    property string catalogError: ""
     // The canvas owns the staged palette.  Keep a host-theme fallback so this
     // component remains safe when it is rendered outside the Live Canvas.
     property color foregroundColor: Color.foreground
@@ -23,6 +25,7 @@ Item {
     property bool busy: false
 
     signal presetRequested(string preset)
+    signal catalogRetryRequested()
     signal resetRequested(string scope)
     signal terminalChanged(var terminal)
 
@@ -198,11 +201,27 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: root.catalog.length === 0 ? "Loading preset catalog…" : root.catalogName(root.selectedPreset) + " · " + (root.isCustomized ? "Customized" : "Preset")
+            text: root.catalogError !== ""
+                ? "Preset catalog unavailable: " + root.catalogError
+                : root.catalogLoading || root.catalog.length === 0
+                    ? "Loading preset catalog…"
+                    : root.catalogName(root.selectedPreset) + " · " + (root.isCustomized ? "Customized" : "Preset")
             color: root.foregroundColor
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
             font.bold: true
+        }
+
+        Button {
+            Layout.fillWidth: true
+            visible: root.catalogError !== ""
+            text: "Retry preset catalog"
+            foreground: root.foregroundColor
+            accent: root.accentColor
+            background: Util.alpha(root.foregroundColor, 0.045)
+            bordered: true
+            enabled: !root.busy
+            onClicked: root.catalogRetryRequested()
         }
 
         Text {

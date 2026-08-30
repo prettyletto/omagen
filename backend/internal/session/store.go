@@ -71,6 +71,11 @@ func (s *Store) Delete(sessionID string) error {
 			errs = append(errs, err)
 		}
 	}
+	// Preview/apply history was removed. Clean any protocol journal left by an
+	// older engine when its owning session is cleared.
+	if err := fsutil.RemoveAllAndSync(filepath.Join(s.StateRoot(), "protocol", sessionID)); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 

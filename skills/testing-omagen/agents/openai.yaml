@@ -1,0 +1,4 @@
+interface:
+  display_name: "Testing Omagen"
+  short_description: "Run guarded live Omagen desktop tests"
+  default_prompt: "Use $testing-omagen to run a real Omagen GUI end-to-end test in this repository."

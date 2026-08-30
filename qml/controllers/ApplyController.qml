@@ -41,6 +41,23 @@ Item {
     signal stopBarDemoRequested()
     signal completed()
 
+    // An already-live preview is a successful no-op, not a missing signal.
+    // Continue into durable Apply immediately so the transaction cannot wait
+    // forever for a preview process that correctly did not start.
+    function requestFinalPreview(variant) {
+        const outcome = root.previewController.previewCurrentState(variant)
+        if (outcome === "alreadyLive") {
+            // PreviewController emitted the same completion signal used by a
+            // real preview. The synchronous signal has already advanced Apply.
+            return true
+        }
+        if (outcome === "invalid") {
+            root.handlePreviewFailed("Unable to prepare the final preview")
+            return false
+        }
+        return outcome === "started" || outcome === "queued"
+    }
+
     function apply(variant, name, generateUnlock, capturePreview) {
         if (!root.workspaceReady || root.busy || root.previewBusy || root.cancelBusy || root.demoBusy)
             return
@@ -64,7 +81,7 @@ Item {
             root.hideApplication()
             root.demoBusyRequested(true)
             if (root.backendDemoActive()) {
-                root.previewController.previewCurrentState(variant)
+                root.requestFinalPreview(variant)
             } else {
                 if (root.demoMode === "bar")
                     root.stopBarDemoRequested()
@@ -77,14 +94,14 @@ Item {
             root.pendingAfterDemo = true
             root.pendingCloseDemo = true
             root.demoBusyRequested(true)
-            root.previewController.previewCurrentState(variant)
+            root.requestFinalPreview(variant)
             return
         }
 
         root.pendingAfterDemo = false
         if (root.demoMode === "bar")
             root.stopBarDemoRequested()
-        root.previewController.previewCurrentState(variant)
+        root.requestFinalPreview(variant)
     }
 
     function backendDemoActive() {
@@ -176,7 +193,7 @@ Item {
             return true
         }
         if (root.pendingCapture) {
-            root.previewController.previewCurrentState(root.pendingVariant)
+            root.requestFinalPreview(root.pendingVariant)
             return true
         }
         return false

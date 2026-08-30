@@ -166,8 +166,15 @@ NEXT_THEME_PATH="$HOME/.local/state/omarchy/current/next-theme"
 CURRENT_BACKGROUND_LINK="$HOME/.local/state/omarchy/current/background"
 BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
 THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
+POST_COMMIT_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-post-commit.lock"
 USER_THEMES_PATH="$HOME/.config/omarchy/themes"
 OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
+
+activation_is_current() {
+  local current
+  current=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  [[ "$current" == "$THEME_NAME" ]]
+}
 
 if [[ "$MODE" == "inspect" ]]; then
   current_theme=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
@@ -294,6 +301,12 @@ selected_retint_adapters() {
 run_retint_adapter() {
   local adapter="$1"
   local command
+  # A newer Apply may have superseded this post-commit job while it was
+  # waiting for an adapter. Never let stale work repaint the newer theme.
+  activation_is_current || {
+    printf '%s retint adapter=%s status=skipped reason=stale-activation activation=%s\n' "$MODE" "$adapter" "${OMAGEN_ACTIVATION_ID:-unknown}"
+    return 0
+  }
   command=$(retint_command "$adapter")
   if ! command -v "$command" >/dev/null 2>&1; then
     printf 'preview retint adapter=%s status=skipped reason=command-missing command=%s\n' "$adapter" "$command"
@@ -367,9 +380,11 @@ run_owned_omagen_hook() {
 }
 
 run_post_commit() {
+  activation_is_current || return 0
   if scope_enabled apps || scope_enabled hyprland; then
     run_selected_retints
   fi
+  activation_is_current || return 0
   run_trusted_hooks
 }
 
@@ -383,9 +398,24 @@ run_post_commit_async() {
   # in a separate per-operation log and fully detach stdin/stdout/stderr from
   # the critical transaction.
   if [[ -n "$post_commit_log" ]] && mkdir -p "$(dirname -- "$post_commit_log")" 2>/dev/null && : >"$post_commit_log"; then
-    (run_post_commit >>"$post_commit_log" 2>&1 </dev/null) &
+    (
+      # Detached post-commit work must never inherit the critical theme-set
+      # lock. The parent releases it below, but keeping a duplicated fd open
+      # can extend the lock lifetime until the adapter jobs finish.
+      exec 9>&-
+      exec 8>"$POST_COMMIT_LOCK"
+      flock 8
+      activation_is_current || exit 0
+      run_post_commit >>"$post_commit_log" 2>&1 </dev/null
+    ) &
   else
-    (run_post_commit >/dev/null 2>&1 </dev/null) &
+    (
+      exec 9>&-
+      exec 8>"$POST_COMMIT_LOCK"
+      flock 8
+      activation_is_current || exit 0
+      run_post_commit >/dev/null 2>&1 </dev/null
+    ) &
   fi
 }
 
@@ -472,7 +502,37 @@ set_theme_background() {
   fi
 
   new_background="$CHOSEN_THEME_BACKGROUND"
+
+  # Live Canvas is an inspection loop, not a presentation transition. The
+  # generated wallpaper must become visible, but waiting for a crossfade and
+  # retaining transition snapshots only adds seconds to the first preview.
+  # Promote the link and force Quickshell to reread it instantly; permanent
+  # Apply keeps the animated transition below.
+  if [[ "$MODE" == "preview" ]]; then
+    if scope_enabled shell || scope_enabled hyprland; then
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    fi
+    ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+    if [[ "$THEME_HEADLESS" != "1" ]]; then
+      shell_ipc background setInstant "$new_background" || true
+    fi
+    rm -f "$OLD_BACKGROUND_SNAPSHOT"
+    return 0
+  fi
+
   new_background_snapshot=$(snapshot_background_path "$new_background" "next")
+
+  # A palette/preset preview commonly keeps the same wallpaper. Do not run a
+  # full background transition (or its delayed snapshot cleanup) when the
+  # image content is unchanged: update shell tokens directly and return while
+  # the critical lock is still available. This is the fast path for color-only
+  # Live Canvas tests, while cmp keeps same-path-but-replaced wallpapers safe.
+  if [[ -n "$OLD_BACKGROUND_SNAPSHOT" && -n "$new_background_snapshot" ]] && \
+     cmp -s "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot"; then
+    rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot"
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    return 0
+  fi
 
   if ! scope_enabled shell && ! scope_enabled hyprland; then
     ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
@@ -482,16 +542,16 @@ set_theme_background() {
   if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
     shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
-    (sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
+    (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
   elif [[ -f "$new_background_snapshot" ]]; then
     shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
-    (sleep 3; rm -f "$new_background_snapshot") &
+    (exec 9>&-; sleep 3; rm -f "$new_background_snapshot") &
   else
     shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload" || \
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
     if [[ -f "$OLD_BACKGROUND_SNAPSHOT" ]]; then
-      (sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
+      (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
     fi
   fi
 
@@ -612,7 +672,7 @@ if [[ "$THEME_HEADLESS" != "1" ]]; then
   # hooks and only runs the adapters selected by the explicit policy. Missing
   # optional commands are reported as skipped; selected command failures are
   # reported individually after all parallel adapters finish.
-  printf '%s scope=%s wait=%s retint-run=%s skip=%s selected=%s trusted-hooks=%s\n' "$MODE" "$SCOPE_POLICY" "$WAIT_MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}" "$ALLOW_TRUSTED_HOOKS"
+  printf '%s scope=%s wait=%s retint-run=%s skip=%s selected=%s trusted-hooks=%s activation=%s\n' "$MODE" "$SCOPE_POLICY" "$WAIT_MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}" "$ALLOW_TRUSTED_HOOKS" "${OMAGEN_ACTIVATION_ID:-unknown}"
   if [[ "$WAIT_MODE" == "full" ]]; then
     run_post_commit
   else

@@ -13,7 +13,6 @@ frontend, backend, lifecycle, or contract document relevant to the task.
 | QML ↔ Go | [qml-backend contract](contracts/qml-backend.md) |
 | QML controllers | [QML controller contract](contracts/qml-controllers.md) |
 | Engine/session/Apply | [engine contract](contracts/engine.md) |
-| Studio history | [Studio protocol](contracts/studio-protocol.md) |
 | Runtime | [runtime contract](contracts/runtime.md) |
 | Look & Feel | [Look & Feel contract](contracts/look-feel.md) |
 | Style editor | [Style editor contract](contracts/style-editor.md) |
@@ -29,10 +28,9 @@ The stable backend ownership and Studio attachment rules are recorded in the
 Studio capabilities; it does not replace the existing session or recovery
 engine.
 
-The live operation seam is recorded in the
-[Studio protocol](contracts/studio-protocol.md). It persists operation events and
-checkpoints and streams them to observers without taking ownership of native
-desktop rollback.
+Live Canvas deliberately has no history/checkpoint engine. Preview state is
+session-scoped and replaceable; the session service remains the sole owner of
+baseline capture, restore, and interrupted-Apply recovery.
 
 ## Theme-bounded bar profiles
 

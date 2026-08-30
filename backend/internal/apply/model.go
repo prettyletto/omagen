@@ -25,8 +25,4 @@ type Result struct {
 	AdvancedRuntimeInstalled  bool               `json:"advanced_runtime_installed,omitempty"`
 	NativeOnlyFallback        bool               `json:"native_only_fallback,omitempty"`
 	FallbackNotificationShown bool               `json:"fallback_notification_shown,omitempty"`
-	ProtocolOperation         string             `json:"protocol_operation,omitempty"`
-	ProtocolCheckpoint        string             `json:"protocol_checkpoint,omitempty"`
-	ProtocolEvents            string             `json:"protocol_events,omitempty"`
-	ProtocolSocket            string             `json:"protocol_socket,omitempty"`
 }

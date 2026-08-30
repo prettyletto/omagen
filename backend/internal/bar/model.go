@@ -274,7 +274,7 @@ func (s BarSpec) Validate() error {
 	if !oneOf(string(s.Engine), string(EngineAuto), string(EngineNative), string(EngineOmagen)) {
 		return fmt.Errorf("invalid bar engine %q", s.Engine)
 	}
-	if !oneOf(s.Preset, "native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail", "orbit", "ribbon", "custom") {
+	if !oneOf(s.Preset, "native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon", "custom") {
 		return fmt.Errorf("invalid bar preset %q", s.Preset)
 	}
 	if !oneOf(string(s.Topology), "continuous", "floating", "sections", "islands", "dock", "split", "minimal", "notch", "rail") {
@@ -416,7 +416,7 @@ func Compile(spec BarSpec) (CompileResult, error) {
 }
 
 func Presets() []string {
-	return []string{"native", "float", "float-expanded", "sections", "islands", "dock", "minimal", "split", "notch", "rail", "orbit", "ribbon"}
+	return []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon"}
 }
 
 func Preset(name string) (BarSpec, error) {
@@ -436,9 +436,6 @@ func Preset(name string) (BarSpec, error) {
 		s.Geometry.Density = "native"
 		s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.Radius = 8, 8, 14
 		s.Behavior.HoverExpand = true
-	case "sections":
-		s.Topology, s.Surface.Role, s.Surface.Opacity, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth = TopologySections, "dark", 1, "accent", .35, 1
-		s.Geometry.SectionGap, s.Geometry.Radius = 10, 14
 	case "islands":
 		s.Topology, s.Engine, s.Surface.Role, s.Surface.Opacity, s.Surface.Blur, s.Surface.BorderRole, s.Surface.BorderOpacity, s.Surface.BorderWidth, s.Surface.Shadow = TopologyIslands, EngineOmagen, "native", 1, 0, "foreground", .35, 1, "none"
 	case "dock":
@@ -450,12 +447,6 @@ func Preset(name string) (BarSpec, error) {
 		s.Geometry.Density = "compact"
 		s.Behavior.HoverExpand = true
 		s.Motion = Motion{Preset: "smooth", DurationMs: 260, Easing: "out_cubic"}
-	case "split":
-		s.Topology, s.Engine, s.Surface.Role = TopologySplit, EngineOmagen, "dark"
-	case "notch":
-		s.Topology, s.Engine, s.Surface.Role, s.Geometry.Radius = TopologyNotch, EngineOmagen, "dark", 14
-	case "rail":
-		s.Topology, s.Engine, s.Position, s.Surface.Role = TopologyRail, EngineOmagen, PositionLeft, "dark"
 	case "orbit":
 		s.Topology, s.Engine = TopologyFloating, EngineOmagen
 		s.Surface = Surface{Treatment: "preset", Role: "background", Opacity: 1, BorderRole: "accent", BorderOpacity: .42, BorderWidth: 1, Shadow: "raised"}

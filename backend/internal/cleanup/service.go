@@ -150,6 +150,11 @@ func (s *Service) cleanupSessions(active session.ActiveRecord, hasActive bool, r
 			result.Warnings = append(result.Warnings, fmt.Sprintf("remove stale session %s: %v", record.SessionID, err))
 			continue
 		}
+		// Remove protocol journals created by pre-history builds along with the
+		// session that owned them.
+		if err := fsutil.RemoveAllAndSync(filepath.Join(s.sessions.StateRoot(), "protocol", record.SessionID)); err != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("remove stale protocol %s: %v", record.SessionID, err))
+		}
 		result.SessionDirsRemoved++
 	}
 }

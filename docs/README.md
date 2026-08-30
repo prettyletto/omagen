@@ -17,8 +17,6 @@ routes in [docs/agents](agents/README.md).
 - [Recovery and safety](recovery.md) — temporary sessions, Cancel, Apply,
   Quit, and interrupted operations.
 - [Development](development.md) — local plugin development and validation.
-- [Studio protocol](architecture/contracts/studio-protocol.md) — live operation
-  events, checkpoints, socket streaming, and back/forward navigation.
 - [Agent navigation](agents/README.md) — context map, invariants, recipes, and
   handoffs for bounded work.
 - [Plans](plans/active/) — active implementation roadmaps; not canonical

@@ -21,7 +21,6 @@ domains:
       - backend/internal/cleanup/*_test.go
     dependencies:
       - backend/internal/omarchy
-      - backend/internal/protocol
     avoid:
       - backend/internal/palette
       - bar
@@ -280,25 +279,6 @@ domains:
     avoid:
       - backend/internal/palette
       - qml/views/LiveCanvasPanel.qml
-      - docs/plans
-  protocol:
-    docs:
-      - docs/architecture/contracts/studio-protocol.md
-      - docs/agents/recipes/protocol-change.md
-    source:
-      - backend/internal/protocol
-      - backend/internal/cli/protocol_cmd.go
-      - qml/components/ProtocolNavigationControls.qml
-      - Omagen.qml
-    tests:
-      - backend/internal/protocol/*_test.go
-      - backend/internal/cli/protocol_test.go
-    dependencies:
-      - backend/internal/preview
-      - backend/internal/session
-    avoid:
-      - backend/internal/palette
-      - bar
       - docs/plans
   packaging:
     docs:

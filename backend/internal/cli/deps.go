@@ -18,7 +18,6 @@ import (
 )
 
 type dependencies struct {
-	store             *session.Store
 	settingsStore     *settingspkg.Store
 	omarchyClient     *omarchy.Client
 	barStore          *barprofile.Store
@@ -62,7 +61,6 @@ func newDependencies(stderr io.Writer) (dependencies, error) {
 	demoService := demo.NewService(store)
 
 	return dependencies{
-		store:             store,
 		settingsStore:     settingsStore,
 		omarchyClient:     omarchyClient,
 		barStore:          barStore,

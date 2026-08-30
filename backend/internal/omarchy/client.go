@@ -327,6 +327,11 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 		clean()
 		return 0, true, nil
 	}
+	// The log path is session-scoped and unique per operation. Pass a stable
+	// activation token to Studio so deferred adapters can fence themselves when
+	// a newer theme intent supersedes this one.
+	activationID := filepath.Base(logPath)
+	environment = append(environment, "OMAGEN_ACTIVATION_ID="+activationID)
 
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {

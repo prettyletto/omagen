@@ -2,7 +2,7 @@
 
 Omagen is an Omarchy Quattro plugin. QML presents the overlay and bar widget;
 the bundled Go backend owns theme generation, durable sessions, filesystem
-mutation, Demo, Apply, recovery, and the Studio protocol.
+mutation, Demo, Apply, and recovery.
 
 ## Global invariants
 
@@ -34,7 +34,6 @@ mutation, Demo, Apply, recovery, and the Studio protocol.
 | Bar | `docs/agents/recipes/bar-change.md` | `bar`, `OmagenBar.qml`, `NativeBarClone.qml`, `backend/internal/bar`, `barprofile` |
 | Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/components/LookFeelControls.qml` |
 | Runtime | `docs/agents/recipes/runtime-adapter-change.md` | `backend/internal/runtime`, `bin/studio-theme-set` |
-| Protocol | `docs/agents/recipes/protocol-change.md` | `backend/internal/protocol`, QML protocol calls |
 | Packaging | `docs/agents/recipes/packaging-release.md` | `manifest.json`, `bar-manifest.json`, `install.sh`, `scripts`, `.github` |
 
 Use `scripts/agent-context <domain>` to print the compact route for a task.
@@ -101,6 +100,12 @@ Use the repository's default five-role triage vocabulary. See
 
 This repository uses domain-routed architecture documents rather than one
 global context file. See `docs/agents/domain.md` and `context-map.yaml`.
+
+### Repo-local live UI skill
+
+For real interactive Omagen testing on the live Omarchy/Hyprland desktop, read
+`skills/testing-omagen/SKILL.md` and use `scripts/ui-test`. This skill is scoped
+to this repository and does not replace the normal Go, QML, or packaging tests.
 
 ## Handoff
 
