@@ -522,7 +522,10 @@ PanelWindow {
                             foregroundColor: root.foregroundColor
                             backgroundColor: root.backgroundColor
                             accentColor: root.accentColor
-                            onApplyRequested: themeNameDialog.openWith(root.suggestedThemeName)
+                            onApplyRequested: {
+                                root.errorMessage = ""
+                                themeNameDialog.openWith(root.suggestedThemeName)
+                            }
                             onRestoreAndCloseRequested: root.restoreAndCloseRequested()
                         }
                     }
