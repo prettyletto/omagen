@@ -73,7 +73,7 @@ To install a branch checkout for testers without requiring Go, use the
 branch bootstrap from that branch. The checked-in backend is used as-is:
 
 ~~~sh
-curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash
+bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
 ~~~
 
 The bootstrap clones `nightly` into a temporary directory, runs

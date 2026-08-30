@@ -36,7 +36,7 @@ The plugin manager follows the repository's default branch. To test the
 current `nightly` branch instead, run this single command:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash
+bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
 ```
 
 The bootstrap clones `nightly` into a temporary directory, installs both
@@ -50,10 +50,9 @@ To test another branch or fork, set the source variables before piping the
 script:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | \
-  OMAGEN_TEST_BRANCH=my-branch \
+OMAGEN_TEST_BRANCH=my-branch \
   OMAGEN_TEST_REPOSITORY=https://github.com/your-name/omagen.git \
-  bash
+  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
 ```
 
 ## How it works
