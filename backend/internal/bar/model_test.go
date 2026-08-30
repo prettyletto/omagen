@@ -367,3 +367,20 @@ func TestDockClosedPresentationDefaultsAndValidation(t *testing.T) {
 		t.Fatal("oversized custom dock glyph was accepted")
 	}
 }
+
+func TestCustomDockGlyphSurvivesCompilation(t *testing.T) {
+	spec, err := Preset("dock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec.Dock.Closed = "glyph"
+	spec.Dock.Glyph = "⌘"
+
+	compiled, err := Compile(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if compiled.Spec.Dock.Closed != "glyph" || compiled.Spec.Dock.Glyph != "⌘" {
+		t.Fatalf("custom dock glyph was not preserved: %#v", compiled.Spec.Dock)
+	}
+}

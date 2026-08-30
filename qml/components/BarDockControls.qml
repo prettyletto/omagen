@@ -40,6 +40,18 @@ Item {
         return root.normalizedGlyph(raw)
     }
 
+    // TextInput::editingFinished is not guaranteed when the editor is left by
+    // a wizard navigation action or when the final save dialog opens without
+    // moving keyboard focus. Commit the non-empty user edit as it is made so
+    // the staged BarSpec never falls back to the default star just because the
+    // field did not receive a final focus event.
+    function commitGlyph(raw) {
+        var value = String(raw === undefined ? "" : raw)
+        if (value.length === 0)
+            return
+        root.edit(root.closed, root.normalizedGlyph(value))
+    }
+
     ColumnLayout {
         id: body
         anchors.left: parent.left
@@ -93,7 +105,8 @@ Item {
                 font.pixelSize: Style.font.heading
                 horizontalAlignment: TextInput.AlignHCenter
                 maximumLength: 16
-                onEditingFinished: root.edit("glyph", root.parseGlyph(text))
+                onTextEdited: root.commitGlyph(text)
+                onEditingFinished: root.edit(root.closed, root.parseGlyph(text))
                 Keys.onReturnPressed: focus = false
                 Keys.onEnterPressed: focus = false
             }
