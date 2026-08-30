@@ -431,6 +431,62 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	}
 }
 
+func TestThemeEditGenerationDerivesDirectionsFromAuthoredSource(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "theme-edit-generation",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+	}
+	saveGenerationRecord(t, store, record)
+
+	imagePath := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
+		SessionID:   record.SessionID,
+		SourceImage: imagePath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authoredSourcePath := filepath.Join(store.SessionDir(record.SessionID), "generations", initial.GenerationID, string(Source), "colors.toml")
+	authoredSource, err := os.ReadFile(authoredSourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated := record
+	updated.Workflow = "theme-edit"
+	updated.ExtraConfigs = true
+	updated.GenerationID = initial.GenerationID
+	updated.ThemeEdit = &session.ThemeEdit{SourceID: "theme", SourceName: "Theme", SourcePath: "/themes/theme", SourceKind: "stock"}
+	if err := store.Save(updated); err != nil {
+		t.Fatal(err)
+	}
+
+	derived, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: record.SessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(derived.Variants) != len(orderedVariants) {
+		t.Fatalf("expected six derived variants, got %d", len(derived.Variants))
+	}
+	derivedSource, err := os.ReadFile(filepath.Join(store.SessionDir(record.SessionID), "generations", derived.GenerationID, string(Source), "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(derivedSource, authoredSource) {
+		t.Fatal("theme-edit source palette was rewritten while deriving directions")
+	}
+	for _, variant := range []Variant{Calm, Mute, Deep, Vibrant, Balanced} {
+		if _, err := os.Stat(filepath.Join(store.SessionDir(record.SessionID), "generations", derived.GenerationID, string(variant), "colors.toml")); err != nil {
+			t.Fatalf("derived %s palette missing: %v", variant, err)
+		}
+	}
+}
+
 func TestGenerateEmitsMergedShellAndSectionOverrides(t *testing.T) {
 	store := generationStore(t)
 	saveGenerationRecord(t, store, session.Record{

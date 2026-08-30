@@ -113,9 +113,22 @@ func validateRecord(record Record, expectedID string) error {
 	if record.OriginalBackground.Path == "" {
 		return fmt.Errorf("session has no original background path")
 	}
+	if record.Workflow == "" {
+		record.Workflow = "generate"
+	}
+	if record.Workflow != "generate" && record.Workflow != "theme-edit" {
+		return fmt.Errorf("session has unknown workflow %q", record.Workflow)
+	}
+	if record.Workflow == "theme-edit" {
+		if record.ThemeEdit == nil || record.ThemeEdit.SourceID == "" || record.ThemeEdit.SourceName == "" || record.ThemeEdit.SourcePath == "" || record.ThemeEdit.SourceKind == "" {
+			return fmt.Errorf("theme-edit session has incomplete source metadata")
+		}
+	} else if record.ThemeEdit != nil {
+		return fmt.Errorf("generated session has theme-edit metadata")
+	}
 	switch record.ApplyPhase {
 	case ApplyPhaseNone:
-		if record.AppliedTheme != "" || record.AppliedGeneration != "" || record.AppliedVariant != "" || record.AppliedDisplayName != "" {
+		if record.AppliedTheme != "" || record.AppliedGeneration != "" || record.AppliedVariant != "" || record.AppliedDisplayName != "" || record.AppliedBackup != "" {
 			return fmt.Errorf("session has apply metadata without a transaction phase")
 		}
 	case ApplyPhasePrepared, ApplyPhaseCommitted:
@@ -130,6 +143,9 @@ func validateRecord(record Record, expectedID string) error {
 		}
 		if record.AppliedDisplayName == "" {
 			return fmt.Errorf("session has no applied display name")
+		}
+		if record.AppliedBackup != "" && record.AppliedBackup != "replacement-backup" {
+			return fmt.Errorf("session has invalid applied backup")
 		}
 	default:
 		return fmt.Errorf("session has unknown apply phase %q", record.ApplyPhase)

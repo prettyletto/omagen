@@ -1,6 +1,7 @@
 package omarchy
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +14,16 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
+
+type ThemeInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Kind        string `json:"kind"`
+	PreviewPath string `json:"preview_path,omitempty"`
+	StockPath   string `json:"stock_path,omitempty"`
+	UserPath    string `json:"user_path,omitempty"`
+}
 
 const maxStudioLogBytes int64 = 1 << 20
 
@@ -63,6 +74,151 @@ func (c *Client) CurrentTheme() (string, error) {
 		return "", fmt.Errorf("theme.name is empty")
 	}
 	return theme, nil
+}
+
+// ListThemes delegates discovery to Omarchy so stock and user-installed
+// themes follow the same precedence rules as the native switcher.
+func (c *Client) ListThemes() ([]ThemeInfo, error) {
+	command := exec.Command("omarchy", "theme", "list")
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = c.stderr
+	command.Env = appendOmarchyEnvironment(os.Environ())
+	if err := command.Run(); err != nil {
+		return nil, fmt.Errorf("list Omarchy themes: %w", err)
+	}
+	lines := strings.Split(strings.ReplaceAll(output.String(), "\r\n", "\n"), "\n")
+	result := make([]ThemeInfo, 0, len(lines))
+	seen := make(map[string]struct{})
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		if _, ok := seen[name]; ok {
+			continue
+		}
+		seen[name] = struct{}{}
+		id := themeSlug(name)
+		path, err := c.ThemeDir(id)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Omarchy theme %q: %w", name, err)
+		}
+		stockPath, userPath := c.themeRoots(id)
+		kind := "stock"
+		if userPath != "" && stockPath != "" {
+			kind = "user-overlay"
+		} else if userPath != "" {
+			kind = "user"
+		}
+		previewPath := firstThemeAsset("preview.png", userPath, stockPath, path)
+		result = append(result, ThemeInfo{ID: id, Name: name, Path: path, Kind: kind, PreviewPath: previewPath, StockPath: stockPath, UserPath: userPath})
+	}
+	return result, nil
+}
+
+// firstThemeAsset follows native overlay precedence while keeping the catalog
+// response useful to visual consumers. A missing preview is valid; the picker
+// renders a deliberate placeholder instead of hiding the theme.
+func firstThemeAsset(name string, roots ...string) string {
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		candidate := filepath.Join(root, name)
+		info, err := os.Stat(candidate)
+		if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (c *Client) ThemeDir(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name, "\r\n") {
+		return "", fmt.Errorf("invalid theme name")
+	}
+	command := exec.Command("omarchy", "theme", "dir", name)
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = c.stderr
+	command.Env = appendOmarchyEnvironment(os.Environ())
+	if err := command.Run(); err != nil {
+		return "", fmt.Errorf("resolve Omarchy theme directory: %w", err)
+	}
+	path := strings.TrimSpace(output.String())
+	if !filepath.IsAbs(path) || path == "/" {
+		return "", fmt.Errorf("Omarchy returned an invalid theme directory")
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("theme directory is not a directory")
+	}
+	return path, nil
+}
+
+func themeKind(path string) string {
+	home, err := os.UserHomeDir()
+	if err == nil {
+		userRoot := filepath.Join(home, ".config", "omarchy", "themes")
+		if relative, relErr := filepath.Rel(userRoot, path); relErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return "user"
+		}
+	}
+	return "stock"
+}
+
+func themeSlug(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	dash := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			b.WriteRune(r)
+			dash = false
+		} else {
+			dash = b.Len() > 0
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (c *Client) themeRoots(slug string) (stockPath, userPath string) {
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil {
+		candidate := filepath.Join(home, ".config", "omarchy", "themes", slug)
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			userPath = candidate
+		}
+	}
+	root := strings.TrimSpace(os.Getenv("OMARCHY_PATH"))
+	if root == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			candidate := filepath.Join(home, ".local", "share", "omarchy")
+			if _, err := os.Stat(filepath.Join(candidate, "themes")); err == nil {
+				root = candidate
+			}
+		}
+	}
+	if root == "" {
+		root = "/usr/share/omarchy"
+	}
+	candidate := filepath.Join(root, "themes", slug)
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		stockPath = candidate
+	}
+	return stockPath, userPath
 }
 
 func (c *Client) CurrentBackground() (session.BackgroundRef, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/preview"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
+	"github.com/prettyletto/omagen/backend/internal/themeedit"
 )
 
 type dependencies struct {
@@ -27,6 +28,7 @@ type dependencies struct {
 	cleanupService    *cleanup.Service
 	generationService *generation.Service
 	demoService       *demo.Service
+	themeEditService  *themeedit.Service
 }
 
 func newDependencies(stderr io.Writer) (dependencies, error) {
@@ -59,6 +61,7 @@ func newDependencies(stderr io.Writer) (dependencies, error) {
 	cleanupService := cleanup.NewService(store, filepath.Join(home, ".config", "omarchy", "themes"))
 	generationService := generation.NewServiceWithBaselineRestorer(store, settingsStore, omarchyClient)
 	demoService := demo.NewService(store)
+	themeEditService := themeedit.NewService(store, sessionService, omarchyClient)
 
 	return dependencies{
 		settingsStore:     settingsStore,
@@ -70,5 +73,6 @@ func newDependencies(stderr io.Writer) (dependencies, error) {
 		cleanupService:    cleanupService,
 		generationService: generationService,
 		demoService:       demoService,
+		themeEditService:  themeEditService,
 	}, nil
 }

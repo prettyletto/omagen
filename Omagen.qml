@@ -45,6 +45,10 @@ Item {
     property alias demoMode: demoController.mode
     property bool liveCanvasActive: false
     property bool livePanelOpen: false
+    property bool applyCapturePanelHidden: false
+    readonly property bool liveCanvasPanelSuppressed: root.applyCapturePanelHidden
+        || (root.demoActive && root.demoMode === "full")
+    property bool themePickerOpen: false
     property alias liveCanvasMonitor: demoController.monitor
     property alias pendingDemo: demoController.pendingDemo
     property alias pendingWindowDemo: demoController.pendingWindowDemo
@@ -54,6 +58,9 @@ Item {
     property string sourceImage: ""
     property string workflowMode: "fast"
     property bool extraConfigsEnabled: false
+    property bool workflowBackPending: false
+    property string workflowBackImage: ""
+    property string workflowBackMode: ""
     property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
@@ -64,6 +71,21 @@ Item {
     property alias lookFeelBusy: lookFeelController.busy
     property alias lookFeelCatalogLoading: lookFeelController.catalogLoading
     property alias lookFeelCatalogError: lookFeelController.catalogError
+    property alias wizardStep: wizardController.step
+    property alias wizardStepCount: wizardController.stepCount
+    property alias wizardCanGoBack: wizardController.canGoBack
+    property alias wizardCanGoNext: wizardController.canGoNext
+    property alias wizardNextLabel: wizardController.nextLabel
+    property alias wizardAdvancedChoice: wizardController.advancedChoice
+    property alias wizardLookFeelDecided: wizardController.lookFeelDecided
+    property alias wizardOperationBusy: wizardController.operationBusy
+    property alias wizardPaletteSelected: wizardController.paletteSelected
+    property alias wizardWorkflowOpen: wizardController.workflowStepActive
+    property alias wizardWorkflowMode: wizardController.workflowMode
+    property alias wizardWorkflowConfirmed: wizardController.workflowModeConfirmed
+    property alias wizardWorkflowHistoryAvailable: wizardController.workflowHistoryAvailable
+    property alias wizardCanOpenWorkflow: wizardController.canOpenWorkflow
+    property alias wizardCanContinueWorkflow: wizardController.canContinueWorkflow
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property string errorMessage: ""
     readonly property var signalAnimationsStyle: session.active
@@ -195,7 +217,31 @@ Item {
     function requestLookFeelPreset(preset) {
         if (!lookFeelController.requestPreset(preset))
             return
+        wizardController.chooseLookFeel()
         root.errorMessage = ""
+    }
+
+    // Look & Feel selection is itself a reversible live-preview action. The
+    // complete style snapshot is assembled by previewStyles(), then handed to
+    // PreviewController so its single-flight/latest-intent rules remain the
+    // only native preview coordinator.
+    function previewResolvedLookFeel() {
+        if (!session.workspaceReady || !root.liveCanvasActive
+                || root.cancelBusy || root.demoBusy || root.applyBusy)
+            return "unavailable"
+
+        const variant = session.selectedVariant || "source"
+        if (!session.hasPalette(variant))
+            return "unavailable"
+
+        const overrides = liveCanvasPanel.overridesForVariant(variant)
+        root.prepareLiveBar()
+        return previewController.start(
+            variant,
+            overrides,
+            root.previewStyles(variant),
+            Object.keys(overrides).length > 0
+        )
     }
     function loadLookFeelRecipe(preset) {
         if (!preset || preset === "omarchy-native") {
@@ -270,6 +316,15 @@ Item {
             // invalidated the old generation and returned to configuration.
             if (route !== "setup" && route !== "workspace")
                 route = "workspace";
+            // Full Demo is hidden when it starts so the desktop composition is
+            // unobstructed. An explicit summon is the user's control gesture,
+            // however, so reopen the Demo step here to expose Stop Full Demo
+            // and keep the session on the ownership-aware cleanup path.
+            if (root.demoActive && root.demoMode === "full") {
+                livePanelOpen = true;
+                opened = false;
+                return;
+            }
             if (liveCanvasActive) {
                 livePanelOpen = true;
                 opened = false;
@@ -285,10 +340,24 @@ Item {
     }
 
     function close() {
+        if (wizardController.workflowStepActive) {
+            root.cancelPreSessionWorkflow()
+            return
+        }
         opened = false;
         settingsOpen = false;
         runtimeSetupOpen = false;
         livePanelOpen = false;
+        themePickerOpen = false;
+    }
+
+    function chooseInstalledTheme() {
+        if (sessionBusy || cancelBusy || session.active)
+            return;
+        errorMessage = "";
+        opened = false;
+        themePickerOpen = true;
+        themeEditController.list();
     }
 
     function closeRuntimeSetup() {
@@ -326,7 +395,7 @@ Item {
     }
 
     function reopenLiveCanvasPanel() {
-        if (!session.active || !liveCanvasActive)
+        if (!session.active || !liveCanvasActive || root.liveCanvasPanelSuppressed)
             return;
         errorMessage = "";
         route = "workspace";
@@ -335,6 +404,10 @@ Item {
     }
 
     function hideLiveCanvasPanel() {
+        if (wizardController.workflowStepActive) {
+            root.cancelPreSessionWorkflow()
+            return
+        }
         livePanelOpen = false;
         opened = false;
     }
@@ -353,6 +426,7 @@ Item {
                 errorMessage = "The generated workspace is unavailable; restore and close to start again."
             return;
         }
+        wizardController.reset()
         const canvasActive = resumableSession.canvas_active === true;
         const canvasMode = resumableSession.canvas_mode || "full";
         const resumedVariant = resumableSession.preview_variant || "source";
@@ -376,7 +450,19 @@ Item {
             opacity: Number(resumedTerminal.opacity !== undefined ? resumedTerminal.opacity : 1),
             cellMode: resumedTerminal.cell_mode || resumedTerminal.cellMode || "background"
         };
-        root.loadLookFeelRecipe(lookFeel.preset)
+        if (session.workflow === "theme-edit") {
+            var resumedEdit = resumableSession.theme_edit || ({})
+            root.lookFeelRecipe = resumedEdit.shell || resumedEdit.desktop || resumedEdit.bar || resumedEdit.animations || resumedEdit.terminal
+                ? root.normalizedLookFeelRecipe({
+                    window: resumedEdit.desktop,
+                    shell: resumedEdit.shell,
+                    bar: resumedEdit.bar,
+                    animations: resumedEdit.animations,
+                    terminal: resumedEdit.terminal
+                }) : null
+        } else {
+            root.loadLookFeelRecipe(lookFeel.preset)
+        }
         extraConfigsEnabled = resumableSession.extra_configs === true;
         workflowMode = extraConfigsEnabled ? "in-depth" : "fast";
         const resumedMonitor = resumableSession.canvas_monitor || "";
@@ -388,7 +474,7 @@ Item {
         // missing and launch duplicate applications.
         demoController.resume(canvasActive, canvasMode, resumedMonitor);
         liveCanvasActive = true;
-        livePanelOpen = true;
+        livePanelOpen = canvasMode === "full" ? false : true;
         opened = false;
     }
 
@@ -483,6 +569,12 @@ Item {
         if (sourceImage === "" || sessionBusy || cancelBusy)
             return;
 
+        // A new session may only be created after the pre-session workflow
+        // choice has been explicitly confirmed. Existing active sessions use
+        // this same function only for intentional regeneration.
+        if (!session.active && !wizardController.workflowModeConfirmed)
+            return;
+
         // Regenerate inside the existing durable session. The backend commits
         // the new configuration and generation together, so active-session.json
         // remains present and a failed run leaves the previous workspace valid.
@@ -510,6 +602,34 @@ Item {
     }
 
     function continueFromSetup() {
+        if (sessionBusy || cancelBusy)
+            return;
+        if (session.active || sourceImage === "")
+            return;
+        if (!wizardController.canOpenWorkflow) {
+            root.errorMessage = "Choose an image before continuing to Workflow."
+            return;
+        }
+        // SetupWindow's Continue action is only the handoff. The workflow
+        // page owns mode selection and the later backend Begin request.
+        root.errorMessage = "";
+        root.route = "workspace";
+        root.livePanelOpen = true;
+        root.opened = false;
+    }
+
+    function continueFromWorkflow() {
+        if (sessionBusy || cancelBusy || session.active)
+            return;
+        if (!wizardController.workflowStepActive) {
+            root.errorMessage = "Choose an image before continuing to Workflow."
+            return;
+        }
+        if (!wizardController.confirmWorkflow()) {
+            root.errorMessage = "Choose Fast or In-depth before continuing."
+            return;
+        }
+        workflowMode = wizardController.workflowMode;
         extraConfigsEnabled = workflowMode === "in-depth";
         beginSession();
     }
@@ -522,7 +642,7 @@ Item {
     }
 
     function enterLiveCanvas(variant) {
-        if (!session.workspaceReady || !session.hasPalette(variant) || previewBusy || cancelBusy || demoBusy || applyBusy)
+        if (!session.workspaceReady || !session.hasPalette(variant) || cancelBusy || demoBusy || applyBusy)
             return;
 
         session.selectVariant(variant);
@@ -562,7 +682,7 @@ Item {
     }
 
     function testLive(variant) {
-        if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy) return;
+        if (!session.workspaceReady || cancelBusy || demoBusy || applyBusy) return;
         errorMessage = "";
         liveCanvasActive = true;
         livePanelOpen = true;
@@ -574,7 +694,11 @@ Item {
     function previewStyles(variant) {
         if (!root.extraConfigsEnabled)
             return null;
+        if (session.workflow === "theme-edit" && (!session.themeEdit || !(session.themeEdit.managed_scopes || []).length))
+            return null;
         return {
+            managedScopes: session.workflow === "theme-edit" && session.themeEdit
+                ? (session.themeEdit.managed_scopes || []) : [],
             shell: liveCanvasPanel.shellStyleForVariant(variant || session.selectedVariant),
             desktop: root.desktopStyle,
             bar: root.barStyle,
@@ -582,6 +706,17 @@ Item {
             look_feel: root.lookFeel,
             terminal: root.terminalTranslucency
         };
+    }
+
+    function markThemeEditScope(scope) {
+        if (session.workflow !== "theme-edit")
+            return;
+        var edit = session.themeEdit || ({})
+        var scopes = (edit.managed_scopes || []).slice()
+        if (scopes.indexOf(scope) === -1)
+            scopes.push(scope)
+        edit.managed_scopes = scopes
+        session.themeEdit = edit
     }
 
     function previewCurrentState(variant) {
@@ -610,14 +745,16 @@ Item {
         previewController.start(variant, effectiveOverrides, root.previewStyles(variant), Object.keys(effectiveOverrides).length > 0);
     }
     function suggestedThemeName() {
+        if (session.workflow === "theme-edit" && session.themeEdit)
+            return session.themeEdit.source_name || session.themeEdit.name || session.themeEdit.id || "Edited Theme"
         let filename = root.sourceImage || ""
         if (filename === "") return "Omagen Theme"
         filename = filename.split("/").pop().replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim()
         if (filename === "") return "Omagen Theme"
         return filename.split(/\s+/).map(function(word) { return word.length ? word.charAt(0).toUpperCase() + word.slice(1) : word }).join(" ")
     }
-    function applyTheme(variant, name, generateUnlock, capturePreview) {
-        applyController.apply(variant, name, generateUnlock, capturePreview)
+    function applyTheme(variant, name, generateUnlock, capturePreview, replaceSource) {
+        applyController.apply(variant, name, generateUnlock, capturePreview, replaceSource === true)
     }
 
     function startDemo(variant) {
@@ -653,8 +790,11 @@ Item {
     }
 
     function cancelSession() {
-        if (!session.active || session.sessionId === "" || cancelBusy)
+        if (!session.active || session.sessionId === "" || cancelBusy) {
+            if (wizardController.workflowStepActive)
+                return root.cancelPreSessionWorkflow()
             return;
+        }
 
         errorMessage = "";
         cancelBusy = true;
@@ -668,6 +808,60 @@ Item {
         // session. It is deliberately the single cleanup path for explicit
         // Cancel, independent of which frontend operation was in flight.
         backend.cancelSession(session.sessionId);
+    }
+
+    // Terminal wizard intent: let the existing backend cancellation transaction
+    // restore every resource it owns, then clear the frontend with the close
+    // flag. This keeps ordinary Cancel/return-to-setup behavior unchanged.
+    function restoreAndCloseSession() {
+        if (!session.active || session.sessionId === "" || cancelBusy)
+            return false
+        closeAfterCancel = true
+        root.cancelSession()
+        return true
+    }
+
+    function wizardBack() { return wizardController.requestBack() }
+    function wizardNext() { return wizardController.requestNext() }
+    function chooseWizardAdvanced(choice) { return wizardController.chooseAdvanced(choice) }
+    function chooseWizardLookFeel() { return wizardController.chooseLookFeel() }
+    function skipWizardLookFeel() { return wizardController.skipLookFeel() }
+    function wizardRestoreAndClose() { return wizardController.requestRestoreAndClose() }
+    function beginWizardWorkflow(imageSelected) { wizardController.beginWorkflow(imageSelected === true) }
+    function selectWizardWorkflow(mode) {
+        if (!wizardController.selectWorkflowMode(mode))
+            return false
+        workflowMode = wizardController.workflowMode
+        extraConfigsEnabled = workflowMode === "in-depth"
+        if (extraConfigsEnabled)
+            lookFeelController.list()
+        return true
+    }
+    function wizardContinueWorkflow() { return root.continueFromWorkflow() }
+    function cancelPreSessionWorkflow() {
+        if (!wizardController.workflowStepActive)
+            return false
+        wizardController.cancelWorkflow()
+        sourceImage = ""
+        workflowMode = "fast"
+        extraConfigsEnabled = false
+        demoController.monitor = ""
+        errorMessage = ""
+        livePanelOpen = false
+        opened = false
+        route = "setup"
+        return true
+    }
+
+    function returnToWorkflowDecision() {
+        if (!session.active || session.sessionId === "" || workflowBackPending || cancelBusy)
+            return false
+        workflowBackPending = true
+        workflowBackImage = sourceImage
+        workflowBackMode = workflowMode
+        cancelReturnRoute = "workspace"
+        root.cancelSession()
+        return true
     }
 
     // A generated workspace is bound to a durable backend session. Returning
@@ -690,6 +884,9 @@ Item {
         sessionBusy = false;
         cancelBusy = false;
         closeAfterCancel = false;
+        workflowBackPending = false;
+        workflowBackImage = "";
+        workflowBackMode = "";
         sourceImage = "";
         workflowMode = "fast";
         extraConfigsEnabled = false;
@@ -707,16 +904,91 @@ Item {
         generationController.reset();
         previewController.reset();
         demoController.reset();
+        wizardController.reset();
         liveCanvasActive = false;
         livePanelOpen = false;
+        applyCapturePanelHidden = false;
         route = "setup";
         cancelReturnRoute = "workspace";
         resumableSession = null;
         recoveryBusy = false;
+        themePickerOpen = false;
     }
 
     State.SessionState {
         id: session
+    }
+
+    Controllers.LiveCanvasWizardController {
+        id: wizardController
+        sessionReady: session.workspaceReady
+        operationBusy: root.sessionBusy || root.generationBusy || root.describeBusy
+                || root.backBusy || root.previewBusy || root.demoBusy
+                || root.cancelBusy || root.applyBusy || root.lookFeelBusy
+        // The generated source palette is already a valid selection before
+        // any optional live preview mutation. Using previewVariant here made
+        // the first Next button stay disabled until the user clicked a card.
+        paletteSelected: session.workspaceReady && session.selectedVariant !== ""
+
+        onRestoreAndCloseRequested: root.restoreAndCloseSession()
+        onWorkflowBackRequested: root.cancelSession()
+        onWorkflowCancelRequested: root.cancelPreSessionWorkflow()
+        onGoNextRequested: {
+            // Edited advanced documents need one complete staged preview when
+            // the user leaves that page. Palette and preset clicks already
+            // preview through their own immediate-selection paths.
+            if (wizardController.step === 2 && wizardController.advancedChoice === "customize")
+                root.previewCurrentState(session.selectedVariant)
+        }
+    }
+
+    Controllers.ThemeEditController {
+        id: themeEditController
+        backend: backend
+        onOpened: function(result) {
+            root.sessionBusy = false;
+            root.themePickerOpen = false;
+            wizardController.reset();
+            root.sourceImage = "";
+            root.extraConfigsEnabled = true;
+            root.workflowMode = "in-depth";
+            session.activateThemeEdit(result);
+            root.lookFeelRecipe = result.recipe
+                ? root.normalizedLookFeelRecipe({
+                    window: result.recipe.desktop,
+                    shell: result.recipe.shell,
+                    bar: result.recipe.bar,
+                    animations: result.recipe.animations,
+                    terminal: result.recipe.terminal
+                }) : null;
+            root.shellStyle = root.normalizeShellStyle(session.shellStyle);
+            root.desktopStyle = root.normalizeDesktopStyle(session.desktopStyle);
+            root.barStyle = root.normalizeBarStyle(session.barStyle);
+            root.animationsStyle = root.normalizeAnimationsStyle(session.animationsStyle);
+            root.lookFeel = root.copyLookFeelDocument(session.lookFeel);
+            root.terminalTranslucency = root.normalizeTerminalTranslucency(session.terminalTranslucency);
+            root.liveCanvasActive = true;
+            root.livePanelOpen = true;
+            root.opened = false;
+            root.route = "workspace";
+            root.sessionBusy = true;
+            // Theme-edit starts with the trusted source palette. Generate the
+            // remaining Omagen directions from that palette so the user can
+            // compare and preview all six variants without supplying a new
+            // image. The backend preserves the selected theme's assets.
+            root.enterLiveCanvas("source");
+            generationController.generate(
+                "",
+                root.extraConfigsEnabled ? root.shellStyle : null,
+                root.extraConfigsEnabled ? root.desktopStyle : null,
+                root.extraConfigsEnabled ? root.barStyle : null,
+                root.extraConfigsEnabled ? root.animationsStyle : null,
+                root.extraConfigsEnabled ? root.lookFeel : null,
+                root.extraConfigsEnabled ? root.terminalTranslucency : null,
+                true
+            );
+        }
+        onErrorRaised: function(message) { root.errorMessage = message }
     }
 
     Services.ImagePickerService {
@@ -725,15 +997,40 @@ Item {
 
         onSelected: function(path) {
             root.sourceImage = path;
+            if (session.active) {
+                root.opened = true;
+                return;
+            }
+            root.workflowMode = "";
+            root.extraConfigsEnabled = false;
+            wizardController.beginWorkflow(true);
+            demoController.monitor = root.focusedMonitorName();
+            // The image is only staged here. The pre-session wizard owns the
+            // Keep SetupWindow visible until its explicit Continue to
+            // Workflow handoff. No backend session or generation starts here.
+            root.route = "setup";
+            root.livePanelOpen = false;
             root.opened = true;
         }
 
         onCancelled: {
+            if (wizardController.workflowStepActive) {
+                root.route = "setup";
+                root.livePanelOpen = false;
+                root.opened = true;
+                return;
+            }
             root.opened = true;
         }
 
         onFailed: function(message) {
             root.errorMessage = message;
+            if (wizardController.workflowStepActive) {
+                root.route = "setup";
+                root.livePanelOpen = false;
+                root.opened = true;
+                return;
+            }
             root.opened = true;
         }
     }
@@ -759,6 +1056,7 @@ Item {
             session.activate(
                 sessionId
             );
+            wizardController.finishWorkflow();
             root.shellStyle = root.normalizeShellStyle(backendShellStyle);
             root.desktopStyle = root.normalizeDesktopStyle(backendDesktopStyle);
             root.barStyle = root.normalizeBarStyle(backendBarStyle);
@@ -785,7 +1083,21 @@ Item {
             root.liveCanvasActive = true;
             root.livePanelOpen = true;
             root.opened = false;
-            generationController.generate(root.sourceImage, null, null, null, null, null, null, false);
+            // Carry the confirmed workflow mode into generation as well as
+            // Begin. Fast keeps the existing lightweight generation path;
+            // In-depth receives the staged composition documents selected for
+            // the Studio pages. The backend session remains the durable
+            // authority for the resulting workspace.
+            generationController.generate(
+                root.sourceImage,
+                root.extraConfigsEnabled ? root.shellStyle : null,
+                root.extraConfigsEnabled ? root.desktopStyle : null,
+                root.extraConfigsEnabled ? root.barStyle : null,
+                root.extraConfigsEnabled ? root.animationsStyle : null,
+                root.extraConfigsEnabled ? root.lookFeel : null,
+                root.extraConfigsEnabled ? root.terminalTranslucency : null,
+                false
+            );
         }
 
         onSessionBeginFailed: function(message) {
@@ -802,6 +1114,7 @@ Item {
                 root.clearSession();
                 return;
             }
+            wizardController.workflowBeginFailed()
             root.closeAfterCancel = false;
             root.errorMessage = message;
         }
@@ -865,15 +1178,43 @@ Item {
                 root.errorMessage = "Backend cancelled a different session";
                 return;
             }
+            if (root.workflowBackPending) {
+                const preservedImage = root.workflowBackImage;
+                const preservedMode = root.workflowBackMode;
+                root.workflowBackPending = false;
+                root.workflowBackImage = "";
+                root.workflowBackMode = "";
+                root.clearSession();
+                root.sourceImage = preservedImage;
+                root.workflowMode = preservedMode;
+                root.beginWizardWorkflow(true);
+                root.selectWizardWorkflow(preservedMode);
+                demoController.monitor = root.focusedMonitorName();
+                root.route = "workspace";
+                root.livePanelOpen = true;
+                root.opened = false;
+                return;
+            }
             root.clearSession();
         }
 
         onSessionCancelFailed: function(message) {
             root.cancelBusy = false;
             root.closeAfterCancel = false;
+            if (root.workflowBackPending) {
+                root.workflowBackPending = false;
+                root.workflowBackImage = "";
+                root.workflowBackMode = "";
+                root.liveCanvasActive = true;
+                root.livePanelOpen = true;
+                root.opened = false;
+                root.route = "workspace";
+            }
             root.errorMessage = message;
-            root.opened = true;
-            root.route = root.cancelReturnRoute;
+            if (!root.livePanelOpen) {
+                root.opened = true;
+                root.route = root.cancelReturnRoute;
+            }
         }
 
     }
@@ -887,9 +1228,10 @@ Item {
         cancelBusy: root.cancelBusy
 
         onResolved: function(composition, applies) {
-            if (applies)
+            if (applies) {
                 root.applyLookFeelComposition(composition)
-            else {
+                root.previewResolvedLookFeel()
+            } else {
                 root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
                 root.refreshLookFeelCustomized()
             }
@@ -925,6 +1267,22 @@ Item {
             root.livePanelOpen = true
             root.opened = false
             root.route = "workspace"
+            if (!wasRegeneration)
+                wizardController.finishWorkflow()
+            if (session.workflow === "theme-edit" && variants.length === 1) {
+                root.sessionBusy = true;
+                generationController.generate(
+                    "",
+                    root.extraConfigsEnabled ? root.shellStyle : null,
+                    root.extraConfigsEnabled ? root.desktopStyle : null,
+                    root.extraConfigsEnabled ? root.barStyle : null,
+                    root.extraConfigsEnabled ? root.animationsStyle : null,
+                    root.extraConfigsEnabled ? root.lookFeel : null,
+                    root.extraConfigsEnabled ? root.terminalTranslucency : null,
+                    true
+                );
+                return;
+            }
             // Continue opens Live Canvas on Source and applies it once. A
             // later Test Live click with no edits is deduplicated by the
             // preview controller instead of replacing the same bar again.
@@ -935,6 +1293,10 @@ Item {
             root.liveCanvasActive = false
             demoController.markClosed()
             root.livePanelOpen = false
+            // Returning from the first live page discards only the generated
+            // workspace. Keep the selected image and confirmed workflow mode
+            // available for the next Continue without creating a new session.
+            wizardController.resetNavigation()
             liveCanvasPanel.clearColorSession()
             session.clearGeneration()
             root.liveCanvasActive = true
@@ -984,6 +1346,7 @@ Item {
             root.livePanelOpen = true
         }
         onHideApplicationRequested: root.opened = false
+        onHideLiveCanvasRequested: root.livePanelOpen = false
         onStopped: root.livePanelOpen = root.liveCanvasActive
         onErrorRaised: root.errorMessage = message
     }
@@ -1006,7 +1369,17 @@ Item {
             root.errorMessage = message
         }
         onHideApplication: root.opened = false
-        onShowApplication: root.opened = true
+        onHideLiveCanvasRequested: {
+            root.applyCapturePanelHidden = true
+            root.livePanelOpen = false
+        }
+        onShowApplication: {
+            root.opened = true
+            if (root.applyCapturePanelHidden) {
+                root.applyCapturePanelHidden = false
+                root.livePanelOpen = root.liveCanvasActive
+            }
+        }
         onDemoBusyRequested: function(busy) {
             root.demoBusy = busy
         }
@@ -1066,6 +1439,7 @@ Item {
             root.errorMessage = message
             if (root.pendingDemo) {
                 demoController.finishPendingDemo()
+                root.livePanelOpen = root.liveCanvasActive
             }
         }
     }
@@ -1081,7 +1455,7 @@ Item {
                 return
             }
             root.opened = false
-            root.livePanelOpen = root.liveCanvasActive
+            root.livePanelOpen = root.demoMode === "full" ? false : root.liveCanvasActive
         }
 
         function onOpenFailed(message) {
@@ -1115,14 +1489,14 @@ Item {
             }
             if (root.pendingDemo) {
                 demoController.finishPendingDemo()
-                root.livePanelOpen = true
+                root.livePanelOpen = root.demoMode === "full" ? false : true
                 root.opened = false
                 return
             }
             // Reapplication from the side panel keeps the panel available for
             // the next direction instead of forcing a trip back through the
             // bar widget.
-            root.livePanelOpen = true
+            root.livePanelOpen = root.demoMode === "full" ? false : true
             root.opened = false
         }
 
@@ -1167,8 +1541,10 @@ Item {
             if (root.pendingWindowDemo) {
                 root.pendingWindowDemo = false
                 demoController.openWindowAfterClose()
+                root.livePanelOpen = true
                 return
             }
+            root.livePanelOpen = root.liveCanvasActive
             root.opened = root.liveCanvasActive ? false : true
         }
 
@@ -1238,16 +1614,37 @@ Item {
         errorMessage: root.errorMessage
 
         onChooseImageRequested: root.chooseImage()
+        onEditThemeRequested: root.chooseInstalledTheme()
         workflowMode: root.workflowMode
-        onWorkflowModeSelected: function(mode) {
-            root.workflowMode = mode;
-            root.extraConfigsEnabled = mode === "in-depth";
-            if (root.extraConfigsEnabled)
-                lookFeelController.list();
+        onWorkflowModeSelected: {
+            if (session.active) {
+                root.workflowMode = mode;
+                root.extraConfigsEnabled = mode === "in-depth";
+                if (root.extraConfigsEnabled)
+                    lookFeelController.list();
+            } else {
+                root.selectWizardWorkflow(mode);
+            }
         }
         onContinueRequested: root.continueFromSetup()
-        onCancelRequested: root.cancelSession()
+        onCancelRequested: session.active ? root.cancelSession() : root.cancelPreSessionWorkflow()
         onHideRequested: root.close()
+    }
+
+    Views.ThemePickerWindow {
+        active: root.themePickerOpen
+        busy: themeEditController.opening
+        themes: themeEditController.themes
+        errorMessage: root.errorMessage
+        onThemeSelected: function(themeId) {
+            root.errorMessage = ""
+            root.sessionBusy = true
+            themeEditController.open(themeId)
+        }
+        onCloseRequested: {
+            root.themePickerOpen = false
+            root.opened = true
+        }
     }
 
     Views.AdvancedRuntimeSetupWindow {
@@ -1343,7 +1740,8 @@ Item {
 
     Views.LiveCanvasPanel {
         id: liveCanvasPanel
-        active: root.route === "workspace" && session.active && root.liveCanvasActive && root.livePanelOpen
+        active: root.route === "workspace" && root.livePanelOpen
+                && ((session.active && root.liveCanvasActive) || root.wizardWorkflowOpen)
         previewBusy: root.previewBusy
         demoBusy: root.demoBusy
         demoActive: root.demoActive
@@ -1352,6 +1750,20 @@ Item {
         applyBusy: root.applyBusy
         generationBusy: root.generationBusy || root.describeBusy
         workspaceReady: session.workspaceReady
+        wizardStep: root.wizardStep
+        wizardStepCount: root.wizardStepCount
+        wizardCanGoBack: root.wizardCanGoBack
+        wizardCanGoNext: root.wizardCanGoNext
+        wizardNextLabel: root.wizardNextLabel
+        wizardAdvancedChoice: root.wizardAdvancedChoice
+        wizardLookFeelDecided: root.wizardLookFeelDecided
+        wizardOperationBusy: root.wizardOperationBusy
+        wizardPaletteSelected: root.wizardPaletteSelected
+        wizardCanContinueWorkflow: root.wizardCanContinueWorkflow
+        workflowStep: root.wizardWorkflowOpen
+        workflowMode: root.wizardWorkflowMode
+        workflowSelected: root.wizardWorkflowConfirmed
+        sourceImage: root.sourceImage
         extraConfigsEnabled: root.extraConfigsEnabled
         lookFeel: root.lookFeel
         lookFeelRecipe: root.lookFeelRecipe
@@ -1372,6 +1784,7 @@ Item {
         selectedVariant: session.selectedVariant
         monitorName: root.liveCanvasMonitor
         suggestedThemeName: root.suggestedThemeName()
+        sourceThemeName: session.themeEdit ? String(session.themeEdit.name || session.themeEdit.source_name || session.themeEdit.id || "") : ""
         variants: root.variants
         palettes: session.palettes
 
@@ -1387,22 +1800,34 @@ Item {
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
         onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
+        onGoBackRequested: root.wizardBack()
+        onGoNextRequested: root.wizardNext()
+        onAdvancedChoiceRequested: function(choice) { root.chooseWizardAdvanced(choice) }
+        onLookFeelSelectedRequested: root.chooseWizardLookFeel()
+        onLookFeelSkippedRequested: root.skipWizardLookFeel()
+        onDemoSkippedRequested: root.wizardNext()
+        onRestoreAndCloseRequested: root.wizardRestoreAndClose()
+        onWorkflowModeSelected: function(mode) { root.selectWizardWorkflow(mode) }
+        onWorkflowContinueRequested: root.wizardContinueWorkflow()
         onLookFeelCatalogRetryRequested: lookFeelController.list()
         onAdvancedStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
+            root.markThemeEditScope("shell-bar")
+            root.markThemeEditScope("window-motion")
             root.shellStyle = root.normalizeEditedShellStyle(shellStyle)
             root.desktopStyle = root.normalizeEditedDesktopStyle(desktopStyle)
             root.barStyle = root.normalizeEditedBarStyle(barStyle)
             root.animationsStyle = root.normalizeEditedAnimationsStyle(animationsStyle)
             root.refreshLookFeelCustomized()
         }
-        onLookFeelPresetRequested: root.requestLookFeelPreset(preset)
-        onLookFeelResetRequested: root.resetLookFeelScope(scope)
+        onLookFeelPresetRequested: { root.markThemeEditScope("shell-bar"); root.markThemeEditScope("window-motion"); root.requestLookFeelPreset(preset) }
+        onLookFeelResetRequested: { root.markThemeEditScope(scope === "terminal" ? "terminal" : scope === "shell" || scope === "bar" ? "shell-bar" : "window-motion"); root.resetLookFeelScope(scope) }
         onTerminalIntentChanged: function(terminal) {
+            root.markThemeEditScope("terminal")
             root.terminalTranslucency = root.normalizeEditedTerminalTranslucency(terminal)
             root.refreshLookFeelCustomized()
         }
-        onApplyRequested: function(variant, name, generateUnlock, capturePreview) {
-            root.applyTheme(variant, name, generateUnlock, capturePreview)
+        onApplyRequested: function(variant, name, generateUnlock, capturePreview, replaceSource) {
+            root.applyTheme(variant, name, generateUnlock, capturePreview, replaceSource)
         }
     }
 
@@ -1427,6 +1852,7 @@ Item {
 
     Views.LiveCanvasHandle {
         active: session.active && root.liveCanvasActive && !root.opened && !root.livePanelOpen
+            && !root.liveCanvasPanelSuppressed
         glitchEnabled: root.cyberpunkSignalActive
         glitchEpoch: root.shellGlitchEpoch
         monitorName: root.liveCanvasMonitor

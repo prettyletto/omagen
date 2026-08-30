@@ -8,12 +8,14 @@ Item {
     signal applied(string sessionId, string generationId, string variant, string themeName)
     signal applyFailed(string message)
 
-    function apply(sessionId, generationId, variant, name, generateUnlock, capturePreview) {
+    function apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource) {
         const args = [root.executable, "apply", sessionId, generationId, variant, name]
         if (generateUnlock)
             args.push("--unlock")
         if (capturePreview)
             args.push("--live-preview")
+        if (replaceSource)
+            args.push("--replace-source")
         command.exec(args)
     }
 

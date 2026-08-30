@@ -6,11 +6,14 @@ import qs.Commons
 import qs.Ui
 import "../components" as Components
 import "../components/Contrast.js" as Contrast
-import "../features/live-canvas/LiveCanvasState.js" as LiveCanvasState
+import "live-canvas" as Wizard
 
 PanelWindow {
     id: root
 
+    // Durable session, preview, Demo, Apply, and rollback state remain owned
+    // by Omagen.qml and its controllers. This surface only renders pages and
+    // emits intent.
     property bool active: false
     property bool previewBusy: false
     property bool generationBusy: false
@@ -25,14 +28,7 @@ PanelWindow {
     property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
-    property bool glitchEnabled: false
-    property int glitchEpoch: 0
     property var lookFeel: ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) })
-    // Keep the resolved Look & Feel recipe beside its metadata. The metadata
-    // says whether Shell is customized; the recipe supplies the inherited
-    // Shell document when it is not. This avoids letting the editor's default
-    // placeholder replace a selected Look & Feel preset during a stale/resume
-    // or cross-engine update.
     property var lookFeelRecipe: null
     property var lookFeelCatalog: []
     property bool lookFeelBusy: false
@@ -40,100 +36,60 @@ PanelWindow {
     property string lookFeelCatalogError: ""
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
     property real terminalPresetOpacity: 0.82
-    property bool applyRecoveryRequired: false
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
     property string errorMessage: ""
-    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy
-    // A native preview is single-flight, but it is safe to keep editing the
-    // staged document while that flight settles. Reserve the modal shield for
-    // operations that cannot safely share the panel with user input.
-    readonly property bool blockingOperationBusy: root.generationBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy
-    readonly property string operationTitle: root.generationBusy
-        ? "Preparing Live Canvas…"
-        : root.previewBusy
-            ? (root.applyBusy ? "Preparing final theme…" : "Applying live changes…")
-            : root.applyBusy
-                ? "Saving theme…"
-                : root.demoBusy
-                    ? (root.demoActive ? "Closing Live Canvas…" : "Opening Live Canvas…")
-                    : root.cancelBusy
-                        ? "Restoring original desktop…"
-                        : "Ready"
-    readonly property string operationDetail: root.generationBusy
-        ? "Building the palette directions before the canvas can be edited."
-        : root.previewBusy
-            ? (root.applyBusy
-                ? "Materializing the exact state shown here before the permanent save."
-                : "Updating the long-lived Omarchy shell in place. Test Live, Apply, and demos unlock when it finishes.")
-            : root.applyBusy
-                ? "Saving the selected theme and completing the native Omarchy transaction."
-                : root.demoBusy
-                    ? "Waiting for the Live Canvas workspace transition to finish."
-                    : root.cancelBusy
-                        ? "Restoring the original theme and closing this session."
-                        : ""
     property string selectedVariant: "source"
     property string monitorName: ""
-    property string suggestedThemeName: ""
+    property string sourceImage: ""
+    property bool workflowStep: false
+    property string workflowMode: "fast"
+    property bool workflowSelected: false
+    property int workflowCursorIndex: -1
+    property string suggestedThemeName: "omagen-theme"
+    property string sourceThemeName: ""
     property var variants: []
     property var palettes: ({})
-    // All editor surfaces follow the selected/staged palette, not the theme
-    // that happened to launch Omagen.  Fall back to native tokens while the
-    // palette catalog is still loading.
-    readonly property color foregroundColor: root.palettes[root.selectedVariant] && root.palettes[root.selectedVariant].foreground
-        ? root.palettes[root.selectedVariant].foreground : Color.foreground
-    readonly property color backgroundColor: root.palettes[root.selectedVariant] && root.palettes[root.selectedVariant].background
-        ? root.palettes[root.selectedVariant].background : Color.background
-    readonly property color accentColor: root.palettes[root.selectedVariant] && root.palettes[root.selectedVariant].accent
-        ? root.palettes[root.selectedVariant].accent : Color.accent
-    property bool colorEditorOpen: false
-    property bool colorPreviewLive: false
-    property string editingColorRole: "accent"
     property var stagedColors: ({})
     property var colorOverridesByVariant: ({})
-    property bool moreColorsOpen: false
-    property string expandedColorGroup: "surfaces"
-    property bool lookFeelEditorOpen: false
-    property bool advancedEditorOpen: false
-    property int advancedSection: 0
-    readonly property var wizardStages: ["Source", "Palette", "Customize", "Test / Apply"]
-    readonly property int wizardStageIndex: root.generationBusy
-        ? 0
-        : (root.previewBusy || root.demoBusy || root.applyBusy || root.cancelBusy)
-            ? 3
-            : (root.colorEditorOpen || root.lookFeelEditorOpen || root.advancedEditorOpen)
-                ? 2 : 1
-    readonly property string wizardStageLabel: root.cancelBusy
-        ? "Restore"
-        : root.demoBusy
-            ? (root.demoActive ? "Demo · closing" : "Demo · opening")
-            : root.wizardStages[root.wizardStageIndex]
-    readonly property string wizardNextAction: root.generationBusy
-        ? "Waiting for the palette directions to finish."
-        : root.cancelBusy
-            ? "Restoring the original desktop and closing this session."
-            : root.demoBusy
-                ? (root.demoActive ? "Closing the demo before returning to the canvas." : "Opening the demo for the selected section.")
-                : root.applyBusy
-                    ? "Completing the permanent save."
-                    : root.previewBusy
-                        ? "Review the live preview when it finishes."
-                        : root.colorEditorOpen
-                            ? "Edit a colour, then Test Live colours."
-                            : root.lookFeelEditorOpen
-                                ? "Choose a recipe, then Test Live composition."
-                                : root.advancedEditorOpen
-                                    ? "Tune a section, then Test Live composition."
-                                    : root.workspaceReady
-                                        ? "Select a palette direction to preview it."
-                                        : "Preparing the palette directions."
-    readonly property string inactiveStyle: desktopStyle.inactiveStyle || desktopStyle.inactive_style || "native"
-    readonly property bool frostedBackdropEnabled: inactiveStyle === "blur" || inactiveStyle.indexOf("frosted_") === 0
-    readonly property real frostedBackdropOpacity: inactiveStyle === "native" ? 1.0
-        : inactiveStyle === "frosted_rich" ? 0.46
-        : inactiveStyle === "frosted_balanced" || inactiveStyle === "blur" ? 0.56
-        : inactiveStyle === "frosted_light" ? 0.68 : 0.97
-    readonly property var editableColorRoles: LiveCanvasState.editableColorRoles()
-    readonly property var advancedColorGroups: LiveCanvasState.advancedColorGroups()
+    property bool colorPreviewLive: false
+
+    // Agent 1 wizard contract. Omagen.qml should bind these to the wizard
+    // controller aliases. Defaults keep this view lintable in isolation while
+    // that root seam is integrated.
+    property int wizardStep: 0
+    property int wizardStepCount: 5
+    property bool wizardCanGoBack: false
+    property bool wizardCanGoNext: false
+    property string wizardNextLabel: "Next"
+    property string wizardAdvancedChoice: "undecided"
+    property bool wizardLookFeelDecided: false
+    property bool wizardOperationBusy: false
+    property bool wizardPaletteSelected: false
+    // Agent 1 may bind this to the begin-session transition. The fallback
+    // preserves safe standalone rendering until that contract is connected.
+    property bool wizardCanContinueWorkflow: root.workflowSelected && !root.operationBusy
+
+    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy || root.wizardOperationBusy
+    readonly property color foregroundColor: Color.foreground
+    readonly property color backgroundColor: Color.background
+    readonly property color accentColor: Color.accent
+    readonly property var stepLabels: root.workflowStep
+        ? ["Workflow", "Palette", "Look & Feel", "Advanced", "Demo", "Finish"]
+        : ["Palette", "Look & Feel", "Advanced", "Demo", "Finish"]
+    readonly property string operationText: root.generationBusy
+        ? "Preparing palette directions…"
+        : root.previewBusy
+            ? "Previewing the latest choice on the real desktop…"
+            : root.lookFeelBusy
+                ? "Resolving the selected Look & Feel…"
+                : root.demoBusy
+                    ? (root.demoActive ? "Stopping the session-owned Demo…" : "Opening the session-owned Demo…")
+                    : root.cancelBusy
+                        ? "Restoring the original desktop and closing this session…"
+                        : root.applyBusy
+                            ? "Saving the selected theme…"
+                            : ""
 
     signal hideRequested()
     signal closeCanvasRequested()
@@ -152,14 +108,67 @@ PanelWindow {
     signal lookFeelCatalogRetryRequested()
     signal lookFeelResetRequested(string scope)
     signal terminalIntentChanged(var terminal)
-    signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview)
+    signal applyRequested(string variant, string name, bool generateUnlock, bool capturePreview, bool replaceSource)
 
-    function copyColors() {
-        return LiveCanvasState.copyColors(root.stagedColors)
+    // Wizard signals are intent-only. The panel does not own navigation,
+    // session cleanup, preview requests, or backend commands.
+    signal goBackRequested()
+    signal goNextRequested()
+    signal advancedChoiceRequested(string choice)
+    signal lookFeelSelectedRequested()
+    signal lookFeelSkippedRequested()
+    signal demoSkippedRequested()
+    signal restoreAndCloseRequested()
+    signal workflowModeSelected(string mode)
+    signal workflowContinueRequested()
+
+    visible: root.active
+    screen: root.resolveScreen()
+    color: "transparent"
+    surfaceFormat.opaque: false
+    exclusionMode: ExclusionMode.Ignore
+    WlrLayershell.namespace: "omagen-live-canvas"
+    WlrLayershell.layer: WlrLayer.Overlay
+    WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+
+    anchors { top: true; right: true }
+    margins { top: Style.bar.sizeHorizontal + Style.space(12) }
+    implicitWidth: Math.min(Style.space(620), Math.max(Style.space(420), (root.screen ? root.screen.width : Style.space(900)) - Style.space(48)))
+    implicitHeight: Math.min(Style.space(820), Math.max(Style.space(520), (root.screen ? root.screen.height : Style.space(760)) - Style.bar.sizeHorizontal - Style.space(24)))
+
+    function resolveScreen() {
+        const screens = Quickshell.screens || []
+        for (let index = 0; index < screens.length; index++) {
+            if (screens[index].name === root.monitorName)
+                return screens[index]
+        }
+        return null
     }
 
-    function copyOverrideColors(overrides) {
-        return LiveCanvasState.copyOverrideColors(overrides)
+    function selectedVariantLabel() {
+        for (let index = 0; index < root.variants.length; index++) {
+            if (root.variants[index].variant === root.selectedVariant)
+                return root.variants[index].label || root.selectedVariant
+        }
+        return root.selectedVariant
+    }
+
+    function selectedPresetLabel() {
+        const selected = String(root.lookFeel.preset || "omarchy-native")
+        if (selected === "omarchy-native")
+            return "Keep native"
+        for (let index = 0; index < root.lookFeelCatalog.length; index++) {
+            if (root.lookFeelCatalog[index].id === selected)
+                return root.lookFeelCatalog[index].name || selected
+        }
+        return selected
+    }
+
+    function copyOverrideColors(value) {
+        const result = {}
+        for (const key in (value || {}))
+            result[key] = String(value[key])
+        return result
     }
 
     function overridesForVariant(variant) {
@@ -167,11 +176,10 @@ PanelWindow {
     }
 
     function storeOverridesForVariant(variant, overrides) {
-        var next = {}
-        for (var key in root.colorOverridesByVariant)
+        const next = {}
+        for (const key in root.colorOverridesByVariant)
             next[key] = root.colorOverridesByVariant[key]
-
-        var copied = root.copyOverrideColors(overrides)
+        const copied = root.copyOverrideColors(overrides)
         if (Object.keys(copied).length > 0)
             next[variant] = copied
         else
@@ -179,10 +187,36 @@ PanelWindow {
         root.colorOverridesByVariant = next
     }
 
+    function setStagedColors(overrides, variant) {
+        const target = variant || root.selectedVariant
+        const copied = root.copyOverrideColors(overrides)
+        root.storeOverridesForVariant(target, copied)
+        if (target === root.selectedVariant)
+            root.stagedColors = copied
+        root.colorPreviewLive = false
+    }
+
+    function previewPaletteColors(overrides) {
+        const target = root.selectedVariant
+        root.setStagedColors(overrides || ({}), target)
+        root.colorTestLiveRequested(
+            target,
+            root.overridesForVariant(target),
+            root.shellStyleForVariant(target),
+            root.desktopStyle,
+            root.barStyleForVariant(target),
+            root.animationsStyle
+        )
+    }
+
+    function markColorsLive() {
+        root.colorPreviewLive = Object.keys(root.stagedColors).length > 0
+    }
+
     function copyShellStyle(value) {
         value = value || ({})
-        var overrides = {}
-        for (var key in (value.overrides || {}))
+        const overrides = {}
+        for (const key in (value.overrides || {}))
             overrides[key] = String(value.overrides[key])
         return {
             preset: value.preset || "default",
@@ -195,286 +229,24 @@ PanelWindow {
     }
 
     function shellStyleForVariant(_variant) {
-        var customized = root.lookFeel.customized || ({})
-        var inherited = root.lookFeelRecipe && root.lookFeelRecipe.shell && customized.shell !== true
+        const customized = root.lookFeel.customized || ({})
+        const inherited = root.lookFeelRecipe && root.lookFeelRecipe.shell && customized.shell !== true
             ? root.lookFeelRecipe.shell : root.shellStyle
         return root.copyShellStyle(inherited)
     }
 
-    function barStyleForVariant(variant) {
-        return root.barStyle
-    }
-
-    function paletteValue(role) {
-        var palette = root.palettes[root.selectedVariant] || null
-        return palette && palette[role] ? String(palette[role]).toUpperCase() : "#FFFFFF"
-    }
-
-    function presetColor(role) {
-        return root.paletteValue(role)
-    }
-
-    function currentColor(role) {
-        return root.stagedColors[role] || root.presetColor(role)
-    }
-
-    function colorRoleLabel(role) {
-        for (var i = 0; i < root.editableColorRoles.length; i++) {
-            if (root.editableColorRoles[i].key === role)
-                return root.editableColorRoles[i].label
-        }
-        for (var groupIndex = 0; groupIndex < root.advancedColorGroups.length; groupIndex++) {
-            var roles = root.advancedColorGroups[groupIndex].roles
-            for (var roleIndex = 0; roleIndex < roles.length; roleIndex++) {
-                if (roles[roleIndex].key === role)
-                    return roles[roleIndex].label
-            }
-        }
-        return role
-    }
-
-    function colorRoleDescription(role) {
-        var descriptions = {
-            accent: "Primary shell highlight for focus, selection, active borders, and theme accents.",
-            background: "Base background used by the shell fallback and terminal/editor theme templates.",
-            foreground: "Primary text and icon colour for Quickshell and generated application themes.",
-            selection: "Selection fill and text pairing in menus, terminals, editors, and code views.",
-            muted: "Low-emphasis text, inactive details, dividers, and ANSI black in supported apps.",
-            dark_background: "Dark surface tier for recessed shell panels and application templates.",
-            darker_background: "Deepest surface tier for nested or recessed backgrounds in supported templates.",
-            lighter_background: "Raised surface tier for cards, controls, and editor backgrounds.",
-            dark_foreground: "Low-contrast text for inactive labels, line numbers, and disabled UI.",
-            light_foreground: "Secondary readable text in editors, charts, and supporting UI.",
-            bright_foreground: "Strong text and cursor colour, including ANSI bright white in supported apps.",
-            red: "ANSI red plus error and urgent accents in the shell and supported applications.",
-            orange: "Warm syntax, number, and modified-state accent in supported editors and applications.",
-            yellow: "Warning, attention, and ANSI yellow accent in supported applications.",
-            green: "Success, positive-state, and ANSI green accent in supported applications.",
-            cyan: "Informational highlight and ANSI cyan accent in supported applications.",
-            blue: "Links, functions, information, and ANSI blue accent in supported applications.",
-            magenta: "Keywords, special syntax, and ANSI magenta accent in supported applications.",
-            brown: "Warm low-intensity terminal or editor accent where supported.",
-            bright_red: "High-emphasis ANSI red and error accent in supported applications.",
-            bright_yellow: "High-emphasis ANSI yellow and warning accent in supported applications.",
-            bright_green: "High-emphasis ANSI green and success accent in supported applications.",
-            bright_cyan: "High-emphasis ANSI cyan and information accent in supported applications.",
-            bright_blue: "High-emphasis ANSI blue, links, and function accent in supported applications.",
-            bright_magenta: "High-emphasis ANSI magenta and syntax accent in supported applications."
-        }
-        return descriptions[role] || "Semantic palette colour used by supported Omarchy theme consumers."
-    }
-
-    // qs.Ui.Button's native tooltip sizes to its text's implicit width. Keep
-    // long semantic descriptions inside the panel/monitor without replacing
-    // the shell-owned tooltip surface.
-    function tooltipDescription(value) {
-        var words = String(value || "").split(/\s+/)
-        var lines = []
-        var line = ""
-        var maximumCharacters = 48
-
-        for (var index = 0; index < words.length; index++) {
-            var word = words[index]
-            if (!word)
-                continue
-            if (!line) {
-                line = word
-            } else if (line.length + word.length + 1 <= maximumCharacters) {
-                line += " " + word
-            } else {
-                lines.push(line)
-                line = word
-            }
-        }
-        if (line)
-            lines.push(line)
-        return lines.join("\n")
-    }
-
-    function stageColor(role, value) {
-        var next = root.copyColors()
-        next[role] = value.toUpperCase()
-        root.stagedColors = next
-        root.storeOverridesForVariant(root.selectedVariant, next)
-        root.colorPreviewLive = false
-    }
-
-    function resetColor(role) {
-        var next = root.copyColors()
-        delete next[role]
-        root.stagedColors = next
-        root.storeOverridesForVariant(root.selectedVariant, next)
-        root.colorPreviewLive = false
-    }
-
-    function resetVariantColors() {
-        root.stagedColors = ({})
-        root.storeOverridesForVariant(root.selectedVariant, ({}))
-        root.colorPreviewLive = false
-    }
-
+    function barStyleForVariant(_variant) { return root.barStyle }
+    function resetApplyDialog() { themeNameDialog.reset() }
     function clearColorSession() {
         root.stagedColors = ({})
         root.colorOverridesByVariant = ({})
         root.colorPreviewLive = false
-        root.colorEditorOpen = false
-        root.lookFeelEditorOpen = false
-        root.advancedEditorOpen = false
-        root.editingColorRole = "accent"
-        root.moreColorsOpen = false
-        root.expandedColorGroup = "surfaces"
     }
-
-    // The palette-direction list is the root of the Live Canvas flow. Keep
-    // this navigation separate from the editor toggles so a user can always
-    // return to another colour variant without resetting staged edits.
-    function showPaletteDirections() {
-        root.colorEditorOpen = false
-        root.lookFeelEditorOpen = false
-        root.advancedEditorOpen = false
-        root.moreColorsOpen = false
-    }
-
-    function resetApplyDialog() {
-        themeNameDialog.reset()
-    }
-
-    function setStagedColors(overrides, variant) {
-        var targetVariant = variant || root.selectedVariant
-        var copied = root.copyOverrideColors(overrides)
-        root.storeOverridesForVariant(targetVariant, copied)
-        if (targetVariant !== root.selectedVariant)
-            return
-        root.stagedColors = copied
-        if (Object.keys(root.stagedColors).length > 0) {
-            root.colorEditorOpen = true
-            root.lookFeelEditorOpen = false
-            root.advancedEditorOpen = false
-        }
-        root.colorPreviewLive = false
-    }
-
-    function markColorsLive() {
-        root.colorPreviewLive = Object.keys(root.stagedColors).length > 0
-    }
-
-    function suggestionsFor(role) {
-        var palette = root.palettes[root.selectedVariant] || ({})
-        var candidates = []
-        if (role === "accent") {
-            candidates = [
-                { hex: palette.accent, label: "Preset colour" },
-                { hex: palette.blue, label: "Blue from preset" },
-                { hex: palette.magenta, label: "Magenta from preset" },
-                { hex: palette.cyan, label: "Cyan from preset" }
-            ]
-        } else if (role === "background") {
-            candidates = [
-                { hex: palette.background, label: "Preset surface" },
-                { hex: palette.dark_background, label: "Dark surface" },
-                { hex: palette.darker_background, label: "Deep surface" },
-                { hex: palette.lighter_background, label: "Lifted surface" }
-            ]
-        } else if (role === "foreground") {
-            candidates = [
-                { hex: palette.foreground, label: "Preset text" },
-                { hex: palette.light_foreground, label: "Light text" },
-                { hex: palette.bright_foreground, label: "Bright text" },
-                { hex: palette.dark_foreground, label: "Muted text" }
-            ]
-        } else if (role === "selection") {
-            candidates = [
-                { hex: palette.selection, label: "Preset selection" },
-                { hex: palette.accent, label: "Accent selection" },
-                { hex: palette.lighter_background, label: "Lifted selection" },
-                { hex: palette.muted, label: "Muted selection" }
-            ]
-        } else if (role === "muted") {
-            candidates = [
-                { hex: palette.muted, label: "Preset muted" },
-                { hex: palette.dark_foreground, label: "Dark text" },
-                { hex: palette.selection, label: "Selection" },
-                { hex: palette.foreground, label: "Foreground" }
-            ]
-        } else if (role.indexOf("background") !== -1) {
-            candidates = [
-                { hex: palette[role], label: "Preset surface" },
-                { hex: palette.background, label: "Background" },
-                { hex: palette.darker_background, label: "Deep background" },
-                { hex: palette.lighter_background, label: "Light background" }
-            ]
-        } else if (role.indexOf("foreground") !== -1) {
-            candidates = [
-                { hex: palette[role], label: "Preset text" },
-                { hex: palette.foreground, label: "Foreground" },
-                { hex: palette.light_foreground, label: "Light text" },
-                { hex: palette.bright_foreground, label: "Bright text" }
-            ]
-        } else {
-            var baseRole = role.indexOf("bright_") === 0 ? role.substring(7) : role
-            candidates = [
-                { hex: palette[role], label: "Preset " + root.colorRoleLabel(role).toLowerCase() },
-                { hex: palette[baseRole], label: "Base " + root.colorRoleLabel(baseRole).toLowerCase() },
-                { hex: palette.accent, label: "Accent from preset" },
-                { hex: palette.selection, label: "Selection from preset" }
-            ]
-        }
-
-        return candidates.filter(function(candidate) {
-            return candidate.hex && String(candidate.hex).length === 7
-        }).map(function(candidate) {
-            return { hex: String(candidate.hex).toUpperCase(), label: candidate.label }
-        })
-    }
-
-    function resolveScreen() {
-        const screens = Quickshell.screens || []
-        for (let i = 0; i < screens.length; i++) {
-            if (screens[i].name === root.monitorName)
-                return screens[i]
-        }
-        return null
-    }
-
-    visible: root.active
-    screen: root.resolveScreen()
-    color: "transparent"
-    // The frosted profile needs an alpha-capable Wayland surface. Without this
-    // declaration, the compositor may treat this PanelWindow as opaque even
-    // though its content Rectangle has an alpha value.
-    surfaceFormat.opaque: false
-    exclusionMode: ExclusionMode.Ignore
-    WlrLayershell.namespace: "omagen-live-canvas"
-    WlrLayershell.layer: WlrLayer.Overlay
-    WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
-
-    anchors {
-        top: true
-        right: true
-    }
-    margins {
-        top: Style.bar.sizeHorizontal + Style.space(12)
-    }
-    implicitWidth: Style.space(480)
-    implicitHeight: Math.min(
-        Style.space(780),
-        Math.max(
-            Style.space(420),
-            (root.screen ? root.screen.height : Style.space(900))
-                - Style.bar.sizeHorizontal
-                - Style.space(24)
-        )
-    )
+    function showPaletteDirections() {}
 
     Rectangle {
         anchors.fill: parent
-        // Hyprland's layer blur samples the pixels behind this surface. Keep
-        // the panel translucent when a Frosted backdrop profile is selected; an almost
-        // opaque panel would hide the compositor effect even with the rule.
-        color: Util.alpha(
-            Color.popups.background,
-            root.frostedBackdropOpacity
-        )
+        color: Util.alpha(Color.popups.background, 0.96)
         border.width: keyCatcher.activeFocus ? Math.max(1, Style.space(2)) : 1
         border.color: keyCatcher.activeFocus ? root.accentColor : Color.popups.border
 
@@ -490,828 +262,272 @@ PanelWindow {
         PanelKeyCatcher {
             id: keyCatcher
             anchors.fill: parent
-            enabled: !root.operationBusy
+            enabled: true
             onCloseRequested: root.hideRequested()
         }
 
-        Flickable {
-            id: scrollArea
-            anchors.top: parent.top
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: actionFooter.top
-            clip: true
-            contentWidth: width
-            contentHeight: contentColumn.y + contentColumn.implicitHeight + Style.space(18)
-            flickableDirection: Flickable.VerticalFlick
-            boundsBehavior: Flickable.StopAtBounds
-            interactive: contentHeight > height
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: Style.space(18)
+            spacing: Style.space(12)
+            z: 1
 
-            WheelHandler {
-                onWheel: function(event) {
-                    if (event.angleDelta.y === 0 || !scrollArea.interactive)
-                        return
-                    scrollArea.cancelFlick()
-                    const maximum = Math.max(0, scrollArea.contentHeight - scrollArea.height)
-                    scrollArea.contentY = Math.max(0, Math.min(maximum, scrollArea.contentY - event.angleDelta.y / 2))
-                    event.accepted = true
-                }
+            Wizard.WizardChrome {
+                id: chrome
+                Layout.fillWidth: true
+                step: root.workflowStep
+                    ? 0
+                    : Math.max(0, Math.min(root.wizardStep, root.stepLabels.length - 1))
+                stepCount: root.workflowStep ? root.stepLabels.length : root.wizardStepCount
+                steps: root.stepLabels
+                busy: root.operationBusy
+                operationText: root.operationText
+                errorText: root.errorMessage
+                foregroundColor: root.foregroundColor
+                backgroundColor: root.backgroundColor
+                accentColor: root.accentColor
+                subtitle: root.generationBusy
+                    ? "Generating directions from the selected image…"
+                    : root.workflowStep
+                        ? "Choose the level of control before palette generation begins."
+                        : "A reversible desktop preview, one clear decision at a time · " + (root.monitorName || "focused monitor")
+                onHideRequested: root.hideRequested()
             }
 
-            ColumnLayout {
-                id: contentColumn
-                x: Style.space(18)
-                y: Style.space(18)
-                width: scrollArea.width - Style.space(36)
-                height: implicitHeight
-                spacing: Style.space(9)
-                z: 1
-
-            Item {
+            Flickable {
+                id: scrollArea
                 Layout.fillWidth: true
-                Layout.preferredHeight: Style.space(42)
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: width
+                contentHeight: pageColumn.implicitHeight + Style.space(4)
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: contentHeight > height
 
-                Column {
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: Style.space(2)
-
-                    Text {
-                        text: "LIVE CANVAS"
-                        color: root.accentColor
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        font.bold: true
-                        font.letterSpacing: 1.1
-                    }
-                    Text {
-                        text: root.generationBusy ? "Preparing palette directions" : "Real desktop / " + (root.monitorName || "focused monitor")
-                        color: root.foregroundColor
-                        opacity: 0.6
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.bodySmall
+                WheelHandler {
+                    onWheel: function(event) {
+                        if (!scrollArea.interactive || event.angleDelta.y === 0)
+                            return
+                        scrollArea.cancelFlick()
+                        const maximum = Math.max(0, scrollArea.contentHeight - scrollArea.height)
+                        scrollArea.contentY = Math.max(0, Math.min(maximum, scrollArea.contentY - event.angleDelta.y / 2))
+                        event.accepted = true
                     }
                 }
 
-                Button {
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: Style.space(34)
-                    height: Style.space(34)
-                    text: "—"
-                    fontSize: Style.font.title
-                    foreground: root.foregroundColor
-                    tooltipText: "Hide Studio panel"
-                    onClicked: root.hideRequested()
-                }
-            }
+                ColumnLayout {
+                    id: pageColumn
+                    x: Style.space(1)
+                    y: Style.space(2)
+                    width: scrollArea.width - Style.space(2)
+                    spacing: Style.space(10)
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(3)
-
-                Repeater {
-                    model: root.wizardStages
-                    delegate: Rectangle {
-                        required property string modelData
-                        required property int index
-                        readonly property bool currentStage: index === root.wizardStageIndex
-                        readonly property bool completedStage: index < root.wizardStageIndex
+                    Item {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Style.space(28)
-                        radius: Math.max(Style.space(4), Style.cornerRadius / 2)
-                        color: currentStage
-                            ? root.accentColor
-                            : completedStage
-                                ? Util.alpha(root.accentColor, 0.14)
-                                : Util.alpha(root.foregroundColor, 0.035)
-                        border.width: 1
-                        border.color: currentStage
-                            ? root.accentColor
-                            : completedStage
-                                ? Util.alpha(root.accentColor, 0.42)
-                                : Util.alpha(root.foregroundColor, 0.16)
+                        Layout.preferredHeight: visible ? workflowStepPage.implicitHeight : 0
+                        visible: root.workflowStep
 
-                        Text {
-                            anchors.fill: parent
-                            anchors.leftMargin: Style.space(5)
-                            anchors.rightMargin: Style.space(5)
-                            text: (parent.completedStage ? "✓  " : parent.currentStage ? "●  " : "") + parent.modelData
-                            color: parent.currentStage
-                                ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
-                                : root.foregroundColor
-                            opacity: parent.currentStage ? 1 : parent.completedStage ? 0.78 : 0.48
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                            font.bold: parent.currentStage
-                            elide: Text.ElideRight
-                            verticalAlignment: Text.AlignVCenter
+                        Wizard.WorkflowStep {
+                            id: workflowStepPage
+                            width: parent.width
+                            sourceImage: root.sourceImage
+                            workflowMode: root.workflowMode
+                            workflowSelected: root.workflowSelected
+                            cursorIndex: root.workflowCursorIndex
+                            busy: root.operationBusy
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onWorkflowModeSelected: root.workflowModeSelected(mode)
                         }
                     }
-                }
-            }
 
-            Text {
-                Layout.fillWidth: true
-                text: root.cancelBusy || root.demoBusy
-                    ? root.wizardStageLabel.toUpperCase() + "  ·  " + root.wizardNextAction
-                    : "STAGE " + (root.wizardStageIndex + 1) + " OF " + root.wizardStages.length + " · " + root.wizardStageLabel + "  NEXT: " + root.wizardNextAction
-                color: root.foregroundColor
-                opacity: 0.72
-                wrapMode: Text.WordWrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-
-            Text {
-                Layout.fillWidth: true
-                text: "Keyboard: Esc hides this panel · focused fields show an accent ring"
-                color: root.foregroundColor
-                opacity: 0.46
-                wrapMode: Text.WordWrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.preferredHeight: Style.space(76)
-                radius: Style.cornerRadius
-                color: Util.alpha(root.accentColor, 0.1)
-                border.width: 1
-                border.color: Util.alpha(root.accentColor, 0.45)
-
-                Column {
-                    anchors.fill: parent
-                    anchors.margins: Style.space(12)
-                    spacing: Style.space(3)
-                    Text {
-                        text: "ACTIVE PALETTE"
-                        color: root.accentColor
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        font.bold: true
-                    }
-                    Text {
-                        text: root.selectedVariant.toUpperCase()
-                        color: root.foregroundColor
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.heading
-                        font.bold: true
-                    }
-                }
-            }
-
-            Text {
-                Layout.fillWidth: true
-                text: root.generationBusy
-                    ? "Generating six interpretations…"
-                    : root.colorEditorOpen
-                        ? "Tune a staged colour, then reset it or return to the palette directions."
-                        : root.lookFeelEditorOpen
-                            ? "Choose a complete Look & Feel recipe. The four engines remain available as advanced controls."
-                            : root.advancedEditorOpen
-                                ? "Tune one engine at a time. Window, Shell, Bar, and Animations keep their native owners."
-                                : root.demoActive
-                                    ? "Choose another palette direction to reapply it without losing this canvas."
-                                    : root.workspaceReady
-                                        ? "Choose a direction to apply it to the real desktop."
-                                        : "Preparing the Live Canvas…"
-                color: root.foregroundColor
-                opacity: 0.62
-                wrapMode: Text.WordWrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.bodySmall
-            }
-
-            RowLayout {
-                visible: root.colorEditorOpen || root.lookFeelEditorOpen || root.advancedEditorOpen
-                Layout.fillWidth: true
-                spacing: Style.space(5)
-
-                Button {
-                    Layout.fillWidth: true
-                    text: "←  Palette directions"
-                    leftAlign: true
-                    fontSize: Style.font.caption
-                    foreground: root.foregroundColor
-                    accent: root.accentColor
-                    background: Util.alpha(root.foregroundColor, 0.045)
-                    bordered: true
-                    enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
-                    tooltipText: "Return to the colour variants without losing staged edits"
-                    onClicked: root.showPaletteDirections()
-                }
-            }
-
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Style.space(4)
-
-                Button {
-                    Layout.fillWidth: true
-                    text: "Edit colours"
-                    fontSize: Style.font.caption
-                    foreground: root.colorEditorOpen ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
-                    accent: root.accentColor
-                    background: root.colorEditorOpen ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
-                    bordered: true
-                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
-                    onClicked: {
-                        root.colorEditorOpen = !root.colorEditorOpen
-                        if (root.colorEditorOpen) {
-                            root.lookFeelEditorOpen = false
-                            root.advancedEditorOpen = false
-                        }
-                    }
-                }
-
-                Button {
-                    visible: root.extraConfigsEnabled
-                    Layout.fillWidth: true
-                    text: "Choose a preset"
-                    fontSize: Style.font.caption
-                    foreground: root.lookFeelEditorOpen ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
-                    accent: root.accentColor
-                    background: root.lookFeelEditorOpen ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
-                    bordered: true
-                    enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
-                    onClicked: {
-                        root.lookFeelEditorOpen = !root.lookFeelEditorOpen
-                        if (root.lookFeelEditorOpen) {
-                            root.colorEditorOpen = false
-                            root.advancedEditorOpen = false
-                        }
-                    }
-                }
-
-                Button {
-                    visible: root.extraConfigsEnabled
-                    Layout.fillWidth: true
-                    text: "Advanced controls"
-                    fontSize: Style.font.caption
-                    foreground: root.advancedEditorOpen ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
-                    accent: root.accentColor
-                    background: root.advancedEditorOpen ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
-                    bordered: true
-                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
-                    onClicked: {
-                        root.advancedEditorOpen = !root.advancedEditorOpen
-                        if (root.advancedEditorOpen) {
-                            root.colorEditorOpen = false
-                            root.lookFeelEditorOpen = false
-                        }
-                    }
-                }
-            }
-
-            RowLayout {
-                visible: root.colorEditorOpen
-                Layout.fillWidth: true
-                spacing: Style.space(5)
-
-                Repeater {
-                    model: root.editableColorRoles
-                    delegate: Button {
-                        id: editableRoleButton
-                        required property var modelData
+                    Item {
+                        id: paletteStepPage
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Style.space(32)
-                        text: modelData.label
-                        fontSize: Style.font.caption
-                        foreground: root.editingColorRole === modelData.key ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
-                        accent: root.accentColor
-                        background: root.editingColorRole === modelData.key ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
-                        bordered: true
-                        tooltipText: ""
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.editingColorRole = modelData.key
+                        implicitHeight: visible ? paletteStep.implicitHeight : 0
+                        Layout.preferredHeight: visible ? paletteStep.implicitHeight : 0
+                        visible: !root.workflowStep && root.wizardStep === 0
 
-                        Components.BoundedTooltip {
-                            anchorItem: editableRoleButton
-                            text: root.tooltipDescription(root.colorRoleDescription(modelData.key))
+                        Wizard.PaletteStep {
+                            id: paletteStep
+                            width: parent.width
+                            variants: root.variants
+                            palettes: root.palettes
+                            selectedVariant: root.selectedVariant
+                            paletteSelected: root.wizardPaletteSelected || root.workspaceReady && root.selectedVariant !== ""
+                            previewBusy: root.previewBusy
+                            generationBusy: root.generationBusy
+                            controlsEnabled: !root.operationBusy
+                            stagedColors: root.stagedColors
+                            colorPreviewLive: root.colorPreviewLive
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onVariantRequested: root.variantRequested(variant)
+                            onColorOverridesCommitted: root.previewPaletteColors(overrides)
                         }
                     }
-                }
-            }
 
-            Button {
-                visible: root.colorEditorOpen
-                Layout.fillWidth: true
-                text: root.moreColorsOpen ? "More colours  ↑" : "More colours  ↓"
-                foreground: root.foregroundColor
-                accent: root.accentColor
-                background: Util.alpha(root.foregroundColor, 0.045)
-                bordered: true
-                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                onClicked: root.moreColorsOpen = !root.moreColorsOpen
-            }
-
-            ColumnLayout {
-                visible: root.colorEditorOpen && root.moreColorsOpen
-                Layout.fillWidth: true
-                spacing: Style.space(5)
-
-                Repeater {
-                    model: root.advancedColorGroups
-                    delegate: ColumnLayout {
-                        id: groupDelegate
-                        required property var modelData
+                    Item {
                         Layout.fillWidth: true
-                        spacing: Style.space(4)
+                        Layout.preferredHeight: visible ? lookFeelStep.implicitHeight : 0
+                        visible: !root.workflowStep && root.wizardStep === 1
 
-                        Button {
-                            Layout.fillWidth: true
-                            text: (root.expandedColorGroup === groupDelegate.modelData.key ? "▾  " : "▸  ") + groupDelegate.modelData.label
-                            leftAlign: true
-                            foreground: root.foregroundColor
-                            accent: root.accentColor
-                            background: Util.alpha(root.foregroundColor, 0.045)
-                            bordered: true
-                            enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                            onClicked: root.expandedColorGroup = root.expandedColorGroup === groupDelegate.modelData.key ? "" : groupDelegate.modelData.key
+                        Wizard.LookFeelStep {
+                            id: lookFeelStep
+                            width: parent.width
+                            catalog: root.lookFeelCatalog
+                            lookFeel: root.lookFeel
+                            recipe: root.lookFeelRecipe
+                            decided: root.wizardLookFeelDecided
+                            catalogLoading: root.lookFeelCatalogLoading
+                            catalogError: root.lookFeelCatalogError
+                            busy: root.lookFeelBusy
+                            previewBusy: root.previewBusy
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onPresetRequested: function(preset) {
+                                root.lookFeelPresetRequested(preset)
+                                root.lookFeelSelectedRequested()
+                            }
+                            onSkipRequested: {
+                                root.lookFeelSkippedRequested()
+                                root.lookFeelPresetRequested("omarchy-native")
+                            }
+                            onCatalogRetryRequested: root.lookFeelCatalogRetryRequested()
                         }
+                    }
 
-                        GridLayout {
-                            visible: root.expandedColorGroup === groupDelegate.modelData.key
-                            Layout.fillWidth: true
-                            columns: 2
-                            rowSpacing: Style.space(4)
-                            columnSpacing: Style.space(4)
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: visible ? advancedStep.implicitHeight : 0
+                        visible: !root.workflowStep && root.wizardStep === 2
 
-                            Repeater {
-                                model: groupDelegate.modelData.roles
-                                delegate: Button {
-                                    id: advancedRoleButton
-                                    required property var modelData
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: Style.space(32)
-                                    text: modelData.label
-                                    fontSize: Style.font.caption
-                                    foreground: root.editingColorRole === modelData.key ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
-                                    accent: root.accentColor
-                                    background: root.editingColorRole === modelData.key ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
-                                    bordered: true
-                                    tooltipText: ""
-                                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                                    onClicked: root.editingColorRole = modelData.key
-
-                                    Components.BoundedTooltip {
-                                        anchorItem: advancedRoleButton
-                                        text: root.tooltipDescription(root.colorRoleDescription(modelData.key))
-                                    }
-                                }
+                        Wizard.AdvancedStep {
+                            id: advancedStep
+                            width: parent.width
+                            choice: root.wizardAdvancedChoice
+                            controlsEnabled: !root.operationBusy
+                            shellStyle: root.shellStyleForVariant(root.selectedVariant)
+                            desktopStyle: root.desktopStyle
+                            barStyle: root.barStyleForVariant(root.selectedVariant)
+                            animationsStyle: root.animationsStyle
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onChoiceRequested: root.advancedChoiceRequested(choice)
+                            onStylesChanged: function(nextShell, nextDesktop, nextBar, nextAnimations) {
+                                root.advancedStylesChanged(nextShell, nextDesktop, nextBar, nextAnimations)
                             }
                         }
                     }
-                }
-            }
 
-            Components.ColorRoleEditor {
-                visible: root.colorEditorOpen
-                Layout.fillWidth: true
-                Layout.preferredHeight: implicitHeight
-                roleKey: root.editingColorRole
-                roleLabel: root.colorRoleLabel(root.editingColorRole)
-                roleDescription: root.tooltipDescription(root.colorRoleDescription(root.editingColorRole))
-                value: root.currentColor(root.editingColorRole)
-                presetValue: root.presetColor(root.editingColorRole)
-                suggestions: root.suggestionsFor(root.editingColorRole)
-                live: root.colorPreviewLive
-                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                onValueEdited: function(hex) { root.stageColor(root.editingColorRole, hex) }
-                onResetRequested: root.resetColor(root.editingColorRole)
-                onSuggestionRequested: function(hex) { root.stageColor(root.editingColorRole, hex) }
-            }
-
-            Components.LookFeelControls {
-                visible: root.extraConfigsEnabled && root.lookFeelEditorOpen
-                Layout.fillWidth: true
-                catalog: root.lookFeelCatalog
-                catalogLoading: root.lookFeelCatalogLoading
-                catalogError: root.lookFeelCatalogError
-                lookFeel: root.lookFeel
-                recipe: root.lookFeelRecipe
-                terminalTranslucency: root.terminalTranslucency
-                presetOpacity: root.terminalPresetOpacity
-                foregroundColor: root.foregroundColor
-                backgroundColor: root.backgroundColor
-                accentColor: root.accentColor
-                busy: root.lookFeelBusy || root.previewBusy
-                onPresetRequested: root.lookFeelPresetRequested(preset)
-                onCatalogRetryRequested: root.lookFeelCatalogRetryRequested()
-                onResetRequested: root.lookFeelResetRequested(scope)
-                onTerminalChanged: root.terminalIntentChanged(terminal)
-            }
-
-            Components.AdvancedStyleEditor {
-                id: advancedStyleEditor
-                visible: root.extraConfigsEnabled && root.advancedEditorOpen
-                Layout.fillWidth: true
-                Layout.preferredHeight: implicitHeight
-                shellStyle: root.shellStyleForVariant(root.selectedVariant)
-                desktopStyle: root.desktopStyle
-                barStyle: root.barStyleForVariant(root.selectedVariant)
-                animationsStyle: root.animationsStyle
-                foregroundColor: root.foregroundColor
-                backgroundColor: root.backgroundColor
-                accentColor: root.accentColor
-                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
-                onStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
-                    root.advancedStylesChanged(shellStyle, desktopStyle, barStyle, animationsStyle)
-                }
-                onSectionChanged: function(index) {
-                    root.advancedSection = index
-                    if (index !== 0 && root.demoActive && root.demoMode === "window")
-                        root.windowDemoStopRequested()
-                    if (index !== 1 && root.demoActive && root.demoMode === "shell")
-                        root.shellDemoStopRequested()
-                    if (index !== 2 && root.demoActive && root.demoMode === "bar")
-                        root.barDemoStopRequested()
-                }
-            }
-
-            Rectangle {
-                // This is deliberately translucent, not a Qt item blur. With a
-                // frosted profile selected, Hyprland's scoped layer rule blurs
-                // the real wallpaper/window pixels behind the Live Canvas.
-                visible: root.extraConfigsEnabled && root.advancedEditorOpen && root.frostedBackdropEnabled
-                Layout.fillWidth: true
-                Layout.preferredHeight: Style.space(64)
-                radius: Style.space(8)
-                color: Util.alpha(root.backgroundColor, 0.12)
-                border.width: 1
-                border.color: Util.alpha(Color.popups.border, 0.72)
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: Style.space(10)
-                    spacing: Style.space(2)
-                    Text { text: "LIVE BACKDROP PROBE"; color: root.foregroundColor; opacity: 0.72; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true; font.letterSpacing: 0.7 }
-                    Text { Layout.fillWidth: true; text: "After Test Live, the wallpaper or windows behind this canvas should soften here. Application content itself remains sharp."; color: root.foregroundColor; opacity: 0.7; wrapMode: Text.WordWrap; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                }
-            }
-
-            Button {
-                visible: root.colorEditorOpen
-                Layout.fillWidth: true
-                text: "Reset variant colours"
-                foreground: root.foregroundColor
-                accent: root.accentColor
-                background: Util.alpha(root.foregroundColor, 0.045)
-                bordered: true
-                enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && Object.keys(root.stagedColors).length > 0
-                onClicked: {
-                    root.resetVariantColors()
-                    root.colorTestLiveRequested(root.selectedVariant, ({}), root.shellStyleForVariant(root.selectedVariant), root.desktopStyle, root.barStyleForVariant(root.selectedVariant), root.animationsStyle)
-                }
-            }
-
-            Button {
-                visible: root.colorEditorOpen
-                Layout.fillWidth: true
-                text: root.previewBusy ? "Applying live changes…" : "Test Live colours"
-                foreground: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
-                accent: root.accentColor
-                background: root.accentColor
-                enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyleForVariant(root.selectedVariant), root.desktopStyle, root.barStyleForVariant(root.selectedVariant), root.animationsStyle)
-            }
-
-            ColumnLayout {
-                visible: !root.colorEditorOpen && !root.lookFeelEditorOpen && !root.advancedEditorOpen
-                Layout.fillWidth: true
-                spacing: Style.space(5)
-
-                Repeater {
-                    model: root.variants
-                    delegate: Button {
-                        required property var modelData
-                        readonly property bool selectedRow: root.selectedVariant === modelData.variant
-                        readonly property bool hasStagedChanges: selectedRow && Object.keys(root.stagedColors).length > 0 && !root.colorPreviewLive
+                    Item {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Style.space(48)
-                        text: (selectedRow ? "●  " : "○  ") + modelData.label + "\n" + (selectedRow
-                            ? (root.previewBusy
-                                ? "PREVIEWING…"
-                                : root.colorPreviewLive && Object.keys(root.stagedColors).length > 0
-                                    ? "LIVE PREVIEW"
-                                    : hasStagedChanges
-                                        ? "STAGED CHANGES · TEST LIVE"
-                                        : "SELECTED · TEST LIVE")
-                            : "PREVIEW ON CLICK")
-                        leftAlign: true
-                        fontSize: Style.font.caption
-                        foreground: root.foregroundColor
-                        accent: selectedRow ? root.accentColor : root.foregroundColor
-                        background: selectedRow ? Util.alpha(root.accentColor, 0.12) : Util.alpha(root.foregroundColor, 0.04)
-                        bordered: true
-                        tooltipText: selectedRow ? "Current live direction" : "Preview " + modelData.label + " on the desktop"
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.variantRequested(modelData.variant)
+                        Layout.preferredHeight: visible ? demoStep.implicitHeight : 0
+                        visible: !root.workflowStep && root.wizardStep === 3
+
+                        Wizard.DemoStep {
+                            id: demoStep
+                            width: parent.width
+                            demoActive: root.demoActive
+                            demoBusy: root.demoBusy
+                            demoMode: root.demoMode
+                            monitorName: root.monitorName
+                            errorMessage: root.errorMessage
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onStartRequested: root.startDemoRequested()
+                            onStopRequested: root.closeCanvasRequested()
+                            onSkipRequested: root.demoSkippedRequested()
+                        }
+                    }
+
+                    Item {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: visible ? finishStep.implicitHeight : 0
+                        visible: !root.workflowStep && root.wizardStep === 4
+
+                        Wizard.FinishStep {
+                            id: finishStep
+                            width: parent.width
+                            selectedVariant: root.selectedVariant
+                            selectedVariantLabel: root.selectedVariantLabel()
+                            selectedPreset: root.selectedPresetLabel()
+                            advancedChoice: root.wizardAdvancedChoice
+                            demoActive: root.demoActive
+                            applyBusy: root.applyBusy
+                            cancelBusy: root.cancelBusy
+                            foregroundColor: root.foregroundColor
+                            backgroundColor: root.backgroundColor
+                            accentColor: root.accentColor
+                            onApplyRequested: themeNameDialog.openWith(root.suggestedThemeName)
+                            onRestoreAndCloseRequested: root.restoreAndCloseRequested()
+                        }
                     }
                 }
             }
-
-            Text {
-                Layout.fillWidth: true
-                visible: root.errorMessage !== ""
-                text: root.errorMessage
-                color: Color.urgent
-                wrapMode: Text.WordWrap
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-
-            // Leave a deliberate clearance above the fixed action footer so
-            // the last editor field, error, or suggestion can scroll fully
-            // into view without changing any action or focus behavior.
-            Item {
-                Layout.fillWidth: true
-                visible: root.colorEditorOpen || root.lookFeelEditorOpen || root.advancedEditorOpen
-                Layout.preferredHeight: visible ? Style.space(72) : 0
-            }
-
-            }
-        }
-
-        Rectangle {
-            id: scrollTrack
-            visible: scrollArea.contentHeight > scrollArea.height
-            z: 3
-            width: Style.space(4)
-            anchors.top: parent.top
-            anchors.topMargin: Style.space(22)
-            anchors.bottom: actionFooter.top
-            anchors.bottomMargin: Style.space(22)
-            anchors.right: parent.right
-            anchors.rightMargin: Style.space(7)
-            radius: width / 2
-            color: Util.alpha(root.foregroundColor, 0.08)
 
             Rectangle {
-                width: parent.width
-                height: Math.max(Style.space(36), parent.height * scrollArea.height / scrollArea.contentHeight)
-                y: (parent.height - height) * (scrollArea.contentY / Math.max(1, scrollArea.contentHeight - scrollArea.height))
-                radius: width / 2
-                color: Util.alpha(root.accentColor, 0.7)
-            }
-        }
-
-        Rectangle {
-            id: actionFooter
-            z: 4
-            height: footerColumn.implicitHeight + Style.space(20)
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.bottom: parent.bottom
-            color: Util.alpha(Color.popups.background, 0.96)
-            border.color: Color.popups.border
-            border.width: 1
-
-            ColumnLayout {
-                id: footerColumn
-                anchors.fill: parent
-                anchors.margins: Style.space(10)
-                spacing: Style.space(5)
-
-                Rectangle {
-                    visible: root.previewBusy
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Style.space(28)
-                    radius: Style.space(5)
-                    color: Util.alpha(root.accentColor, 0.1)
-                    border.width: 1
-                    border.color: Util.alpha(root.accentColor, 0.35)
-
-                    Text {
-                        anchors.fill: parent
-                        anchors.leftMargin: Style.space(8)
-                        anchors.rightMargin: Style.space(8)
-                        text: "Previewing on the desktop · keep editing; Test Live unlocks when ready"
-                        color: root.foregroundColor
-                        opacity: 0.78
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        verticalAlignment: Text.AlignVCenter
-                        elide: Text.ElideRight
-                    }
-                }
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(58)
+                color: Util.alpha(Color.popups.background, 0.98)
+                border.width: 1
+                border.color: Color.popups.border
 
                 RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(5)
+                    anchors.fill: parent
+                    anchors.leftMargin: Style.space(10)
+                    anchors.rightMargin: Style.space(10)
+                    spacing: Style.space(8)
 
                     Button {
-                        Layout.fillWidth: true
-                        text: root.previewBusy
-                            ? "Applying live changes…"
-                            : root.colorEditorOpen
-                                ? "Test Live colours"
-                                : root.lookFeelEditorOpen || root.advancedEditorOpen
-                                    ? "Test Live composition"
-                                    : "Test Live"
-                        foreground: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
-                        accent: root.accentColor
-                        background: root.accentColor
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.colorTestLiveRequested(root.selectedVariant, root.stagedColors, root.shellStyleForVariant(root.selectedVariant), root.desktopStyle, root.barStyleForVariant(root.selectedVariant), root.animationsStyle)
-                    }
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: root.applyBusy ? "Saving permanently…" : "Apply permanently…"
+                        Layout.preferredWidth: Style.space(106)
+                        Layout.preferredHeight: Style.space(38)
+                        text: "Back"
                         foreground: root.foregroundColor
                         accent: root.accentColor
                         background: Util.alpha(root.foregroundColor, 0.045)
                         bordered: true
-                        tooltipText: "Write the selected theme permanently after confirmation"
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: themeNameDialog.openWith(root.suggestedThemeName)
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(5)
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: root.demoBusy ? (root.demoActive ? "Stopping demo…" : "Starting demo…") : (root.demoActive ? "Stop demo" : "Start demo")
-                        foreground: root.foregroundColor
-                        bordered: true
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.demoActive ? root.closeCanvasRequested() : root.startDemoRequested()
+                        enabled: root.wizardCanGoBack && !root.operationBusy
+                        onClicked: root.goBackRequested()
                     }
 
-                    Button {
+                    Text {
                         Layout.fillWidth: true
-                        visible: root.advancedEditorOpen && root.advancedSection === 0
-                        text: root.demoBusy
-                            ? (root.demoActive && root.demoMode === "window" ? "Stopping Window…" : "Opening Window…")
-                            : (root.demoActive && root.demoMode === "window" ? "Stop Window Demo" : "Window Demo")
-                        foreground: root.foregroundColor
-                        background: root.demoActive && root.demoMode === "window" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
+                        text: root.operationText !== ""
+                            ? root.operationText
+                            : root.workflowStep
+                                ? "Workflow · choose Fast or In-depth"
+                                : "Step " + (root.wizardStep + 1) + " of " + root.wizardStepCount
+                        color: root.foregroundColor
+                        opacity: 0.55
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        horizontalAlignment: Text.AlignHCenter
+                        elide: Text.ElideRight
+                    }
+
+                    Button {
+                        Layout.preferredWidth: Style.space(170)
+                        Layout.preferredHeight: Style.space(38)
+                        visible: root.workflowStep || root.wizardStep < root.stepLabels.length - 1
+                        text: root.workflowStep ? "Continue to Palette  →" : root.wizardNextLabel
+                        foreground: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
                         accent: root.accentColor
+                        background: root.accentColor
                         bordered: true
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.windowDemoRequested()
+                        enabled: root.workflowStep
+                            ? root.wizardCanContinueWorkflow && !root.operationBusy
+                            : root.wizardCanGoNext && !root.operationBusy
+                        onClicked: root.workflowStep
+                            ? root.workflowContinueRequested()
+                            : root.goNextRequested()
                     }
-
-                    Button {
-                        Layout.fillWidth: true
-                        visible: root.advancedEditorOpen && root.advancedSection === 1
-                        text: root.demoBusy
-                            ? (root.demoActive && root.demoMode === "shell" ? "Stopping Shell…" : "Opening Shell…")
-                            : (root.demoActive && root.demoMode === "shell" ? "Stop Shell Demo" : "Shell Demo")
-                        foreground: root.foregroundColor
-                        background: root.demoActive && root.demoMode === "shell" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
-                        accent: root.accentColor
-                        bordered: true
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.shellDemoRequested()
-                    }
-
-                    Button {
-                        Layout.fillWidth: true
-                        visible: root.advancedEditorOpen && root.advancedSection === 2
-                        text: root.demoBusy
-                            ? (root.demoActive && root.demoMode === "bar" ? "Stopping Bar…" : "Opening Bar…")
-                            : (root.demoActive && root.demoMode === "bar" ? "Stop Bar Demo" : "Bar Demo")
-                        foreground: root.foregroundColor
-                        background: root.demoActive && root.demoMode === "bar" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
-                        accent: root.accentColor
-                        bordered: true
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.barDemoRequested()
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(5)
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: root.cancelBusy ? "Restoring original desktop…" : "Restore & close"
-                        foreground: root.foregroundColor
-                        bordered: true
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.cancelRequested()
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(5)
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: "Hide"
-                        foreground: root.foregroundColor
-                        bordered: true
-                        tooltipText: "Hide Studio panel"
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
-                        onClicked: root.hideRequested()
-                    }
-                }
-            }
-        }
-    }
-
-    // Apply, Demo, generation, recovery, and preset resolution remain modal.
-    // Preview alone is deliberately non-modal: the staged editors stay usable,
-    // while every action that could start another live operation remains gated.
-    FocusScope {
-        id: operationShield
-        anchors.fill: parent
-        visible: root.blockingOperationBusy
-        z: 20
-        focus: visible
-
-        Keys.onPressed: function(event) { event.accepted = true }
-        onVisibleChanged: Qt.callLater(function() {
-            if (operationShield.visible)
-                operationShield.forceActiveFocus()
-            else
-                keyCatcher.forceActiveFocus()
-        })
-
-        MouseArea {
-            anchors.fill: parent
-            acceptedButtons: Qt.AllButtons
-            hoverEnabled: true
-            onPressed: function(mouse) { mouse.accepted = true }
-            onReleased: function(mouse) { mouse.accepted = true }
-            onWheel: function(wheel) { wheel.accepted = true }
-        }
-
-        Rectangle {
-            width: Math.min(parent.width - Style.space(48), Style.space(370))
-            height: operationDetailText.implicitHeight + Style.space(112)
-            anchors.centerIn: parent
-            radius: Style.cornerRadius
-            color: Color.popups.background
-            border.width: 1
-            border.color: Color.popups.border
-
-            Column {
-                anchors.centerIn: parent
-                width: parent.width - Style.space(44)
-                spacing: Style.space(9)
-
-                Item {
-                    width: Style.space(28)
-                    height: Style.space(28)
-                    anchors.horizontalCenter: parent.horizontalCenter
-
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: width / 2
-                        color: "transparent"
-                        border.width: Style.space(3)
-                        border.color: Util.alpha(Color.popups.text, 0.2)
-                    }
-
-                    Rectangle {
-                        width: parent.width
-                        height: parent.height
-                        radius: width / 2
-                        color: "transparent"
-                        border.width: Style.space(3)
-                        border.color: root.accentColor
-                        rotation: 0
-
-                        RotationAnimation on rotation {
-                            from: 0
-                            to: 360
-                            duration: 900
-                            loops: Animation.Infinite
-                            running: operationShield.visible
-                        }
-                    }
-                }
-
-                Text {
-                    width: parent.width
-                    text: root.operationTitle
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Color.popups.text
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.title
-                    font.bold: true
-                }
-
-                Text {
-                    id: operationDetailText
-                    width: parent.width
-                    text: root.operationDetail
-                    horizontalAlignment: Text.AlignHCenter
-                    color: Color.popups.text
-                    opacity: 0.62
-                    wrapMode: Text.WordWrap
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.bodySmall
                 }
             }
         }
@@ -1321,17 +537,18 @@ PanelWindow {
         id: themeNameDialog
         anchors.fill: parent
         busy: root.applyBusy
-        onConfirmed: function(name, generateUnlock, capturePreview) {
-            root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview)
+        themeEditMode: root.sourceThemeName !== ""
+        sourceThemeName: root.sourceThemeName
+        onConfirmed: function(name, generateUnlock, capturePreview, replaceSource) {
+            root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview, replaceSource)
         }
     }
 
     onActiveChanged: if (active)
-        Qt.callLater(function() { keyCatcher.forceActiveFocus(); })
+        Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+
     onSelectedVariantChanged: {
         root.stagedColors = root.overridesForVariant(root.selectedVariant)
-        root.colorEditorOpen = Object.keys(root.stagedColors).length > 0
         root.colorPreviewLive = false
-        root.editingColorRole = "accent"
     }
 }

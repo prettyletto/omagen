@@ -702,7 +702,11 @@ type BackgroundRef struct {
 }
 
 type Record struct {
-	SessionID            string               `json:"session_id"`
+	SessionID string `json:"session_id"`
+	// Workflow identifies how the workspace was created. Empty and "generate"
+	// remain compatible with sessions written before installed-theme editing.
+	Workflow             string               `json:"workflow,omitempty"`
+	ThemeEdit            *ThemeEdit           `json:"theme_edit,omitempty"`
 	OriginalTheme        string               `json:"original_theme"`
 	OriginalBackground   BackgroundRef        `json:"original_background"`
 	CreatedAt            time.Time            `json:"created_at"`
@@ -724,10 +728,39 @@ type Record struct {
 	AppliedGeneration  string               `json:"applied_generation,omitempty"`
 	AppliedVariant     string               `json:"applied_variant,omitempty"`
 	AppliedDisplayName string               `json:"applied_display_name,omitempty"`
+	AppliedBackup      string               `json:"applied_backup,omitempty"`
+}
+
+// ThemeEdit records the user-selected source and the scopes Omagen has
+// explicitly taken ownership of. The source directory is never mutated in
+// place; Apply uses this identity to constrain same-name replacement.
+type ThemeEdit struct {
+	SourceID          string               `json:"source_id"`
+	SourceName        string               `json:"source_name"`
+	SourcePath        string               `json:"source_path"`
+	SourceKind        string               `json:"source_kind"`
+	SourceFingerprint string               `json:"source_fingerprint,omitempty"`
+	ManagedScopes     []string             `json:"managed_scopes,omitempty"`
+	ReplaceSource     bool                 `json:"replace_source,omitempty"`
+	Shell             ShellStyle           `json:"shell,omitempty"`
+	Desktop           DesktopStyle         `json:"desktop,omitempty"`
+	Bar               BarStyle             `json:"bar,omitempty"`
+	Animations        AnimationsStyle      `json:"animations,omitempty"`
+	LookFeel          LookFeelDocument     `json:"look_feel,omitempty"`
+	Terminal          TerminalTranslucency `json:"terminal,omitempty"`
+}
+
+func (r Record) ThemeEditManagedScopes() []string {
+	if r.ThemeEdit == nil {
+		return nil
+	}
+	return append([]string(nil), r.ThemeEdit.ManagedScopes...)
 }
 
 type BeginResult struct {
 	SessionID            string               `json:"session_id"`
+	Workflow             string               `json:"workflow,omitempty"`
+	ThemeEdit            *ThemeEdit           `json:"theme_edit,omitempty"`
 	OriginalTheme        string               `json:"original_theme"`
 	OriginalBackground   BackgroundRef        `json:"original_background"`
 	ShellStyle           ShellStyle           `json:"shell_style"`

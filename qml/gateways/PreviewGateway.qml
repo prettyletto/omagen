@@ -18,6 +18,7 @@ Item {
         const lookFeel = styles.look_feel || styles.lookFeel || null
         const terminal = styles.terminal || styles.terminalTranslucency || null
         return {
+            managed_scopes: styles.managedScopes || styles.managed_scopes || [],
             shell: {
                 preset: shell.preset || "default",
                 surface: shell.surface || "flat",

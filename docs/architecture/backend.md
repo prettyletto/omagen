@@ -18,6 +18,8 @@ The domain packages are intentionally separate:
   Omarchy commands.
 - `settings` and `terminaltheme` are supporting persistence/materialization
   domains.
+- `themeedit` adopts merged stock/user themes into source-only editable
+  workspaces and writes portable theme recipes.
 
 The package-level tests are the primary contract tests. The CLI must remain
 thin enough that command behavior can be located without reading the engine

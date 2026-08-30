@@ -1,6 +1,7 @@
 package preview
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/prettyletto/omagen/backend/internal/bar"
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/generation"
@@ -322,33 +324,61 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		styles.Desktop = session.NormalizeDesktopStyle(styles.Desktop)
 		styles.Bar = session.NormalizeBarStyle(styles.Bar)
 		styles.Animations = session.NormalizeAnimationsStyle(styles.Animations)
+		managed := styles.ManagedScopes
+		allScopes := len(managed) == 0
+		hasScope := func(want string) bool {
+			if allScopes {
+				return true
+			}
+			for _, scope := range managed {
+				if scope == want {
+					return true
+				}
+			}
+			return false
+		}
 		spec := styles.Bar.EffectiveBarSpec()
-		if err := theme.WriteHyprlandWithAnimationsAndShell(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations, styles.Shell.Preset, &spec); err != nil {
-			return fmt.Errorf("rewrite overridden hyprland style: %w", err)
-		}
-		if err := theme.WriteShellWithOverridesAndSpec(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility, session.EffectiveShellOverrides(styles.Shell, styles.Bar), &spec); err != nil {
-			return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
-		}
-		if styles.Bar.Profile != nil {
-			if err := theme.WriteBarProfile(dir, *styles.Bar.Profile); err != nil {
-				return fmt.Errorf("rewrite bar profile: %w", err)
+		if hasScope("window-motion") {
+			if err := writeHyprlandOverridePreservingNative(dir, palette, styles, spec); err != nil {
+				return fmt.Errorf("rewrite overridden hyprland style: %w", err)
 			}
 		}
-		if err := theme.WriteBarSpec(dir, styles.Bar.EffectiveBarSpec()); err != nil {
-			return fmt.Errorf("rewrite bar spec: %w", err)
+		if hasScope("shell-bar") {
+			if err := theme.WriteShellWithOverridesAndSpec(dir, palette, styles.Shell.Surface, styles.Shell.Detail, styles.Shell.Tooltip, styles.Shell.Notifications, styles.Bar.Surface, styles.Bar.Density, styles.Bar.Attention, styles.Bar.Form, styles.Bar.Visibility, session.EffectiveShellOverrides(styles.Shell, styles.Bar), &spec); err != nil {
+				return fmt.Errorf("rewrite overridden shell sidecars: %w", err)
+			}
+			if styles.Bar.Profile != nil {
+				if err := theme.WriteBarProfile(dir, *styles.Bar.Profile); err != nil {
+					return fmt.Errorf("rewrite bar profile: %w", err)
+				}
+			}
+			if err := theme.WriteBarSpec(dir, styles.Bar.EffectiveBarSpec()); err != nil {
+				return fmt.Errorf("rewrite bar spec: %w", err)
+			}
 		}
-		if styles.LookFeel != nil {
+		if styles.LookFeel != nil && (allScopes || len(managed) > 0) {
 			if err := theme.WriteLookFeelMetadata(dir, *styles.LookFeel); err != nil {
 				return fmt.Errorf("rewrite Look & Feel metadata: %w", err)
 			}
 		}
-		if styles.Terminal != nil {
+		if styles.Terminal != nil && hasScope("terminal") {
 			if err := theme.WriteTerminalTranslucency(dir, *styles.Terminal); err != nil {
 				return fmt.Errorf("rewrite terminal translucency metadata: %w", err)
 			}
 		}
-		if err := runtime.WriteManifest(dir, runtime.AdvancedManifest("shell", "bar", "window", "animations")); err != nil {
-			return fmt.Errorf("write Omagen runtime manifest: %w", err)
+		if len(managed) > 0 || allScopes {
+			manifestScopes := []string{}
+			if allScopes || hasScope("shell-bar") {
+				manifestScopes = append(manifestScopes, "shell", "bar")
+			}
+			if allScopes || hasScope("window-motion") {
+				manifestScopes = append(manifestScopes, "window", "animations")
+			}
+			if len(manifestScopes) > 0 {
+				if err := runtime.WriteManifest(dir, runtime.AdvancedManifest(manifestScopes...)); err != nil {
+					return fmt.Errorf("write Omagen runtime manifest: %w", err)
+				}
+			}
 		}
 		return nil
 	}
@@ -371,6 +401,38 @@ func writeOverrideFiles(dir string, palette theme.Palette, request Request, shel
 		return fmt.Errorf("write Omagen runtime manifest: %w", err)
 	}
 	return nil
+}
+
+// writeHyprlandOverridePreservingNative keeps hand-authored stock/user Lua
+// rules ahead of Omagen's generated compositor block. Generated Omagen files
+// are intentionally replaced rather than recursively duplicated on each
+// preview. This preserves custom rules while keeping Omagen's explicit style
+// values authoritative for the managed window/motion fields.
+func writeHyprlandOverridePreservingNative(dir string, palette theme.Palette, styles StyleOverrides, spec bar.BarSpec) error {
+	path := filepath.Join(dir, "hyprland.lua")
+	original, readErr := os.ReadFile(path)
+	preserve := readErr == nil && len(bytes.TrimSpace(original)) > 0 && !bytes.Contains(original, []byte("-- Generated by Omagen."))
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return readErr
+	}
+	if err := theme.WriteHyprlandWithAnimationsAndShell(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations, styles.Shell.Preset, &spec); err != nil {
+		return err
+	}
+	if !preserve {
+		return nil
+	}
+	generated, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	merged := make([]byte, 0, len(original)+len(generated)+64)
+	merged = append(merged, original...)
+	if len(merged) > 0 && merged[len(merged)-1] != '\n' {
+		merged = append(merged, '\n')
+	}
+	merged = append(merged, []byte("\n-- Omagen managed window/motion block.\n")...)
+	merged = append(merged, generated...)
+	return fsutil.AtomicWriteFile(path, merged, 0o644)
 }
 
 func colorOverrideHash(overrides map[string]string) (string, error) {
@@ -414,7 +476,11 @@ func copyCandidateTree(source, destination string) error {
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("unsupported candidate entry %s", relative)
 		}
-		return fsutil.CopyFileAtomic(path, target, 0o644)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return fsutil.CopyFileAtomic(path, target, info.Mode().Perm())
 	})
 }
 
@@ -538,6 +604,18 @@ func applyStyleOverrides(record *session.Record, styles *StyleOverrides) {
 		record.TerminalTranslucency = session.NormalizeTerminalTranslucency(*styles.Terminal)
 	}
 	record.ExtraConfigs = true
+	if record.ThemeEdit != nil && len(styles.ManagedScopes) > 0 {
+		seen := make(map[string]bool, len(record.ThemeEdit.ManagedScopes)+len(styles.ManagedScopes))
+		for _, scope := range record.ThemeEdit.ManagedScopes {
+			seen[scope] = true
+		}
+		for _, scope := range styles.ManagedScopes {
+			if !seen[scope] {
+				record.ThemeEdit.ManagedScopes = append(record.ThemeEdit.ManagedScopes, scope)
+				seen[scope] = true
+			}
+		}
+	}
 }
 
 func validateComponent(name, value string) error {

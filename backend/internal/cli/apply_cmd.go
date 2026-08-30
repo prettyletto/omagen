@@ -9,7 +9,7 @@ import (
 
 func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) int {
 	if len(args) < 4 {
-		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview] [--run <adapters>] [--skip <adapters>]")
+		return fail(stderr, 2, "usage: omagen apply <session_id> <generation_id> <variant> <theme_name> [--unlock] [--live-preview] [--replace-source] [--run <adapters>] [--skip <adapters>]")
 	}
 	variant, err := generation.ParseVariant(args[2])
 	if err != nil {
@@ -49,6 +49,8 @@ func runApply(args []string, service *apply.Service, stdout, stderr io.Writer) i
 			i++
 		case "--allow-trusted-hooks":
 			request.AllowTrustedHooks = true
+		case "--replace-source":
+			request.DestinationPolicy = "replace-source"
 		default:
 			return fail(stderr, 2, "unknown apply option: %s", arg)
 		}

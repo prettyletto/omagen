@@ -29,6 +29,7 @@ Item {
     property bool pendingUnlock: false
     property bool pendingAfterDemo: false
     property bool pendingCapture: false
+    property bool pendingReplaceSource: false
     property bool pendingPreview: false
     property bool pendingCloseDemo: false
     property bool pendingAbortAfterDemo: false
@@ -36,6 +37,7 @@ Item {
 
     signal errorRaised(string message)
     signal hideApplication()
+    signal hideLiveCanvasRequested()
     signal showApplication()
     signal demoBusyRequested(bool busy)
     signal stopBarDemoRequested()
@@ -58,7 +60,7 @@ Item {
         return outcome === "started" || outcome === "queued"
     }
 
-    function apply(variant, name, generateUnlock, capturePreview) {
+    function apply(variant, name, generateUnlock, capturePreview, replaceSource) {
         if (!root.workspaceReady || root.busy || root.previewBusy || root.cancelBusy || root.demoBusy)
             return
 
@@ -70,6 +72,7 @@ Item {
         root.pendingName = name
         root.pendingUnlock = generateUnlock === true
         root.pendingCapture = capturePreview === true
+        root.pendingReplaceSource = replaceSource === true
         root.pendingPreview = true
         root.pendingCloseDemo = false
 
@@ -78,6 +81,7 @@ Item {
         // skipped.
         if (root.pendingCapture) {
             root.pendingAfterDemo = true
+            root.hideLiveCanvasRequested()
             root.hideApplication()
             root.demoBusyRequested(true)
             if (root.backendDemoActive()) {
@@ -111,6 +115,7 @@ Item {
     function clearPending() {
         root.pendingAfterDemo = false
         root.pendingCapture = false
+        root.pendingReplaceSource = false
         root.pendingPreview = false
         root.pendingCloseDemo = false
         root.pendingAbortAfterDemo = false
@@ -173,7 +178,8 @@ Item {
             root.pendingVariant,
             root.pendingName,
             root.pendingUnlock,
-            false
+            false,
+            root.pendingReplaceSource
         )
         return true
     }
@@ -253,6 +259,7 @@ Item {
         const name = root.pendingName
         const generateUnlock = root.pendingUnlock
         const capturePreview = root.pendingCapture
+        const replaceSource = root.pendingReplaceSource
         root.clearPending()
         // Demo capture hides Omagen while the screenshot is taken, but the
         // permanent Go/theme-set phase stays behind the applying modal until
@@ -264,7 +271,8 @@ Item {
             variant,
             name,
             generateUnlock,
-            capturePreview
+            capturePreview,
+            replaceSource
         )
         return true
     }

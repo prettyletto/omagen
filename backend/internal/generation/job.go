@@ -19,6 +19,7 @@ import (
 type job struct {
 	variant         Variant
 	sourceImage     string
+	basePalette     *theme.Palette
 	analysis        *imageanalysis.Analysis
 	settings        settingspkg.Settings
 	shellStyle      session.ShellStyle
@@ -64,52 +65,38 @@ func (j job) run(
 	}
 
 	var generatedPalette theme.Palette
-	switch j.variant {
-	case Source:
-		basePalette, err := semanticpalette.Source(
+	basePalette := j.basePalette
+	if basePalette == nil {
+		base, err := semanticpalette.Source(
 			j.analysis.Representatives,
 			j.settings.ColorTheory.Harmony,
 		)
 		if err != nil {
 			return fmt.Errorf("build source palette: %w", err)
 		}
-		generatedPalette = basePalette
+		basePalette = &base
+	}
+	switch j.variant {
+	case Source:
+		generatedPalette = *basePalette
 
 	case Calm:
-		basePalette, err := semanticpalette.Source(
-			j.analysis.Representatives,
-			j.settings.ColorTheory.Harmony,
-		)
-		if err != nil {
-			return fmt.Errorf("build calm base palette: %w", err)
-		}
-		generatedPalette, err = semanticpalette.Calm(basePalette)
+		var err error
+		generatedPalette, err = semanticpalette.Calm(*basePalette)
 		if err != nil {
 			return fmt.Errorf("build calm palette: %w", err)
 		}
 
 	case Mute:
-		basePalette, err := semanticpalette.Source(
-			j.analysis.Representatives,
-			j.settings.ColorTheory.Harmony,
-		)
-		if err != nil {
-			return fmt.Errorf("build mute base palette: %w", err)
-		}
-		generatedPalette, err = semanticpalette.Mute(basePalette)
+		var err error
+		generatedPalette, err = semanticpalette.Mute(*basePalette)
 		if err != nil {
 			return fmt.Errorf("build mute palette: %w", err)
 		}
 
 	case Deep:
-		basePalette, err := semanticpalette.Source(
-			j.analysis.Representatives,
-			j.settings.ColorTheory.Harmony,
-		)
-		if err != nil {
-			return fmt.Errorf("build deep base palette: %w", err)
-		}
-		generatedPalette, err = semanticpalette.Deep(basePalette)
+		var err error
+		generatedPalette, err = semanticpalette.Deep(*basePalette)
 		if err != nil {
 			return fmt.Errorf("build deep palette: %w", err)
 		}
@@ -119,27 +106,15 @@ func (j job) run(
 		}
 
 	case Vibrant:
-		basePalette, err := semanticpalette.Source(
-			j.analysis.Representatives,
-			j.settings.ColorTheory.Harmony,
-		)
-		if err != nil {
-			return fmt.Errorf("build vibrant base palette: %w", err)
-		}
-		generatedPalette, err = semanticpalette.Vibrant(basePalette)
+		var err error
+		generatedPalette, err = semanticpalette.Vibrant(*basePalette)
 		if err != nil {
 			return fmt.Errorf("build vibrant palette: %w", err)
 		}
 
 	case Balanced:
-		basePalette, err := semanticpalette.Source(
-			j.analysis.Representatives,
-			j.settings.ColorTheory.Harmony,
-		)
-		if err != nil {
-			return fmt.Errorf("build balanced base palette: %w", err)
-		}
-		generatedPalette, err = semanticpalette.Balanced(basePalette)
+		var err error
+		generatedPalette, err = semanticpalette.Balanced(*basePalette)
 		if err != nil {
 			return fmt.Errorf("build balanced palette: %w", err)
 		}
@@ -150,17 +125,22 @@ func (j job) run(
 
 	var err error
 	var effectiveBarSpec *bar.BarSpec
-	generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
-	if err != nil {
-		return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
-	}
-	generatedPalette, err = semanticpalette.EnsureANSIDistinctAfterContrast(
-		generatedPalette,
-		j.settings.Contrast.ANSI,
-		j.settings.Contrast.BrightANSI,
-	)
-	if err != nil {
-		return fmt.Errorf("finalize ANSI palette for %s: %w", j.variant, err)
+	// A theme-edit source is already an authored palette. Keep it semantically
+	// identical; contrast normalization belongs to newly derived directions
+	// and must not silently rewrite the user's source.
+	if j.basePalette == nil || j.variant != Source {
+		generatedPalette, err = contrast.Enforce(generatedPalette, j.settings.Contrast)
+		if err != nil {
+			return fmt.Errorf("enforce %s contrast: %w", j.variant, err)
+		}
+		generatedPalette, err = semanticpalette.EnsureANSIDistinctAfterContrast(
+			generatedPalette,
+			j.settings.Contrast.ANSI,
+			j.settings.Contrast.BrightANSI,
+		)
+		if err != nil {
+			return fmt.Errorf("finalize ANSI palette for %s: %w", j.variant, err)
+		}
 	}
 
 	if err := theme.WriteColors(

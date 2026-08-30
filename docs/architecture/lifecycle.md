@@ -4,6 +4,13 @@ An active session captures the original theme/background and the configuration
 needed to resume. That record survives the QML overlay being hidden or
 reloaded. `session.Service` and its stores are the durable lifecycle authority.
 
+An installed-theme edit enters the same lifecycle after native adoption:
+
+```text
+List/resolve native theme -> snapshot merged source -> source-only Preview
+  -> clone or same-name Apply -> commit/recover
+```
+
 Preview is temporary and session-scoped. Apply is a staged transaction with
 prepared/committed state and explicit recovery. Cancel, Quit, and recovery
 close Omagen-owned Demo state, recover interrupted Apply when present, restore

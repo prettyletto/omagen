@@ -132,7 +132,7 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 			return BeginResult{}, fmt.Errorf("create session id: %w", err)
 		}
 		now := time.Now().UTC()
-		record := Record{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, CreatedAt: now}
+		record := Record{SessionID: sessionID, Workflow: "generate", OriginalTheme: theme, OriginalBackground: background, ExtraConfigs: extraConfigs, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, CreatedAt: now}
 		var capturedBarSnapshot *barprofile.Snapshot
 		if s.bar != nil {
 			snapshot, snapshotErr := s.bar.Capture(theme)
@@ -160,7 +160,56 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 				return BeginResult{}, fmt.Errorf("persist user bar snapshot: %w", err)
 			}
 		}
-		return BeginResult{SessionID: sessionID, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, ExtraConfigs: extraConfigs, BarSnapshot: record.BarSnapshot}, nil
+		return BeginResult{SessionID: sessionID, Workflow: record.Workflow, ThemeEdit: record.ThemeEdit, OriginalTheme: theme, OriginalBackground: background, ShellStyle: shellStyle, DesktopStyle: desktopStyle, BarStyle: barStyle, AnimationsStyle: animationsStyle, LookFeel: lookFeel, TerminalTranslucency: terminalTranslucency, ExtraConfigs: extraConfigs, BarSnapshot: record.BarSnapshot}, nil
+	})
+}
+
+// MarkThemeEdit attaches an already-created source snapshot to a newly begun
+// session. Keeping this mutation in session.Service preserves the durable
+// record as the only lifecycle authority while the theme-edit adapter owns
+// source discovery and copying.
+func (s *Service) MarkThemeEdit(sessionID string, edit ThemeEdit, generationID string) error {
+	return withMutationLockError(s.store, func() error {
+		if !validSessionID(sessionID) {
+			return fmt.Errorf("invalid session id")
+		}
+		active, exists, err := s.store.LoadActive()
+		if err != nil {
+			return err
+		}
+		if !exists || active.SessionID != sessionID {
+			return ErrSessionNotActive
+		}
+		record, err := s.store.Load(sessionID)
+		if err != nil {
+			return err
+		}
+		if (record.Workflow != "" && record.Workflow != "generate") || record.ThemeEdit != nil {
+			return fmt.Errorf("session is already configured for a different workflow")
+		}
+		if edit.SourceID == "" || edit.SourceName == "" || edit.SourcePath == "" || edit.SourceKind == "" {
+			return fmt.Errorf("theme-edit source metadata is incomplete")
+		}
+		if generationID == "" || !validSessionID(generationID) {
+			return fmt.Errorf("theme-edit source generation is incomplete")
+		}
+		record.Workflow = "theme-edit"
+		// Theme editing always exposes the Studio controls, even when the
+		// selected source has no Omagen recipe yet. Scope ownership remains
+		// empty until the user explicitly changes an engine.
+		record.ExtraConfigs = true
+		if edit.Shell.Preset != "" || edit.Shell.Surface != "" {
+			record.ShellStyle = NormalizeShellStyle(edit.Shell)
+			record.DesktopStyle = NormalizeDesktopStyle(edit.Desktop)
+			record.BarStyle = NormalizeBarStyle(edit.Bar)
+			record.AnimationsStyle = NormalizeAnimationsStyle(edit.Animations)
+			record.LookFeel = NormalizeLookFeelDocument(edit.LookFeel)
+			record.TerminalTranslucency = NormalizeTerminalTranslucency(edit.Terminal)
+		}
+		record.ThemeEdit = &edit
+		record.GenerationID = generationID
+		record.PreviewVariant = ""
+		return s.store.Save(record)
 	})
 }
 

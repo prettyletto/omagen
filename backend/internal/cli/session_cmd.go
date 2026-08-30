@@ -25,6 +25,8 @@ type cancelResponse struct {
 
 type resumeResponse struct {
 	Active                 bool                          `json:"active"`
+	Workflow               string                        `json:"workflow,omitempty"`
+	ThemeEdit              *session.ThemeEdit            `json:"theme_edit,omitempty"`
 	SessionID              string                        `json:"session_id,omitempty"`
 	SourceImage            string                        `json:"source_image,omitempty"`
 	GenerationID           string                        `json:"generation_id,omitempty"`
@@ -86,7 +88,7 @@ func runSessionWithDependencies(args []string, service *session.Service, preview
 		if err != nil {
 			return fail(stderr, 1, "%v", err)
 		}
-		result := resumeResponse{Active: true, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, AnimationsStyle: session.NormalizeAnimationsStyle(record.AnimationsStyle), LookFeel: session.NormalizeLookFeelDocument(record.LookFeel), TerminalTranslucency: session.NormalizeTerminalTranslucency(record.TerminalTranslucency), ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
+		result := resumeResponse{Active: true, Workflow: record.Workflow, ThemeEdit: record.ThemeEdit, SessionID: record.SessionID, SourceImage: record.SourceImage, GenerationID: record.GenerationID, PreviewVariant: record.PreviewVariant, ShellStyle: record.ShellStyle, DesktopStyle: record.DesktopStyle, BarStyle: record.BarStyle, AnimationsStyle: session.NormalizeAnimationsStyle(record.AnimationsStyle), LookFeel: session.NormalizeLookFeelDocument(record.LookFeel), TerminalTranslucency: session.NormalizeTerminalTranslucency(record.TerminalTranslucency), ExtraConfigs: record.ExtraConfigs, OriginalTheme: record.OriginalTheme, OriginalBackgroundKind: record.OriginalBackground.Kind, OriginalBackgroundPath: record.OriginalBackground.Path}
 		if demoService != nil {
 			canvas, statusErr := demoService.Status(record.SessionID)
 			if statusErr == nil {
