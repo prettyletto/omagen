@@ -29,10 +29,10 @@ Item {
     onActiveTabChanged: root.sectionChanged(root.activeTab)
 
     readonly property var tabs: [
-        { title: "Window", key: "window", eyebrow: "HYPRLAND" },
-        { title: "Shell", key: "shell", eyebrow: "QUICKSHELL" },
-        { title: "Bar", key: "bar", eyebrow: "QUATTRO BAR" },
-        { title: "Animations", key: "animations", eyebrow: "HYPRLAND" }
+        { title: "Window", key: "window", eyebrow: "HYPRLAND", guidance: "Start here with shape, spacing, depth, and focused-window treatment." },
+        { title: "Shell", key: "shell", eyebrow: "QUICKSHELL", guidance: "Choose the surface and detail language for menus, popups, tooltips, and notifications." },
+        { title: "Bar", key: "bar", eyebrow: "QUATTRO BAR", guidance: "Choose a bar recipe first, then reveal size and composition details only when needed." },
+        { title: "Animations", key: "animations", eyebrow: "HYPRLAND", guidance: "Finish with motion preferences; keep the timing readable before testing the composition." }
     ]
     readonly property var surfaceOptions: [
         { key: "flat", title: "Flat" }, { key: "layered", title: "Layered" },
@@ -726,7 +726,7 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "ADVANCED CONTROLS"
+            text: "CUSTOMIZE STAGE"
             color: root.accentColor
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
@@ -735,7 +735,7 @@ Item {
         }
         Text {
             Layout.fillWidth: true
-            text: "Tune one of the four engines independently. The selected Look & Feel recipe remains the starting point."
+            text: "Stage 3 of 4 · Tune one engine at a time. The selected Look & Feel recipe remains the starting point."
             color: root.foregroundColor
             opacity: 0.62
             wrapMode: Text.WordWrap
@@ -752,13 +752,51 @@ Item {
                     required property var modelData
                     required property int index
                     Layout.fillWidth: true
-                    text: modelData.title
+                    text: (index + 1) + "  " + modelData.title
                     fontSize: Style.font.caption
                     foreground: root.activeTab === index ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor) : root.foregroundColor
                     background: root.activeTab === index ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
                     accent: root.accentColor
                     bordered: true
+                    tooltipText: modelData.eyebrow
                     onClicked: root.activeTab = index
+                }
+            }
+        }
+
+        BorderSurface {
+            Layout.fillWidth: true
+            implicitHeight: customizeGuidance.implicitHeight + Style.space(18)
+            color: Util.alpha(root.accentColor, 0.07)
+            radius: Math.max(Style.space(6), Style.cornerRadius / 2)
+            borderSpec: Border.flat(Util.alpha(root.accentColor, 0.3), 1)
+
+            ColumnLayout {
+                id: customizeGuidance
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.top: parent.top
+                anchors.margins: Style.space(9)
+                spacing: Style.space(3)
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "CURRENT STEP · " + root.tabs[root.activeTab].eyebrow + " · " + root.tabs[root.activeTab].title.toUpperCase()
+                    color: root.accentColor
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    font.bold: true
+                    font.letterSpacing: 0.7
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: root.tabs[root.activeTab].guidance
+                    color: root.foregroundColor
+                    opacity: 0.72
+                    wrapMode: Text.WordWrap
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
                 }
             }
         }

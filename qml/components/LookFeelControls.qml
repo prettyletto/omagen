@@ -52,6 +52,20 @@ Item {
         return id
     }
 
+    function conciseDescription(value) {
+        var description = String(value || "").trim()
+        if (description === "")
+            return "Native Omarchy defaults."
+        var maximumCharacters = 72
+        if (description.length <= maximumCharacters)
+            return description
+        var shortened = description.slice(0, maximumCharacters - 1)
+        var lastSpace = shortened.lastIndexOf(" ")
+        if (lastSpace > maximumCharacters / 2)
+            shortened = shortened.slice(0, lastSpace)
+        return shortened + "…"
+    }
+
     function customCount() {
         var count = 0
         for (var key in root.customized) {
@@ -177,13 +191,14 @@ Item {
                 model: root.catalog
                 delegate: Button {
                     required property var modelData
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Style.space(58)
-                    text: modelData.name + "\n" + "Revision " + modelData.revision
-                    fontSize: Style.font.caption
-                    foreground: root.selectedPreset === modelData.id
+                    readonly property color cardTextColor: root.selectedPreset === modelData.id
                         ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
                         : root.foregroundColor
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Style.space(82)
+                    text: ""
+                    fontSize: Style.font.caption
+                    foreground: cardTextColor
                     background: root.selectedPreset === modelData.id
                         ? root.accentColor : Util.alpha(root.foregroundColor, 0.035)
                     accent: root.accentColor
@@ -195,6 +210,37 @@ Item {
                     tooltipText: modelData.description || ""
                     enabled: !root.busy
                     onClicked: root.presetRequested(modelData.id)
+
+                    Column {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: Style.space(10)
+                        anchors.rightMargin: Style.space(10)
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Style.space(2)
+
+                        Text {
+                            width: parent.width
+                            text: modelData.name
+                            color: cardTextColor
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.bodySmall
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Text {
+                            width: parent.width
+                            text: "Revision " + modelData.revision + " · " + root.conciseDescription(modelData.description)
+                            color: cardTextColor
+                            opacity: root.selectedPreset === modelData.id ? 0.86 : 0.68
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
             }
         }

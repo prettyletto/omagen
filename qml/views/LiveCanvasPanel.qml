@@ -95,6 +95,37 @@ PanelWindow {
     property bool lookFeelEditorOpen: false
     property bool advancedEditorOpen: false
     property int advancedSection: 0
+    readonly property var wizardStages: ["Source", "Palette", "Customize", "Test / Apply"]
+    readonly property int wizardStageIndex: root.generationBusy
+        ? 0
+        : (root.previewBusy || root.demoBusy || root.applyBusy || root.cancelBusy)
+            ? 3
+            : (root.colorEditorOpen || root.lookFeelEditorOpen || root.advancedEditorOpen)
+                ? 2 : 1
+    readonly property string wizardStageLabel: root.cancelBusy
+        ? "Restore"
+        : root.demoBusy
+            ? (root.demoActive ? "Demo · closing" : "Demo · opening")
+            : root.wizardStages[root.wizardStageIndex]
+    readonly property string wizardNextAction: root.generationBusy
+        ? "Waiting for the palette directions to finish."
+        : root.cancelBusy
+            ? "Restoring the original desktop and closing this session."
+            : root.demoBusy
+                ? (root.demoActive ? "Closing the demo before returning to the canvas." : "Opening the demo for the selected section.")
+                : root.applyBusy
+                    ? "Completing the permanent save."
+                    : root.previewBusy
+                        ? "Review the live preview when it finishes."
+                        : root.colorEditorOpen
+                            ? "Edit a colour, then Test Live colours."
+                            : root.lookFeelEditorOpen
+                                ? "Choose a recipe, then Test Live composition."
+                                : root.advancedEditorOpen
+                                    ? "Tune a section, then Test Live composition."
+                                    : root.workspaceReady
+                                        ? "Select a palette direction to preview it."
+                                        : "Preparing the palette directions."
     readonly property string inactiveStyle: desktopStyle.inactiveStyle || desktopStyle.inactive_style || "native"
     readonly property bool frostedBackdropEnabled: inactiveStyle === "blur" || inactiveStyle.indexOf("frosted_") === 0
     readonly property real frostedBackdropOpacity: inactiveStyle === "native" ? 1.0
@@ -444,8 +475,8 @@ PanelWindow {
             Color.popups.background,
             root.frostedBackdropOpacity
         )
-        border.width: 1
-        border.color: Color.popups.border
+        border.width: keyCatcher.activeFocus ? Math.max(1, Style.space(2)) : 1
+        border.color: keyCatcher.activeFocus ? root.accentColor : Color.popups.border
 
         Components.SignalGlitch {
             anchors.fill: parent
@@ -533,6 +564,73 @@ PanelWindow {
                     tooltipText: "Hide Studio panel"
                     onClicked: root.hideRequested()
                 }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Style.space(3)
+
+                Repeater {
+                    model: root.wizardStages
+                    delegate: Rectangle {
+                        required property string modelData
+                        required property int index
+                        readonly property bool currentStage: index === root.wizardStageIndex
+                        readonly property bool completedStage: index < root.wizardStageIndex
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Style.space(28)
+                        radius: Math.max(Style.space(4), Style.cornerRadius / 2)
+                        color: currentStage
+                            ? root.accentColor
+                            : completedStage
+                                ? Util.alpha(root.accentColor, 0.14)
+                                : Util.alpha(root.foregroundColor, 0.035)
+                        border.width: 1
+                        border.color: currentStage
+                            ? root.accentColor
+                            : completedStage
+                                ? Util.alpha(root.accentColor, 0.42)
+                                : Util.alpha(root.foregroundColor, 0.16)
+
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: Style.space(5)
+                            anchors.rightMargin: Style.space(5)
+                            text: (parent.completedStage ? "✓  " : parent.currentStage ? "●  " : "") + parent.modelData
+                            color: parent.currentStage
+                                ? Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
+                                : root.foregroundColor
+                            opacity: parent.currentStage ? 1 : parent.completedStage ? 0.78 : 0.48
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: parent.currentStage
+                            elide: Text.ElideRight
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+                }
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: root.cancelBusy || root.demoBusy
+                    ? root.wizardStageLabel.toUpperCase() + "  ·  " + root.wizardNextAction
+                    : "STAGE " + (root.wizardStageIndex + 1) + " OF " + root.wizardStages.length + " · " + root.wizardStageLabel + "  NEXT: " + root.wizardNextAction
+                color: root.foregroundColor
+                opacity: 0.72
+                wrapMode: Text.WordWrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+            }
+
+            Text {
+                Layout.fillWidth: true
+                text: "Keyboard: Esc hides this panel · focused fields show an accent ring"
+                color: root.foregroundColor
+                opacity: 0.46
+                wrapMode: Text.WordWrap
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
             }
 
             Rectangle {
@@ -889,13 +987,26 @@ PanelWindow {
                     model: root.variants
                     delegate: Button {
                         required property var modelData
+                        readonly property bool selectedRow: root.selectedVariant === modelData.variant
+                        readonly property bool hasStagedChanges: selectedRow && Object.keys(root.stagedColors).length > 0 && !root.colorPreviewLive
                         Layout.fillWidth: true
-                        text: (root.selectedVariant === modelData.variant ? "●  " : "○  ") + modelData.label
+                        Layout.preferredHeight: Style.space(48)
+                        text: (selectedRow ? "●  " : "○  ") + modelData.label + "\n" + (selectedRow
+                            ? (root.previewBusy
+                                ? "PREVIEWING…"
+                                : root.colorPreviewLive && Object.keys(root.stagedColors).length > 0
+                                    ? "LIVE PREVIEW"
+                                    : hasStagedChanges
+                                        ? "STAGED CHANGES · TEST LIVE"
+                                        : "SELECTED · TEST LIVE")
+                            : "PREVIEW ON CLICK")
                         leftAlign: true
+                        fontSize: Style.font.caption
                         foreground: root.foregroundColor
-                        accent: root.selectedVariant === modelData.variant ? root.accentColor : root.foregroundColor
-                        background: root.selectedVariant === modelData.variant ? Util.alpha(root.accentColor, 0.12) : Util.alpha(root.foregroundColor, 0.04)
+                        accent: selectedRow ? root.accentColor : root.foregroundColor
+                        background: selectedRow ? Util.alpha(root.accentColor, 0.12) : Util.alpha(root.foregroundColor, 0.04)
                         bordered: true
+                        tooltipText: selectedRow ? "Current live direction" : "Preview " + modelData.label + " on the desktop"
                         enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.variantRequested(modelData.variant)
                     }
@@ -910,6 +1021,15 @@ PanelWindow {
                 wrapMode: Text.WordWrap
                 font.family: Style.font.family
                 font.pixelSize: Style.font.caption
+            }
+
+            // Leave a deliberate clearance above the fixed action footer so
+            // the last editor field, error, or suggestion can scroll fully
+            // into view without changing any action or focus behavior.
+            Item {
+                Layout.fillWidth: true
+                visible: root.colorEditorOpen || root.lookFeelEditorOpen || root.advancedEditorOpen
+                Layout.preferredHeight: visible ? Style.space(72) : 0
             }
 
             }
@@ -1000,10 +1120,12 @@ PanelWindow {
 
                     Button {
                         Layout.fillWidth: true
-                        text: root.applyBusy ? "Applying…" : "Apply theme"
-                        foreground: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
+                        text: root.applyBusy ? "Saving permanently…" : "Apply permanently…"
+                        foreground: root.foregroundColor
                         accent: root.accentColor
-                        background: root.accentColor
+                        background: Util.alpha(root.foregroundColor, 0.045)
+                        bordered: true
+                        tooltipText: "Write the selected theme permanently after confirmation"
                         enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: themeNameDialog.openWith(root.suggestedThemeName)
                     }
