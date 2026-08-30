@@ -128,7 +128,18 @@ else
     echo "  omarchy-shell shell rescanPlugins"
 fi
 
-if omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1; then
+enabled=0
+for attempt in 1 2 3; do
+    if omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1; then
+        enabled=1
+        break
+    fi
+    # A shell rescan can return before the plugin manager has refreshed its
+    # registry. Retry briefly so a fresh branch install does not leave the
+    # overlay installed but disabled.
+    ((attempt < 3)) && sleep 1
+done
+if ((enabled)); then
     echo "Enabled $PLUGIN_ID."
 else
     echo "Plugin not enabled automatically; enable later with:"
