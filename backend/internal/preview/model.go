@@ -10,15 +10,21 @@ import (
 // nil; when present, the candidate is regenerated through the real Hyprland
 // and Quickshell theme writers before the native theme driver runs.
 type StyleOverrides struct {
-	Shell      session.ShellStyle            `json:"shell"`
-	Desktop    session.DesktopStyle          `json:"desktop"`
-	Bar        session.BarStyle              `json:"bar"`
-	Animations session.AnimationsStyle       `json:"animations"`
-	LookFeel   *session.LookFeelDocument     `json:"look_feel,omitempty"`
-	Terminal   *session.TerminalTranslucency `json:"terminal,omitempty"`
+	ManagedScopes []string                      `json:"managed_scopes,omitempty"`
+	Shell         session.ShellStyle            `json:"shell"`
+	Desktop       session.DesktopStyle          `json:"desktop"`
+	Bar           session.BarStyle              `json:"bar"`
+	Animations    session.AnimationsStyle       `json:"animations"`
+	LookFeel      *session.LookFeelDocument     `json:"look_feel,omitempty"`
+	Terminal      *session.TerminalTranslucency `json:"terminal,omitempty"`
 }
 
 func (s StyleOverrides) Valid() bool {
+	for _, scope := range s.ManagedScopes {
+		if scope != "shell-bar" && scope != "window-motion" && scope != "terminal" {
+			return false
+		}
+	}
 	shell := session.NormalizeShellStyle(s.Shell)
 	desktop := session.NormalizeDesktopStyle(s.Desktop)
 	bar := session.NormalizeBarStyle(s.Bar)

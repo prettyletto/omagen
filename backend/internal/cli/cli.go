@@ -28,7 +28,7 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	switch args[0] {
 	case "--help", "-h", "help":
 		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
-		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, bar, look-feel, terminal, runtime, ping")
+		_, _ = fmt.Fprintln(stdout, "commands: session, preview, apply, generate, generation, demo, cleanup, settings, bar, look-feel, theme, terminal, runtime, ping")
 		return 0
 	case "ping":
 		return writeJSON(stdout, stderr, pingResponse{OK: true, Version: BackendVersion})
@@ -52,6 +52,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return runBar(args[1:], deps.barStore, deps.omarchyClient, stdout, stderr)
 	case "look-feel":
 		return runLookFeel(args[1:], stdout, stderr)
+	case "theme":
+		return runTheme(args[1:], deps.themeEditService, stdout, stderr)
 	case "terminal":
 		return runTerminal(args[1:], stdout, stderr)
 	case "runtime":

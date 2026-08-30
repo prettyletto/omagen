@@ -27,6 +27,7 @@ Item {
     property bool pendingWindowDemo: false
 
     signal activateCanvasRequested()
+    signal hideLiveCanvasRequested()
     signal hideApplicationRequested()
     signal stopped()
     signal errorRaised(string message)
@@ -64,6 +65,7 @@ Item {
         root.busy = true
         root.activateCanvasRequested()
         root.hideApplicationRequested()
+        root.hideLiveCanvasRequested()
         // Omarchy reloads all Ghostty instances as part of applying a theme.
         // Create the scene first, then apply the selected preview; this is the
         // same ordering as opening the four applications manually before

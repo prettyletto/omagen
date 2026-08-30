@@ -301,6 +301,74 @@ func TestApplyFailureKeepsSessionActiveAndDoesNotPublish(t *testing.T) {
 	}
 }
 
+func TestReplaceSourceMovesExistingThemeBeforePublishing(t *testing.T) {
+	service, store, sessionID := setupApplyTest(t, &testApplier{})
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Workflow = "theme-edit"
+	record.ThemeEdit = &session.ThemeEdit{SourceID: "test-theme", SourceName: "Test Theme", SourcePath: "/source", SourceKind: "user"}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(service.themesRoot, "test-theme")
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "original.txt"), []byte("preserve until commit"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.Apply(Request{
+		SessionID: sessionID, GenerationID: "generation-1", Variant: generation.Variant("source"),
+		ThemeName: "Test Theme", DestinationPolicy: "replace-source",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.ThemeName != "test-theme" {
+		t.Fatalf("result theme=%q", result.ThemeName)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "original.txt")); !os.IsNotExist(err) {
+		t.Fatalf("old source still present after replacement: err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(destination, ".omagen-owner")); !os.IsNotExist(err) {
+		t.Fatalf("owner marker not cleaned after commit: err=%v", err)
+	}
+	backup := filepath.Join(store.SessionDir(sessionID), "replacement-backup")
+	if _, err := os.Stat(backup); !os.IsNotExist(err) {
+		t.Fatalf("replacement backup not cleaned after commit: err=%v", err)
+	}
+}
+
+func TestSameNameEditRequiresExplicitReplacementPolicy(t *testing.T) {
+	service, store, sessionID := setupApplyTest(t, &testApplier{})
+	record, err := store.Load(sessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record.Workflow = "theme-edit"
+	record.ThemeEdit = &session.ThemeEdit{SourceID: "test-theme", SourceName: "Test Theme", SourcePath: "/source", SourceKind: "user"}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	destination := filepath.Join(service.themesRoot, "test-theme")
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "original.txt"), []byte("keep"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Apply(Request{
+		SessionID: sessionID, GenerationID: "generation-1", Variant: generation.Variant("source"), ThemeName: "Test Theme",
+	}); err == nil {
+		t.Fatal("same-name edit unexpectedly replaced a theme without explicit policy")
+	}
+	if data, err := os.ReadFile(filepath.Join(destination, "original.txt")); err != nil || string(data) != "keep" {
+		t.Fatalf("existing theme changed after rejected apply: data=%q err=%v", data, err)
+	}
+}
+
 func TestApplyStagesOptionalUnlockAndLivePreviewAssets(t *testing.T) {
 	service, store, sessionID := setupApplyTest(t, &testApplier{})
 	candidate := filepath.Join(store.SessionDir(sessionID), "generations", "generation-1", "source")
@@ -458,5 +526,32 @@ func TestPreparedApplyActiveThemeWithoutOwnershipDoesNotCommit(t *testing.T) {
 	}
 	if _, exists, err := store.LoadActive(); err != nil || !exists {
 		t.Fatalf("active marker changed after ownership failure: exists=%t err=%v", exists, err)
+	}
+}
+
+func TestRestoreReplacementBackupNeverRemovesUnownedDestination(t *testing.T) {
+	service, _, sessionID := setupApplyTest(t, &testApplier{})
+	destination := filepath.Join(service.themesRoot, "existing-theme")
+	backup := filepath.Join(service.sessions.SessionDir(sessionID), "replacement-backup")
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, "keep.txt"), []byte("user data"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(backup, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(backup, "old.txt"), []byte("backup"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := restoreReplacementBackup(destination, backup, sessionID); err == nil {
+		t.Fatal("expected unowned destination refusal")
+	}
+	if _, err := os.Stat(filepath.Join(destination, "keep.txt")); err != nil {
+		t.Fatalf("unowned destination was modified: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(backup, "old.txt")); err != nil {
+		t.Fatalf("replacement backup was consumed after refusal: %v", err)
 	}
 }

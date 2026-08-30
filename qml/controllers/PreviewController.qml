@@ -138,6 +138,22 @@ Item {
             root.failed("Preview request became invalid while applying the latest appearance")
     }
 
+    function retryQueuedAfterStalePreview() {
+        const queued = root.queuedRequest
+        root.queuedRequest = null
+        if (!queued)
+            return false
+        const outcome = root.start(
+            queued.variant,
+            queued.overrides,
+            queued.styles,
+            queued.pendingColors
+        )
+        if (outcome === "invalid")
+            root.failed("Preview request became invalid while applying the latest appearance")
+        return outcome === "started" || outcome === "alreadyLive"
+    }
+
     function reset() {
         root.busy = false
         root.pendingColorPreview = false
@@ -156,6 +172,15 @@ Item {
             root.busy = false
             if (!root.session || sessionId !== root.session.sessionId
                     || generationId !== root.session.generationId) {
+                // Theme-edit can replace its one-source workspace with the
+                // six-direction generation while the initial Source preview
+                // is still running. A palette click made during that handoff
+                // is queued against the new generation; do not discard it
+                // merely because the older native request completed.
+                root.activeSignature = ""
+                root.pendingColorPreview = false
+                if (root.retryQueuedAfterStalePreview())
+                    return
                 root.rejected("Backend previewed a different generation")
                 return
             }

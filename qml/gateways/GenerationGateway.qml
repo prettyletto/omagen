@@ -54,7 +54,10 @@ Item {
         invalidJsonFallback: "Backend returned invalid generation description"
         onCompleted: function(result) {
             const requestSessionId = describeCommand.sessionId
-            if (!result.generation_id || (result.variants || []).length !== 6) {
+            const variants = result.variants || []
+            const validWorkspace = variants.length === 6
+                || (variants.length === 1 && variants[0] && variants[0].variant === "source")
+            if (!result.generation_id || !validWorkspace) {
                 root.generationDescribeFailed(requestSessionId, "Backend returned incomplete generation data")
                 return
             }

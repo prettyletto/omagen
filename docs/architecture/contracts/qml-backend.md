@@ -13,6 +13,13 @@ command families. `qml/services/BackendService.qml`
 is the compatibility façade used by the composition root; it forwards gateway
 signals without becoming a second domain implementation.
 
+`ThemeGateway` owns the additive `theme list` and `theme edit <theme-id>`
+commands. An edit response identifies an initial source workspace; the normal
+generation seam can then derive the five Omagen directions directly from its
+authored `colors.toml` without requiring a new image. This preserves the
+six-variant image-generation contract. Apply may append
+`--replace-source` only when the selected edit keeps its trusted source slug.
+
 New gateway code must preserve command names, argument ordering, JSON field
 names, bounded stdout/stderr handling, and signal payloads. Views should call a
 gateway/service method and react to a signal; they should not instantiate

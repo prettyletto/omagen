@@ -11,8 +11,11 @@ Item {
     property string errorMessage: ""
     property bool generateUnlock: false
     property bool capturePreview: false
+    property bool themeEditMode: false
+    property string sourceThemeName: ""
+    property bool replaceSource: false
     signal cancelled()
-    signal confirmed(string name, bool generateUnlock, bool capturePreview)
+    signal confirmed(string name, bool generateUnlock, bool capturePreview, bool replaceSource)
     visible: opened
 
     function openWith(name) {
@@ -20,6 +23,7 @@ Item {
         nameInput.text = name
         generateUnlock = false
         capturePreview = false
+        replaceSource = false
         opened = true
         Qt.callLater(function() { nameInput.forceActiveFocus(); nameInput.selectAll() })
     }
@@ -29,6 +33,7 @@ Item {
         nameInput.text = ""
         generateUnlock = false
         capturePreview = false
+        replaceSource = false
     }
     function close() { if (!busy) { opened = false; errorMessage = "" } }
     function submit() {
@@ -37,12 +42,12 @@ Item {
         if (value.length === 0) { errorMessage = "Theme name cannot be empty"; return }
         if (value.length > 64) { errorMessage = "Theme name must be 64 characters or fewer"; return }
         errorMessage = ""
-        confirmed(value, root.generateUnlock, root.capturePreview)
+        confirmed(value, root.generateUnlock, root.capturePreview, root.replaceSource)
     }
 
     Rectangle { anchors.fill: parent; color: Util.alpha(Color.background, 0.72); MouseArea { anchors.fill: parent; onClicked: { root.close(); root.cancelled() } } }
     Rectangle {
-        width: 430; height: 390; anchors.centerIn: parent; radius: 14; z: 1
+        width: 430; height: root.themeEditMode ? 462 : 390; anchors.centerIn: parent; radius: 14; z: 1
         visible: !root.busy
         color: Color.popups.background; border.width: 1; border.color: Color.popups.border
         Keys.onEscapePressed: { if (!root.busy) { root.close(); root.cancelled() } }
@@ -55,7 +60,7 @@ Item {
             anchors.fill: parent; anchors.margins: 24; spacing: 16
             Column { width: parent.width; spacing: 5
                 Text { text: "Save theme"; color: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
-                Text { text: "Choose a name for the permanent Omarchy theme."; color: Color.popups.text; opacity: .58; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                Text { text: root.themeEditMode ? "Save your edits as a new clone, or replace the selected theme." : "Choose a name for the permanent Omarchy theme."; color: Color.popups.text; opacity: .58; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
             }
             Rectangle { width: parent.width; height: 44; radius: 8; color: Util.alpha(Color.popups.text, 0.06); border.width: 1; border.color: nameInput.activeFocus ? Color.accent : Color.popups.border
                 TextInput { id: nameInput; anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; verticalAlignment: TextInput.AlignVCenter; color: Color.popups.text; selectionColor: Style.selectionFillFor(Color.popups.text, Color.accent, Color.urgent); selectedTextColor: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.body; maximumLength: 64; enabled: !root.busy; Keys.onReturnPressed: root.submit(); Keys.onEnterPressed: root.submit() }
@@ -79,6 +84,17 @@ Item {
                 accent: Color.accent
                 enabled: !root.busy
                 onClicked: root.capturePreview = !root.capturePreview
+            }
+            Ui.Toggle {
+                visible: root.themeEditMode
+                width: parent.width
+                label: "Replace selected theme in place"
+                description: "Explicitly overwrite " + (root.sourceThemeName || "the selected theme") + ". Leave this off to create a clone with a new name."
+                checked: root.replaceSource
+                foreground: Color.popups.text
+                accent: Color.accent
+                enabled: !root.busy
+                onClicked: root.replaceSource = !root.replaceSource
             }
             Text { visible: root.errorMessage !== ""; width: parent.width; text: root.errorMessage; textFormat: Text.PlainText; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
             Item { width: 1; height: root.errorMessage !== "" ? 0 : 14 }

@@ -31,6 +31,11 @@ Item {
     signal lookFeelCatalogFailed(string message)
     signal lookFeelResolved(var composition)
     signal lookFeelResolveFailed(string message)
+
+    signal themeCatalogLoaded(var themes)
+    signal themeCatalogFailed(string message)
+    signal themeEditOpened(var result)
+    signal themeEditOpenFailed(string message)
     signal runtimeStatusLoaded(var status)
     signal runtimeStatusFailed(string message)
     signal runtimeInstalled(string hookPath)
@@ -71,6 +76,8 @@ Item {
     function checkBackend() { pingCommand.exec([root.executable, "ping"]) }
     function listLookFeel() { lookFeelGateway.list() }
     function resolveLookFeel(preset) { lookFeelGateway.resolve(preset) }
+    function listThemes() { themeGateway.list() }
+    function openThemeForEdit(themeId) { themeGateway.openForEdit(themeId) }
     function checkRuntime() { runtimeGateway.check() }
     function installRuntime() { runtimeGateway.install() }
     function dismissRuntimePrompt() { runtimeGateway.dismiss() }
@@ -88,8 +95,8 @@ Item {
     function applyPreview(sessionId, generationId, variant, colorOverrides, styles) {
         previewGateway.apply(sessionId, generationId, variant, colorOverrides, styles)
     }
-    function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview) {
-        applyGateway.apply(sessionId, generationId, variant, name, generateUnlock, capturePreview)
+    function applyTheme(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource) {
+        applyGateway.apply(sessionId, generationId, variant, name, generateUnlock, capturePreview, replaceSource)
     }
     function openDemo(sessionId) { demoGateway.open(sessionId) }
     function openWindowDemo(sessionId) { demoGateway.openWindow(sessionId) }
@@ -141,6 +148,15 @@ Item {
         onCatalogFailed: function(message) { root.lookFeelCatalogFailed(message) }
         onResolved: function(composition) { root.lookFeelResolved(composition) }
         onResolveFailed: function(message) { root.lookFeelResolveFailed(message) }
+    }
+
+    Gateways.ThemeGateway {
+        id: themeGateway
+        executable: root.executable
+        onCatalogLoaded: function(themes) { root.themeCatalogLoaded(themes) }
+        onCatalogFailed: function(message) { root.themeCatalogFailed(message) }
+        onEditOpened: function(result) { root.themeEditOpened(result) }
+        onEditOpenFailed: function(message) { root.themeEditOpenFailed(message) }
     }
 
     Gateways.RuntimeGateway {

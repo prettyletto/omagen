@@ -13,6 +13,7 @@ type Request struct {
 	Scope                   string
 	WaitMode                string
 	AllowTrustedHooks       bool
+	DestinationPolicy       string
 }
 type Result struct {
 	SessionID                 string             `json:"session_id"`

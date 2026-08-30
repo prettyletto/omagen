@@ -113,6 +113,25 @@ func runtimeBridgeOwnsBarActivation(themeRoot string) bool {
 	return err == nil && state.Installed
 }
 
+// verifyPreparedCommit closes the crash window between the native theme
+// switch and the durable committed phase. A prepared transaction is only
+// promoted to committed after the native reader is verified and any
+// Omagen-owned bar profile has been re-applied from the saved baseline.
+func (s *Service) verifyPreparedCommit(record session.Record) error {
+	destination := filepath.Join(s.themesRoot, record.AppliedTheme)
+	if verifier, ok := s.applier.(nativeStateVerifier); ok {
+		if _, err := verifier.VerifyNativeState(record.AppliedTheme); err != nil {
+			return fmt.Errorf("verify prepared theme %q: %w", record.AppliedTheme, err)
+		}
+	}
+	if !runtimeBridgeOwnsBarActivation(destination) {
+		if _, err := s.applyBarProfile(destination, record); err != nil {
+			return fmt.Errorf("apply prepared themed bar profile: %w", err)
+		}
+	}
+	return nil
+}
+
 func (s *Service) Apply(r Request) (Result, error) {
 	if err := validComponent("session id", r.SessionID); err != nil {
 		return Result{}, err
@@ -128,6 +147,10 @@ func (s *Service) Apply(r Request) (Result, error) {
 	name, err := parseThemeName(r.ThemeName)
 	if err != nil {
 		return Result{}, fmt.Errorf("validate theme name: %w", err)
+	}
+	replaceSource := r.DestinationPolicy == "replace-source"
+	if r.DestinationPolicy != "" && !replaceSource {
+		return Result{}, fmt.Errorf("unknown destination policy %q", r.DestinationPolicy)
 	}
 
 	lock, err := fsutil.AcquireFileLock(s.sessions.MutationLockPath())
@@ -165,17 +188,23 @@ func (s *Service) Apply(r Request) (Result, error) {
 		if current == record.AppliedTheme {
 			destination := filepath.Join(s.themesRoot, record.AppliedTheme)
 			if !destinationOwnedBy(destination, record.SessionID) {
-				return Result{}, fmt.Errorf("prepared apply target %q is active but ownership cannot be verified", record.AppliedTheme)
+				if record.AppliedBackup == "" {
+					return Result{}, fmt.Errorf("prepared apply target %q is active but ownership cannot be verified", record.AppliedTheme)
+				}
+			} else {
+				if err := s.verifyPreparedCommit(record); err != nil {
+					return Result{}, err
+				}
+				record.ApplyPhase = session.ApplyPhaseCommitted
+				if err := s.sessions.Save(record); err != nil {
+					return Result{}, fmt.Errorf("persist recovered committed apply: %w", err)
+				}
+				if err := s.finishCommitted(r.SessionID); err != nil {
+					return Result{}, err
+				}
+				variant, _ := generation.ParseVariant(record.AppliedVariant)
+				return Result{SessionID: r.SessionID, GenerationID: record.AppliedGeneration, Variant: variant, ThemeName: record.AppliedTheme, DisplayName: record.AppliedDisplayName, ThemePath: filepath.Join(s.themesRoot, record.AppliedTheme)}, nil
 			}
-			record.ApplyPhase = session.ApplyPhaseCommitted
-			if err := s.sessions.Save(record); err != nil {
-				return Result{}, fmt.Errorf("persist recovered committed apply: %w", err)
-			}
-			if err := s.finishCommitted(r.SessionID); err != nil {
-				return Result{}, err
-			}
-			variant, _ := generation.ParseVariant(record.AppliedVariant)
-			return Result{SessionID: r.SessionID, GenerationID: record.AppliedGeneration, Variant: variant, ThemeName: record.AppliedTheme, DisplayName: record.AppliedDisplayName, ThemePath: filepath.Join(s.themesRoot, record.AppliedTheme)}, nil
 		}
 		owned := filepath.Join(s.themesRoot, record.AppliedTheme)
 		if destinationOwnedBy(owned, r.SessionID) {
@@ -195,11 +224,29 @@ func (s *Service) Apply(r Request) (Result, error) {
 		publishSource = s.currentThemeRoot
 	}
 	destination := filepath.Join(s.themesRoot, name.Slug)
+	if replaceSource {
+		if record.ThemeEdit == nil {
+			return Result{}, fmt.Errorf("replace-source is only available when editing an installed theme")
+		}
+		sourceName, sourceErr := parseThemeName(record.ThemeEdit.SourceName)
+		if sourceErr != nil || sourceName.Slug != name.Slug {
+			return Result{}, fmt.Errorf("replace-source target must keep the selected theme name")
+		}
+	}
+	backupPath := filepath.Join(s.sessions.SessionDir(r.SessionID), "replacement-backup")
+	hasBackup := false
 	if _, err := os.Lstat(destination); err == nil {
-		if !destinationOwnedBy(destination, r.SessionID) {
+		if !destinationOwnedBy(destination, r.SessionID) && !replaceSource {
 			return Result{}, fmt.Errorf("theme %q already exists", name.Display)
 		}
-		if err := fsutil.RemoveAllAndSync(destination); err != nil {
+		if replaceSource && !destinationOwnedBy(destination, r.SessionID) {
+			if _, backupErr := os.Lstat(backupPath); backupErr == nil {
+				return Result{}, fmt.Errorf("replacement backup already exists")
+			} else if !os.IsNotExist(backupErr) {
+				return Result{}, fmt.Errorf("inspect replacement backup: %w", backupErr)
+			}
+			hasBackup = true
+		} else if err := fsutil.RemoveAllAndSync(destination); err != nil {
 			return Result{}, fmt.Errorf("remove abandoned theme %q: %w", name.Display, err)
 		}
 	} else if !os.IsNotExist(err) {
@@ -210,12 +257,32 @@ func (s *Service) Apply(r Request) (Result, error) {
 	record.AppliedGeneration = r.GenerationID
 	record.AppliedVariant = string(r.Variant)
 	record.AppliedDisplayName = name.Display
+	if record.ThemeEdit != nil {
+		record.ThemeEdit.ReplaceSource = replaceSource
+	}
+	if hasBackup {
+		record.AppliedBackup = "replacement-backup"
+	}
 	if err := s.sessions.Save(record); err != nil {
 		return Result{}, fmt.Errorf("persist prepared apply: %w", err)
 	}
+	if hasBackup {
+		if err := os.Rename(destination, backupPath); err != nil {
+			return Result{}, fmt.Errorf("stage replacement backup: %w", err)
+		}
+		if err := fsutil.SyncDir(filepath.Dir(destination)); err != nil {
+			return Result{}, fmt.Errorf("sync replacement backup: %w", err)
+		}
+	}
 	if err := publish(publishSource, destination, s.themesRoot, r.SessionID, func(staged string) error {
-		return stageOptionalAssets(staged, s.sessions.SessionDir(r.SessionID), r)
+		if err := stageOptionalAssets(staged, s.sessions.SessionDir(r.SessionID), r); err != nil {
+			return err
+		}
+		return writeThemeRecipe(staged, name.Display, record)
 	}); err != nil {
+		if hasBackup {
+			_ = restoreReplacementBackup(destination, backupPath, r.SessionID)
+		}
 		return Result{}, fmt.Errorf("publish theme: %w", err)
 	}
 	// A matching Live preview may already have applied the bar profile. Seed
@@ -282,7 +349,9 @@ func (s *Service) Apply(r Request) (Result, error) {
 	}
 	// The external theme switch has committed. Marker removal is cleanup only;
 	// failure here must not turn the operation back into a rollback.
-	_ = fsutil.RemoveFileAndSync(filepath.Join(destination, ".omagen-owner"))
+	if destinationOwnedBy(destination, r.SessionID) {
+		_ = fsutil.RemoveFileAndSync(filepath.Join(destination, ".omagen-owner"))
+	}
 	if err := s.finishCommitted(r.SessionID); err != nil {
 		return Result{}, err
 	}
@@ -298,6 +367,40 @@ func (s *Service) Apply(r Request) (Result, error) {
 		NativeOnlyFallback:        fallbackStatus.NativeOnly,
 		FallbackNotificationShown: fallbackStatus.NotificationShown,
 	}, nil
+}
+
+func writeThemeRecipe(themeDir, displayName string, record session.Record) error {
+	palette, err := theme.ReadColors(themeDir)
+	if err != nil {
+		// Narrow compatibility appliers and older fixtures may publish a
+		// candidate whose colors.toml is intentionally opaque. The native Apply
+		// transaction remains valid; omit optional provenance in that case.
+		return nil
+	}
+	lookFeel := session.NormalizeLookFeelDocument(record.LookFeel)
+	if lookFeel.Preset == "" {
+		lookFeel = session.DefaultLookFeelDocument()
+	}
+	terminal := session.NormalizeTerminalTranslucency(record.TerminalTranslucency)
+	if terminal.Mode == "" {
+		terminal = session.DefaultTerminalTranslucency()
+	}
+	managed := append([]string(nil), record.ThemeEditManagedScopes()...)
+	if len(managed) == 0 && record.ExtraConfigs {
+		managed = []string{"shell-bar", "window-motion", "terminal"}
+	}
+	sourceName, sourceKind := record.OriginalTheme, "generated"
+	sourceFingerprint := ""
+	if record.ThemeEdit != nil {
+		sourceName, sourceKind = record.ThemeEdit.SourceName, record.ThemeEdit.SourceKind
+		sourceFingerprint = record.ThemeEdit.SourceFingerprint
+	}
+	return theme.WriteRecipe(themeDir, theme.Recipe{
+		ThemeName: displayName, SourceTheme: sourceName, SourceKind: sourceKind, SourceFingerprint: sourceFingerprint,
+		ManagedScopes: managed, Palette: palette,
+		Shell: record.ShellStyle, Desktop: record.DesktopStyle, Bar: record.BarStyle,
+		Animations: record.AnimationsStyle, LookFeel: lookFeel, Terminal: terminal,
+	})
 }
 
 func (s *Service) matchesLivePreview(record session.Record, request Request) bool {
@@ -383,13 +486,19 @@ func (s *Service) recoverPrepared(record session.Record) error {
 		if current == record.AppliedTheme {
 			destination := filepath.Join(s.themesRoot, record.AppliedTheme)
 			if !destinationOwnedBy(destination, record.SessionID) {
-				return fmt.Errorf("prepared apply target %q is active but ownership cannot be verified", record.AppliedTheme)
+				if record.AppliedBackup == "" {
+					return fmt.Errorf("prepared apply target %q is active but ownership cannot be verified", record.AppliedTheme)
+				}
+			} else {
+				if err := s.verifyPreparedCommit(record); err != nil {
+					return err
+				}
+				record.ApplyPhase = session.ApplyPhaseCommitted
+				if err := s.sessions.Save(record); err != nil {
+					return fmt.Errorf("persist recovered apply: %w", err)
+				}
+				return s.finishCommitted(record.SessionID)
 			}
-			record.ApplyPhase = session.ApplyPhaseCommitted
-			if err := s.sessions.Save(record); err != nil {
-				return fmt.Errorf("persist recovered apply: %w", err)
-			}
-			return s.finishCommitted(record.SessionID)
 		}
 	}
 
@@ -397,6 +506,12 @@ func (s *Service) recoverPrepared(record session.Record) error {
 	if destinationOwnedBy(destination, record.SessionID) {
 		if err := fsutil.RemoveAllAndSync(destination); err != nil {
 			return fmt.Errorf("remove abandoned apply: %w", err)
+		}
+	}
+	if record.AppliedBackup != "" {
+		backup := filepath.Join(s.sessions.SessionDir(record.SessionID), record.AppliedBackup)
+		if err := restoreReplacementBackup(destination, backup, record.SessionID); err != nil {
+			return fmt.Errorf("restore replaced theme: %w", err)
 		}
 	}
 	restorer, ok := s.applier.(themeRestorer)
@@ -428,7 +543,13 @@ func (s *Service) finishCommitted(sessionID string) error {
 	// A crash can leave the ownership marker behind after the committed
 	// transaction was persisted. It is only a recovery hint, so cleanup is
 	// deliberately best-effort and must not block session finalization.
-	_ = fsutil.RemoveFileAndSync(filepath.Join(s.themesRoot, record.AppliedTheme, ".omagen-owner"))
+	destination := filepath.Join(s.themesRoot, record.AppliedTheme)
+	if destinationOwnedBy(destination, sessionID) {
+		_ = fsutil.RemoveFileAndSync(filepath.Join(destination, ".omagen-owner"))
+	}
+	if record.AppliedBackup != "" {
+		_ = fsutil.RemoveAllAndSync(filepath.Join(s.sessions.SessionDir(sessionID), record.AppliedBackup))
+	}
 	if err := s.sessions.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)
 	}
@@ -437,6 +558,29 @@ func (s *Service) finishCommitted(sessionID string) error {
 		return fmt.Errorf("remove committed session: %w", err)
 	}
 	return nil
+}
+
+func restoreReplacementBackup(destination, backup, sessionID string) error {
+	if _, err := os.Lstat(backup); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if _, err := os.Lstat(destination); err == nil {
+		if sessionID == "" || !destinationOwnedBy(destination, sessionID) {
+			return fmt.Errorf("refusing to remove unowned destination %q while restoring replacement", destination)
+		}
+		if err := fsutil.RemoveAllAndSync(destination); err != nil {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(backup, destination); err != nil {
+		return err
+	}
+	return fsutil.SyncDir(filepath.Dir(destination))
 }
 
 func writeOwnerMarker(destination, sessionID string) error {
@@ -562,6 +706,10 @@ func copyTree(source, destination string) error {
 		if !entry.Type().IsRegular() {
 			return fmt.Errorf("unsupported candidate entry %s", rel)
 		}
-		return fsutil.CopyFileAtomic(path, target, 0o644)
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		return fsutil.CopyFileAtomic(path, target, info.Mode().Perm())
 	})
 }

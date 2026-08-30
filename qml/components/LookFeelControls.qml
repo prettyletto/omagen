@@ -208,7 +208,11 @@ Item {
                     bordered: true
                     focusable: true
                     tooltipText: modelData.description || ""
-                    enabled: !root.busy
+                    // Preset selection is latest-intent input. Keep cards
+                    // clickable while a resolver or native preview is busy;
+                    // LookFeelController and PreviewController retain only
+                    // the newest complete request.
+                    enabled: true
                     onClicked: root.presetRequested(modelData.id)
 
                     Column {

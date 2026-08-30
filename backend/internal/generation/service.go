@@ -15,6 +15,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type Service struct {
@@ -125,9 +126,24 @@ func (s *Service) Generate(
 		return Result{}, fmt.Errorf("apply generation overrides: %w", err)
 	}
 
-	if err := validateSourceImage(
-		request.SourceImage,
-	); err != nil {
+	var basePalette *theme.Palette
+	var sourceThemeDir string
+	if record.Workflow == "theme-edit" && request.SourceImage == "" {
+		if record.GenerationID == "" {
+			return Result{}, fmt.Errorf("theme-edit session has no source generation")
+		}
+		sourceThemeDir = filepath.Join(s.sessions.SessionDir(request.SessionID), "generations", record.GenerationID, "source")
+		palette, paletteErr := theme.ReadColors(sourceThemeDir)
+		if paletteErr != nil {
+			return Result{}, fmt.Errorf("read theme-edit source palette: %w", paletteErr)
+		}
+		basePalette = &palette
+		request.SourceImage, err = findThemeBackground(sourceThemeDir)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if err := validateSourceImage(request.SourceImage); err != nil {
 		return Result{}, err
 	}
 
@@ -195,19 +211,21 @@ func (s *Service) Generate(
 		return Result{}, err
 	}
 
-	if err := runJobs(
-		ctx,
-		tmpRoot,
-		cachedSource,
-		analysis,
-		effectiveSettings,
-		shellStyle,
-		desktopStyle,
-		barStyle,
-		animationsStyle,
+	if err := runJobsWithBasePalette(
+		ctx, tmpRoot, cachedSource, analysis, effectiveSettings, shellStyle, desktopStyle, barStyle, animationsStyle,
+		basePalette,
 		compositionInput{lookFeel: lookFeel, terminal: terminalTranslucency},
 	); err != nil {
 		return Result{}, err
+	}
+	if basePalette != nil {
+		// Keep theme-owned files that the generator does not synthesize (icons,
+		// app templates, hooks, and custom assets) in every derived variant.
+		for _, variant := range orderedVariants {
+			if err := copyMissingTree(sourceThemeDir, filepath.Join(tmpRoot, string(variant))); err != nil {
+				return Result{}, fmt.Errorf("preserve theme files for %s: %w", variant, err)
+			}
+		}
 	}
 	if err := fsutil.SyncDir(tmpRoot); err != nil {
 		return Result{}, fmt.Errorf("sync temporary generation: %w", err)
@@ -279,7 +297,9 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 		_ = fsutil.RemoveAllAndSync(finalRoot)
 		return false, err
 	}
-	record.SourceImage = request.SourceImage
+	if record.Workflow != "theme-edit" {
+		record.SourceImage = request.SourceImage
+	}
 	record.GenerationID = generationID
 	record.PreviewVariant = ""
 	if request.Configuration != nil {
@@ -320,6 +340,22 @@ func runJobs(
 	animationsStyle session.AnimationsStyle,
 	composition ...compositionInput,
 ) error {
+	return runJobsWithBasePalette(ctx, generationRoot, sourceImage, analysis, effectiveSettings, shellStyle, desktopStyle, barStyle, animationsStyle, nil, composition...)
+}
+
+func runJobsWithBasePalette(
+	ctx context.Context,
+	generationRoot string,
+	sourceImage string,
+	analysis *imageanalysis.Analysis,
+	effectiveSettings settingspkg.Settings,
+	shellStyle session.ShellStyle,
+	desktopStyle session.DesktopStyle,
+	barStyle session.BarStyle,
+	animationsStyle session.AnimationsStyle,
+	basePalette *theme.Palette,
+	composition ...compositionInput,
+) error {
 	var lookFeel session.LookFeelDocument
 	var terminal session.TerminalTranslucency
 	if len(composition) > 0 {
@@ -348,6 +384,7 @@ func runJobs(
 			err := (job{
 				variant:         variant,
 				sourceImage:     sourceImage,
+				basePalette:     basePalette,
 				analysis:        analysis,
 				settings:        effectiveSettings,
 				shellStyle:      shellStyle,
