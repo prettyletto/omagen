@@ -43,6 +43,10 @@ PanelWindow {
     property bool applyRecoveryRequired: false
     property string errorMessage: ""
     readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy
+    // A native preview is single-flight, but it is safe to keep editing the
+    // staged document while that flight settles. Reserve the modal shield for
+    // operations that cannot safely share the panel with user input.
+    readonly property bool blockingOperationBusy: root.generationBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy
     readonly property string operationTitle: root.generationBusy
         ? "Preparing Live Canvas…"
         : root.previewBusy
@@ -59,7 +63,7 @@ PanelWindow {
         : root.previewBusy
             ? (root.applyBusy
                 ? "Materializing the exact state shown here before the permanent save."
-                : "Updating the long-lived Omarchy shell in place. Controls are locked until it finishes.")
+                : "Updating the long-lived Omarchy shell in place. Test Live, Apply, and demos unlock when it finishes.")
             : root.applyBusy
                 ? "Saving the selected theme and completing the native Omarchy transaction."
                 : root.demoBusy
@@ -614,7 +618,7 @@ PanelWindow {
                     accent: root.accentColor
                     background: root.colorEditorOpen ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
                     bordered: true
-                    enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
+                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
                     onClicked: {
                         root.colorEditorOpen = !root.colorEditorOpen
                         if (root.colorEditorOpen) {
@@ -652,7 +656,7 @@ PanelWindow {
                     accent: root.accentColor
                     background: root.advancedEditorOpen ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
                     bordered: true
-                    enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
+                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
                     onClicked: {
                         root.advancedEditorOpen = !root.advancedEditorOpen
                         if (root.advancedEditorOpen) {
@@ -682,7 +686,7 @@ PanelWindow {
                         background: root.editingColorRole === modelData.key ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
                         bordered: true
                         tooltipText: ""
-                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.editingColorRole = modelData.key
 
                         Components.BoundedTooltip {
@@ -701,7 +705,7 @@ PanelWindow {
                 accent: root.accentColor
                 background: Util.alpha(root.foregroundColor, 0.045)
                 bordered: true
-                enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                 onClicked: root.moreColorsOpen = !root.moreColorsOpen
             }
 
@@ -726,7 +730,7 @@ PanelWindow {
                             accent: root.accentColor
                             background: Util.alpha(root.foregroundColor, 0.045)
                             bordered: true
-                            enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                            enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                             onClicked: root.expandedColorGroup = root.expandedColorGroup === groupDelegate.modelData.key ? "" : groupDelegate.modelData.key
                         }
 
@@ -751,7 +755,7 @@ PanelWindow {
                                     background: root.editingColorRole === modelData.key ? root.accentColor : Util.alpha(root.foregroundColor, 0.045)
                                     bordered: true
                                     tooltipText: ""
-                                    enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                                    enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                                     onClicked: root.editingColorRole = modelData.key
 
                                     Components.BoundedTooltip {
@@ -776,7 +780,7 @@ PanelWindow {
                 presetValue: root.presetColor(root.editingColorRole)
                 suggestions: root.suggestionsFor(root.editingColorRole)
                 live: root.colorPreviewLive
-                enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
                 onValueEdited: function(hex) { root.stageColor(root.editingColorRole, hex) }
                 onResetRequested: root.resetColor(root.editingColorRole)
                 onSuggestionRequested: function(hex) { root.stageColor(root.editingColorRole, hex) }
@@ -795,7 +799,7 @@ PanelWindow {
                 foregroundColor: root.foregroundColor
                 backgroundColor: root.backgroundColor
                 accentColor: root.accentColor
-                busy: root.lookFeelBusy
+                busy: root.lookFeelBusy || root.previewBusy
                 onPresetRequested: root.lookFeelPresetRequested(preset)
                 onCatalogRetryRequested: root.lookFeelCatalogRetryRequested()
                 onResetRequested: root.lookFeelResetRequested(scope)
@@ -814,7 +818,7 @@ PanelWindow {
                 foregroundColor: root.foregroundColor
                 backgroundColor: root.backgroundColor
                 accentColor: root.accentColor
-                enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
+                enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy && !root.lookFeelBusy
                 onStylesChanged: function(shellStyle, desktopStyle, barStyle, animationsStyle) {
                     root.advancedStylesChanged(shellStyle, desktopStyle, barStyle, animationsStyle)
                 }
@@ -951,6 +955,29 @@ PanelWindow {
                 anchors.margins: Style.space(10)
                 spacing: Style.space(5)
 
+                Rectangle {
+                    visible: root.previewBusy
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: Style.space(28)
+                    radius: Style.space(5)
+                    color: Util.alpha(root.accentColor, 0.1)
+                    border.width: 1
+                    border.color: Util.alpha(root.accentColor, 0.35)
+
+                    Text {
+                        anchors.fill: parent
+                        anchors.leftMargin: Style.space(8)
+                        anchors.rightMargin: Style.space(8)
+                        text: "Previewing on the desktop · keep editing; Test Live unlocks when ready"
+                        color: root.foregroundColor
+                        opacity: 0.78
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        verticalAlignment: Text.AlignVCenter
+                        elide: Text.ElideRight
+                    }
+                }
+
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: Style.space(5)
@@ -991,7 +1018,7 @@ PanelWindow {
                         text: root.demoBusy ? (root.demoActive ? "Stopping demo…" : "Starting demo…") : (root.demoActive ? "Stop demo" : "Start demo")
                         foreground: root.foregroundColor
                         bordered: true
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.demoActive ? root.closeCanvasRequested() : root.startDemoRequested()
                     }
 
@@ -1005,7 +1032,7 @@ PanelWindow {
                         background: root.demoActive && root.demoMode === "window" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
                         accent: root.accentColor
                         bordered: true
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.windowDemoRequested()
                     }
 
@@ -1019,7 +1046,7 @@ PanelWindow {
                         background: root.demoActive && root.demoMode === "shell" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
                         accent: root.accentColor
                         bordered: true
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.shellDemoRequested()
                     }
 
@@ -1033,7 +1060,7 @@ PanelWindow {
                         background: root.demoActive && root.demoMode === "bar" ? Util.alpha(root.accentColor, 0.16) : Util.alpha(root.foregroundColor, 0.045)
                         accent: root.accentColor
                         bordered: true
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.barDemoRequested()
                     }
                 }
@@ -1047,7 +1074,7 @@ PanelWindow {
                         text: root.cancelBusy ? "Restoring original desktop…" : "Restore & close"
                         foreground: root.foregroundColor
                         bordered: true
-                        enabled: !root.demoBusy && !root.cancelBusy && !root.applyBusy
+                        enabled: !root.previewBusy && !root.demoBusy && !root.cancelBusy && !root.applyBusy
                         onClicked: root.cancelRequested()
                     }
                 }
@@ -1070,15 +1097,13 @@ PanelWindow {
         }
     }
 
-    // Preview and Apply update the long-lived Quickshell process. The existing
-    // buttons already disable themselves, but a disabled-looking panel still
-    // accepts focus, wheel input, and accidental clicks while the shell is
-    // settling. Keep the native panel visible as orientation, then make the
-    // transaction explicitly modal until the backend reports completion.
+    // Apply, Demo, generation, recovery, and preset resolution remain modal.
+    // Preview alone is deliberately non-modal: the staged editors stay usable,
+    // while every action that could start another live operation remains gated.
     FocusScope {
         id: operationShield
         anchors.fill: parent
-        visible: root.operationBusy
+        visible: root.blockingOperationBusy
         z: 20
         focus: visible
 

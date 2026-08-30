@@ -160,9 +160,21 @@ Item {
                 return
             }
 
+            // A preview may finish after the user has staged another edit. Do
+            // not mark that newer staged value as live just because the older
+            // native request completed; the next explicit Test Live owns it.
+            const currentSignature = root.liveCanvasPanel
+                ? root.signature(
+                    variant,
+                    root.liveCanvasPanel.overridesForVariant(variant),
+                    root.stylesForVariant ? root.stylesForVariant(variant) : null
+                )
+                : ""
+            const appliedStateIsCurrent = currentSignature === root.activeSignature
+
             if (root.pendingColorPreview) {
                 root.pendingColorPreview = false
-                if (root.liveCanvasPanel)
+                if (root.liveCanvasPanel && appliedStateIsCurrent)
                     root.liveCanvasPanel.markColorsLive()
             }
             root.lastAppliedSignature = root.activeSignature
