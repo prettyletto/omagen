@@ -49,6 +49,7 @@ section "CLI smoke tests"
 "$BIN" --help >/dev/null || fail "omagen --help failed"
 "$BIN" help >/dev/null || fail "omagen help failed"
 "$BIN" demo capabilities | python3 -m json.tool >/dev/null
+"$BIN" look-feel list | python3 -m json.tool >/dev/null || fail "look-feel catalog failed"
 "$ROOT/bin/omagen-studio" --help >/dev/null
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
@@ -127,7 +128,6 @@ required=(
     "qml/gateways/DemoGateway.qml"
     "qml/gateways/LookFeelGateway.qml"
     "qml/gateways/RuntimeGateway.qml"
-    "qml/gateways/ProtocolGateway.qml"
     "qml/gateways/ConfigurationArgs.js"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"

@@ -14,18 +14,6 @@ func TestPresetCompilationSelectsNativeOrOmagen(t *testing.T) {
 	if compiled.Engine != EngineNative || !compiled.Capabilities.Topology || !compiled.Capabilities.Clock {
 		t.Fatalf("native compilation = %#v", compiled)
 	}
-	sections, err := Preset("sections")
-	if err != nil {
-		t.Fatal(err)
-	}
-	compiled, err = Compile(sections)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if compiled.Engine != EngineOmagen || compiled.Native {
-		t.Fatalf("sections compilation = %#v", compiled)
-	}
-
 	dock, err := Preset("dock")
 	if err != nil {
 		t.Fatal(err)
@@ -247,6 +235,16 @@ func TestJapaneseKanjiWorkspacePresentationUsesOmagenLabels(t *testing.T) {
 }
 
 func TestPresetNamesAreStable(t *testing.T) {
+	want := []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon"}
+	got := Presets()
+	if len(got) != len(want) {
+		t.Fatalf("preset count = %d, want %d: %v", len(got), len(want), got)
+	}
+	for index := range want {
+		if got[index] != want[index] {
+			t.Fatalf("preset %d = %q, want %q", index, got[index], want[index])
+		}
+	}
 	for _, name := range Presets() {
 		spec, err := Preset(name)
 		if err != nil {
@@ -255,6 +253,16 @@ func TestPresetNamesAreStable(t *testing.T) {
 		if err := spec.Validate(); err != nil {
 			t.Fatalf("preset %q invalid: %v", name, err)
 		}
+	}
+}
+
+func TestRemovedPresetNamesAreRejected(t *testing.T) {
+	for _, name := range []string{"sections", "split", "notch", "rail"} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := Preset(name); err == nil {
+				t.Fatalf("removed preset %q was accepted", name)
+			}
+		})
 	}
 }
 

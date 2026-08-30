@@ -49,15 +49,11 @@ type Request struct {
 }
 
 type Result struct {
-	SessionID          string             `json:"session_id"`
-	GenerationID       string             `json:"generation_id"`
-	Variant            generation.Variant `json:"variant"`
-	ThemeName          string             `json:"theme_name"`
-	PID                int                `json:"pid,omitempty"`
-	AlreadyActive      bool               `json:"already_active"`
-	LogPath            string             `json:"log_path"`
-	ProtocolOperation  string             `json:"protocol_operation,omitempty"`
-	ProtocolCheckpoint string             `json:"protocol_checkpoint,omitempty"`
-	ProtocolEvents     string             `json:"protocol_events,omitempty"`
-	ProtocolSocket     string             `json:"protocol_socket,omitempty"`
+	SessionID     string             `json:"session_id"`
+	GenerationID  string             `json:"generation_id"`
+	Variant       generation.Variant `json:"variant"`
+	ThemeName     string             `json:"theme_name"`
+	PID           int                `json:"pid,omitempty"`
+	AlreadyActive bool               `json:"already_active"`
+	LogPath       string             `json:"log_path"`
 }

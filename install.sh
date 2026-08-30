@@ -74,6 +74,11 @@ mkdir -p "$DEST_DIR/bar"
 cp "$SRC_DIR/bar/BarSizing.js" "$DEST_DIR/bar/BarSizing.js"
 cp "$SRC_DIR/bin/omagen" "$DEST_DIR/bin/omagen"
 chmod +x "$DEST_DIR/bin/omagen"
+# Fail the install early if the bundled backend cannot answer the command used
+# by the Studio catalog. Without this check the UI can appear to load forever
+# after a partial or incompatible branch install.
+echo "Checking bundled Look & Feel catalog..."
+"$DEST_DIR/bin/omagen" look-feel list >/dev/null
 # Replace executables atomically. The running shell can still have the old
 # helper mapped, and copying over that inode returns ETXTBSY (Text file busy).
 cp "$SRC_DIR/bin/omagen-studio" "$DEST_DIR/bin/.omagen-studio.new"

@@ -15,7 +15,7 @@ The domain packages are intentionally separate:
 - `lookfeel`, `bar`, `barprofile`, and `theme` model user-selectable style
   documents and generated files.
 - `runtime` adapts advanced runtime features; `omarchy` talks to native
-  Omarchy commands; `protocol` journals operations/checkpoints.
+  Omarchy commands.
 - `settings` and `terminaltheme` are supporting persistence/materialization
   domains.
 

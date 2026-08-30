@@ -8,8 +8,8 @@ specific command documents otherwise.
 
 `qml/gateways/BackendCommand.qml` owns the shared bounded stdout/stderr and
 JSON/exit handling. `SessionGateway`, `GenerationGateway`, `PreviewGateway`,
-`ApplyGateway`, `DemoGateway`, `LookFeelGateway`, `RuntimeGateway`, and
-`ProtocolGateway` own their command families. `qml/services/BackendService.qml`
+`ApplyGateway`, `DemoGateway`, `LookFeelGateway`, and `RuntimeGateway` own their
+command families. `qml/services/BackendService.qml`
 is the compatibility façade used by the composition root; it forwards gateway
 signals without becoming a second domain implementation.
 

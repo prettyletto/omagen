@@ -86,7 +86,7 @@ not a parallel styling implementation. The authored catalog contains Glass
 Blur, Focused, Cyberpunk Glitch, Spectral Shift, Phosphor Terminal, Monolith,
 Elastic Orbit, Nature, and Oriental; Omarchy Native remains a protected no-op
 baseline. Oriental is the Kanagawa-inspired recipe: Japanese Kanji workspace
-labels, split glass bar sections, warm frosted windows, and quiet directional
+labels, a compact floating bar, warm frosted windows, and quiet directional
 motion without a screen shader.
 Each recipe also carries its workspace presentation. Cyberpunk retains its
 existing 4 px neon/digital/RGB-tear behavior and changes only to Roman workspace
@@ -172,6 +172,11 @@ place without recreating the workspace.
 The **Live Canvas** action applies a direction and opens the control surface;
 it does not start the optional Demo workspace.
 
+Live preview requests are single-flight. If another direction or style is
+chosen while one is applying, Omagen keeps the newest request and drops stale
+intermediate requests so Quickshell does not replay each intermediate desktop
+state.
+
 Use **Cancel** when you are finished testing. Omagen restores the original
 theme and background before clearing the session.
 
@@ -179,7 +184,7 @@ theme and background before clearing the session.
 
 **Live Canvas** applies a direction to the real desktop and keeps the
 monitor-bound control panel available. It is the normal place to compare
-directions, use history, apply the theme, or restore the original desktop.
+directions, apply the theme, or restore the original desktop.
 
 Use **Start demo** when you specifically want the temporary four-window
 workspace containing the applications Omagen can resolve on the current
@@ -189,8 +194,8 @@ stays available while the workspace is open.
 When the canvas is open, Studio provides a monitor-bound side panel. Hide the
 panel to keep interacting with the desktop; a small handle on the canvas
 monitor reopens it without capturing application input while hidden. The panel
-can reapply directions, move through reversible history, apply the theme, close
-the canvas, or **Restore & close** the complete temporary session. See the
+can reapply directions, apply the theme, close the canvas, or **Restore & close**
+the complete temporary session. See the
 [Live Canvas workspace guide](demo.md) for ownership and cleanup details.
 
 ## Apply a theme

@@ -48,8 +48,6 @@ From the palette gallery:
 - **Hide Studio panel** leaves the canvas and temporary theme active while
   returning all other pointer input to the desktop. The monitor-bound handle
   reopens the panel.
-- The panel's history controls reapply the previous or next protocol
-  checkpoint before moving the cursor, so Undo remains reversible.
 - **Apply theme** can close Demo before applying, or capture it as the theme
   preview when requested.
 

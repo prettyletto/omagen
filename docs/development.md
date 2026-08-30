@@ -149,6 +149,13 @@ hooks remain excluded from Studio-controlled Preview and Apply.
 Apply returns after the critical theme promotion and shell/background update;
 the selected post-commit retint adapters continue in parallel. This keeps the
 UI responsive even when an application-specific helper is slow or unavailable.
+
+Preview and Apply are single-flight from the Studio UI. Rapid changes retain
+only the newest pending appearance, and an already-live request is completed as
+a no-op so it cannot leave Apply waiting for a process that was intentionally
+deduplicated. Deferred retint/runtime work is fenced to the activation that
+created it; if a newer theme is current, the older job exits without repainting
+the desktop.
 Permanent Apply also starts the native theme-selector and background cache
 warmers in the background, after the new user theme is visible. Test Live does
 not warm these caches because its temporary preview alias is removed or
@@ -209,6 +216,14 @@ The expected final line is:
 ~~~text
 V1 automated regression gate: PASS
 ~~~
+
+## Real desktop UI testing
+
+Use the repository-local host-side helper for visual and interaction checks
+against the running Omarchy/Hyprland session. It covers shell summon/hide,
+JSON client and layer lookup, focused-monitor screenshots, keyboard/text input,
+and safe waits; see [Real desktop UI testing](development/ui-testing.md).
+
 
 ## Development boundaries
 

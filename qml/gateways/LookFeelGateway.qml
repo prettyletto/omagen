@@ -17,6 +17,7 @@ Item {
         id: catalogCommand
         failureFallback: "Failed to load Look & Feel presets"
         invalidJsonFallback: "Backend returned invalid Look & Feel catalog JSON"
+        timeoutFallback: "Look & Feel catalog request timed out"
         onCompleted: function(result) {
             if (!Array.isArray(result)) {
                 root.catalogFailed("Backend returned an invalid Look & Feel catalog")
@@ -31,6 +32,7 @@ Item {
         id: resolveCommand
         failureFallback: "Failed to resolve Look & Feel preset"
         invalidJsonFallback: "Backend returned invalid Look & Feel preset JSON"
+        timeoutFallback: "Look & Feel preset request timed out"
         onCompleted: function(result) {
             if (!result || !result.preset || !result.window || !result.shell || !result.bar || !result.animations || !result.terminal) {
                 root.resolveFailed("Backend returned an incomplete Look & Feel preset")

@@ -72,12 +72,6 @@ Item {
     readonly property var barVisibilityOptions: [
         { key: "native", title: "Native" }, { key: "islands", title: "Show islands" }
     ]
-    readonly property var barProfileFormOptions: [
-        { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
-        { key: "sections", title: "Sections" }, { key: "split", title: "Split" },
-        { key: "islands", title: "Islands" }, { key: "dock", title: "Dock" },
-        { key: "minimal", title: "Minimal" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
-    ]
     readonly property var barProfileVisibilityOptions: [
         { key: "always", title: "Always" }, { key: "auto-hide", title: "Auto-hide" },
         { key: "fullscreen-only", title: "Fullscreen" }, { key: "intelligent", title: "Intelligent" }
@@ -113,12 +107,6 @@ Item {
         { key: "lcd", title: "Retro LCD" },
         { key: "classical", title: "Classical" },
         { key: "gothic", title: "Gothic" }
-    ]
-    readonly property var barTopologyOptions: [
-        { key: "continuous", title: "Continuous" }, { key: "floating", title: "Floating" },
-        { key: "sections", title: "Sections" }, { key: "islands", title: "Islands" },
-        { key: "dock", title: "Dock" }, { key: "split", title: "Split" },
-        { key: "minimal", title: "Minimal" }, { key: "notch", title: "Notch" }, { key: "rail", title: "Rail" }
     ]
     property bool barSizeAdvancedExpanded: false
 
@@ -239,15 +227,9 @@ Item {
             return { role: "background", opacity: 1, blur: 0 }
         case "orbit":
             return { role: "background", opacity: 1, blur: 0 }
-        case "sections":
-            return { role: "dark", opacity: 1, blur: 0 }
         case "ribbon":
             return { role: "dark", opacity: 1, blur: 0 }
         case "dock":
-            return { role: "dark", opacity: 1, blur: 0 }
-        case "split":
-        case "notch":
-        case "rail":
             return { role: "dark", opacity: 1, blur: 0 }
         case "islands":
         case "minimal":
@@ -534,15 +516,11 @@ Item {
         switch (key) {
         case "float": spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; break
         case "float-expanded": spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.3, border_width: 1, shadow: "raised" }; spec.geometry.density = "native"; spec.geometry.edge_offset = 8; spec.geometry.outer_margin = 8; spec.geometry.radius = 14; spec.behavior.hover_expand = true; break
-        case "sections": spec.topology = "sections"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.35, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 10; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
         case "islands": spec.engine = "omagen"; spec.topology = "islands"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.geometry.radius = 14; spec.regions = { left: { mode: "island" }, center: { mode: "island" }, right: { mode: "island" } }; break
         case "dock": spec.engine = "omagen"; spec.topology = "dock"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.25, border_width: 1, shadow: "floating" }; spec.geometry.length_mode = "content"; spec.geometry.alignment = "center"; spec.geometry.radius = 16; spec.behavior.visibility = "auto_hide"; spec.behavior.hover_expand = true; break
         case "minimal": spec.engine = "omagen"; spec.topology = "minimal"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.behavior.hover_expand = true; spec.motion = { preset: "smooth", duration_ms: 260, easing: "out_cubic" }; break
         case "orbit": spec.engine = "omagen"; spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.42, border_width: 1, shadow: "raised" }; spec.geometry.density = "compact"; spec.geometry.edge_offset = 10; spec.geometry.outer_margin = 10; spec.geometry.radius = 18; spec.motion = { preset: "smooth", duration_ms: 220, easing: "out_cubic" }; break
         case "ribbon": spec.engine = "omagen"; spec.topology = "sections"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.36, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 2; spec.geometry.radius = 10; spec.motion = { preset: "subtle", duration_ms: 180, easing: "out_cubic" }; break
-        case "split": spec.engine = "omagen"; spec.topology = "split"; spec.surface.role = "dark"; break
-        case "notch": spec.engine = "omagen"; spec.topology = "notch"; spec.surface.role = "dark"; spec.geometry.radius = 14; break
-        case "rail": spec.engine = "omagen"; spec.topology = "rail"; spec.position = "left"; spec.surface.role = "dark"; break
         }
 		spec.surface.treatment = "preset"
         var profile = {

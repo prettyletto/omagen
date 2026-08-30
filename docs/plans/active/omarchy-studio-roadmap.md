@@ -3,6 +3,11 @@
 Status: N3 Live Canvas v1, N3.1 color studio, and N3.2 window composition
 foundation implemented; the four-engine split is implemented; live desktop proof pending
 
+Update (2026-08-29): the protocol journal, preview checkpoints, and Live Canvas
+history controls described in earlier slices are superseded and removed. The
+current UX keeps one replaceable temporary candidate and one durable session
+baseline for Restore/recovery.
+
 Branch: `nightly`
 
 This roadmap turns Omagen into an Omarchy-native live Studio for Hyprland,

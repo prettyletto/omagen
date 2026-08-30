@@ -14,7 +14,6 @@ authority.
 | `qml/controllers/ApplyController.qml` | Apply pending variant/name/options, final-preview sequencing, optional capture, Demo close, cancellation invalidation, and recovery-required state | `apply()`, `cancel()`, `reset()`, shared completion handlers, and `completed`/error/UI signals |
 | `qml/controllers/GenerationController.qml` | Generate/describe/discard sequencing, regeneration state, and generation correlation | `generate()`, `discard()`, `reset()`, and generation outcome signals |
 | `qml/controllers/RuntimeSetupController.qml` | Advanced runtime prompt, status, install, and first-run dismissal state | setup/status actions and prompt/error signals |
-| `qml/controllers/ProtocolController.qml` | Protocol history busy state, navigation availability, refresh/navigation correlation, and user-facing history message | `refresh()`, `navigate()`, `reset()`, and `navigationCompleted` |
 | `qml/controllers/LookFeelController.qml` | Look & Feel catalog/resolution busy state and whether a resolution applies or only loads a recipe | `list()`, `requestPreset()`, `loadRecipe()`, `reset()`, and resolve/error signals |
 
 The controllers use the existing `qml/services/BackendService.qml` façade and
