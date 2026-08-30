@@ -64,8 +64,13 @@ cp "$SRC_DIR/OmagenBarWidget.qml" "$DEST_DIR/OmagenBarWidget.qml"
 rm -f "$DEST_DIR/BarWidget.qml" "$DEST_DIR/Widget.qml"
 rm -rf "$DEST_DIR/demo"
 cp -a "$SRC_DIR/demo" "$DEST_DIR/demo"
-mkdir -p "$DEST_DIR/qml" "$DEST_DIR/bin"
-rsync -a --delete "$SRC_DIR/qml/" "$DEST_DIR/qml/"
+# Keep the package self-contained: rsync is not guaranteed to be installed on
+# every Omarchy system, while cp and rm are part of the base environment. The
+# destination is owned by this installer, so replacing this subtree preserves
+# the same delete-stale-files behavior as rsync --delete.
+rm -rf "$DEST_DIR/qml"
+mkdir -p "$DEST_DIR/bin"
+cp -a "$SRC_DIR/qml" "$DEST_DIR/qml"
 # AdvancedStyleEditor.qml lives in the overlay plugin but shares the bar
 # sizing contract with the full-bar plugin. Keep this helper available at the
 # relative import path used by the installed overlay without merging the two

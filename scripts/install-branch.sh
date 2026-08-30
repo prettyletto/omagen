@@ -9,7 +9,7 @@ BRANCH="${OMAGEN_TEST_BRANCH:-nightly}"
 
 usage() {
     cat <<EOF
-Usage: curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash
+Usage: bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
 
 The default installs the nightly branch. Override the source when needed:
   OMAGEN_TEST_BRANCH=<branch> OMAGEN_TEST_REPOSITORY=<url> bash
