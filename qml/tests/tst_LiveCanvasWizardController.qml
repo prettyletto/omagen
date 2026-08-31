@@ -75,13 +75,21 @@ TestCase {
     function test_existingLookFeelPresetCountsAsASelection() {
         controller.step = 1
         controller.lookFeelDecided = false
-        controller.selectedLookFeelPreset = "glass-blur"
+        controller.selectedLookFeelPreset = "omarchy-native"
 
         verify(controller.canGoNext)
         compare(controller.goNext(), true)
         compare(controller.step, 2)
         compare(controller.advancedChoice, "skip")
         verify(controller.canGoNext)
+    }
+
+    function test_missingLookFeelPresetStillRequiresAChoice() {
+        controller.step = 1
+        controller.lookFeelDecided = false
+        controller.selectedLookFeelPreset = ""
+
+        verify(!controller.canGoNext)
     }
 
     function test_preSessionWorkflowRequiresExplicitModeBeforeContinue() {

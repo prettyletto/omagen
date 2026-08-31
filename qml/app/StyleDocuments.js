@@ -93,6 +93,13 @@ function normalizeBarStyle(value) {
     return { surface: value.surface || "native", density: value.density || "native", attention: value.attention || "semantic", form: value.form || "continuous", visibility: value.visibility || "native", profile: value.profile || null, spec: value.spec || null }
 }
 
+// BarSpec has richer topologies than the legacy five-field bar document. Keep
+// the compatibility field constrained to the native contract while the full
+// topology remains available in spec/profile.
+function legacyBarFormForTopology(topology) {
+    return ["continuous", "floating", "minimal"].indexOf(topology) >= 0 ? "continuous" : "docked"
+}
+
 function normalizeTerminalTranslucency(value) {
     value = value || ({})
     var opacity = Number(value.opacity !== undefined ? value.opacity : 1)

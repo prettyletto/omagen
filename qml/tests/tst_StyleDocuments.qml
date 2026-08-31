@@ -68,6 +68,16 @@ TestCase {
         compare(BarSizing.collapsedClockExtent(0, 30, 14), 30)
     }
 
+    function test_richBarTopologiesMapToTheLegacyFormContract() {
+        compare(StyleDocuments.legacyBarFormForTopology("continuous"), "continuous")
+        compare(StyleDocuments.legacyBarFormForTopology("floating"), "continuous")
+        compare(StyleDocuments.legacyBarFormForTopology("minimal"), "continuous")
+        compare(StyleDocuments.legacyBarFormForTopology("islands"), "docked")
+        compare(StyleDocuments.legacyBarFormForTopology("dock"), "docked")
+        compare(StyleDocuments.legacyBarFormForTopology("sections"), "docked")
+        compare(StyleDocuments.legacyBarFormForTopology("rail"), "docked")
+    }
+
     function test_barSizeLabelsDoNotPromiseASeparateNativePixelValue() {
         compare(BarSizing.optionLabel("native", false, 22, 24), "Default · native")
         compare(BarSizing.optionLabel("compact", false, 22, 24), "Compact · 22 px · same as native")

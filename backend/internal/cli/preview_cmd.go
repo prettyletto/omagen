@@ -44,28 +44,6 @@ func runPreview(args []string, service *preview.Service, stdout, stderr io.Write
 	}
 }
 
-func parseRetintOptions(args []string) (run, skip string, err error) {
-	for i := 0; i < len(args); i++ {
-		switch args[i] {
-		case "--run", "--apps":
-			if i+1 >= len(args) || args[i+1] == "" {
-				return "", "", fmt.Errorf("%s requires adapter names", args[i])
-			}
-			run = args[i+1]
-			i++
-		case "--skip":
-			if i+1 >= len(args) || args[i+1] == "" {
-				return "", "", fmt.Errorf("--skip requires adapter names")
-			}
-			skip = args[i+1]
-			i++
-		default:
-			return "", "", fmt.Errorf("unknown retint option: %s", args[i])
-		}
-	}
-	return run, skip, nil
-}
-
 type studioOptions struct {
 	RetintRun         string
 	RetintSkip        string

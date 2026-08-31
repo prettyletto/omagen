@@ -82,6 +82,10 @@ cp -a "$SRC_DIR/demo" "$DEST_DIR/demo"
 rm -rf "$DEST_DIR/qml"
 mkdir -p "$DEST_DIR/bin"
 cp -a "$SRC_DIR/qml" "$DEST_DIR/qml"
+# QML tests stay in the source checkout and are not part of the production
+# plugin payload. The destination subtree is owned by this installer, so this
+# removes only the test files just copied into the package.
+rm -rf "$DEST_DIR/qml/tests"
 # AdvancedStyleEditor.qml lives in the overlay plugin but shares the bar
 # sizing contract with the full-bar plugin. Keep this helper available at the
 # relative import path used by the installed overlay without merging the two
