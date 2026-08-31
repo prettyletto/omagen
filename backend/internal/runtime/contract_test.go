@@ -59,6 +59,24 @@ func TestActivationRequestRejectsUnsafeThemeInputs(t *testing.T) {
 	}
 }
 
+func TestDeactivationRequestValidatesPreservedFeatures(t *testing.T) {
+	request := DeactivationRequest{ThemeName: "generated-theme", Reason: "handoff", Preserve: []Feature{FeatureBar}}
+	if err := request.Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if !request.Preserves(FeatureBar) || request.Preserves(FeatureShell) {
+		t.Fatalf("unexpected preserved feature lookup: %#v", request)
+	}
+	request.Preserve = []Feature{FeatureBar, FeatureBar}
+	if err := request.Validate(); err == nil {
+		t.Fatal("expected duplicate preserved feature to fail")
+	}
+	request.Preserve = []Feature{"../bar"}
+	if err := request.Validate(); err == nil {
+		t.Fatal("expected invalid preserved feature to fail")
+	}
+}
+
 func TestRegistryPlansDependenciesBeforeFeaturesAndDoesNotClaimReady(t *testing.T) {
 	registry, err := NewAdapterRegistry(
 		contractTestAdapter{contract: FeatureContract{Feature: FeatureBar, Owner: OwnerQuattro, DependsOn: []Feature{FeatureShell}, Durable: true, NativeFallback: true}},

@@ -13,8 +13,9 @@ import (
 )
 
 const (
-	barProfileFile = "omagen.bar.json"
-	barSpecFile    = "omagen.bar.spec.json"
+	barProfileFile      = "omagen.bar.json"
+	barSpecFile         = "omagen.bar.spec.json"
+	activeBarSnapshotID = "runtime-bar-active"
 )
 
 // BarAdapter connects the theme-set hook to the existing reversible Bar
@@ -55,7 +56,7 @@ func (a *BarAdapter) Preflight(_ context.Context, request ActivationRequest) err
 	if !exists || profile.Ownership == barprofile.OwnershipInherit || len(profile.Bar) == 0 {
 		return nil
 	}
-	if _, err := a.store.LoadSnapshot(barSnapshotID(request.ThemeName)); err != nil && !os.IsNotExist(err) {
+	if _, _, err := a.loadBaseline(request.ThemeName); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("validate existing bar snapshot: %w", err)
 	}
 	return nil
@@ -89,29 +90,23 @@ func (a *BarAdapter) Activate(_ context.Context, request ActivationRequest) (Fea
 		}, nil
 	}
 
-	snapshotID := barSnapshotID(request.ThemeName)
-	snapshotPath := filepath.Join(a.store.StateRoot(), "snapshots", snapshotID+".json")
-	if _, err := a.store.LoadSnapshot(snapshotID); os.IsNotExist(err) {
-		snapshot, captureErr := a.store.Capture(request.ThemeName)
-		if captureErr != nil {
-			return FeatureResult{}, fmt.Errorf("capture bar baseline: %w", captureErr)
-		}
-		if err := a.store.SaveSnapshot(snapshotID, snapshot); err != nil {
-			return FeatureResult{}, fmt.Errorf("save bar baseline: %w", err)
-		}
-	} else if err != nil {
-		return FeatureResult{}, fmt.Errorf("load bar baseline: %w", err)
+	snapshot, created, err := a.ensureActiveBaseline(request.ThemeName)
+	if err != nil {
+		return FeatureResult{}, err
 	}
-	if err := a.store.Apply(profile); err != nil {
-		_ = a.store.DeleteSnapshot(snapshotID)
+	if err := a.store.ApplyFromSnapshot(snapshot, profile); err != nil {
+		if created {
+			_ = a.store.DeleteSnapshot(activeBarSnapshotID)
+		}
 		return FeatureResult{}, fmt.Errorf("apply theme bar profile: %w", err)
 	}
+	_ = a.store.DeleteSnapshot(barSnapshotID(request.ThemeName))
 	return FeatureResult{
 		Feature:    FeatureBar,
 		Owner:      OwnerQuattro,
 		State:      FeatureReady,
-		Message:    "theme bar profile applied with a reversible native snapshot",
-		OwnedPaths: []string{snapshotPath},
+		Message:    "theme bar profile applied from the stable native baseline",
+		OwnedPaths: []string{a.activeSnapshotPath()},
 	}, nil
 }
 
@@ -119,8 +114,17 @@ func (a *BarAdapter) Deactivate(_ context.Context, request DeactivationRequest) 
 	if a == nil || a.store == nil {
 		return FeatureResult{}, fmt.Errorf("bar runtime adapter is nil")
 	}
-	snapshotID := barSnapshotID(request.ThemeName)
-	snapshot, err := a.store.LoadSnapshot(snapshotID)
+	legacyID := barSnapshotID(request.ThemeName)
+	if request.Preserves(FeatureBar) {
+		_ = a.store.DeleteSnapshot(legacyID)
+		return FeatureResult{
+			Feature: FeatureBar,
+			Owner:   OwnerQuattro,
+			State:   FeatureInactive,
+			Message: "replacement bar preserved for the next advanced theme",
+		}, nil
+	}
+	snapshot, _, err := a.loadBaseline(request.ThemeName)
 	if os.IsNotExist(err) {
 		return FeatureResult{Feature: FeatureBar, Owner: OwnerQuattro, State: FeatureInactive, Message: "no backend-owned bar snapshot exists"}, nil
 	}
@@ -130,16 +134,81 @@ func (a *BarAdapter) Deactivate(_ context.Context, request DeactivationRequest) 
 	if err := a.store.Restore(snapshot); err != nil {
 		return FeatureResult{}, fmt.Errorf("restore bar baseline: %w", err)
 	}
-	if err := a.store.DeleteSnapshot(snapshotID); err != nil {
+	if err := a.store.DeleteSnapshot(activeBarSnapshotID); err != nil {
 		return FeatureResult{}, fmt.Errorf("delete restored bar baseline: %w", err)
 	}
+	_ = a.store.DeleteSnapshot(legacyID)
 	return FeatureResult{
 		Feature:    FeatureBar,
 		Owner:      OwnerQuattro,
 		State:      FeatureInactive,
 		Message:    "native bar baseline restored",
-		OwnedPaths: []string{filepath.Join(a.store.StateRoot(), "snapshots", snapshotID+".json")},
+		OwnedPaths: []string{a.activeSnapshotPath()},
 	}, nil
+}
+
+// PrepareTransition updates a mounted replacement bar directly from the
+// stable native baseline. Quattro therefore never observes an intermediate
+// shell.json without pretty.omagen.bar during an advanced-to-advanced switch.
+func (a *BarAdapter) PrepareTransition(fromTheme string, request ActivationRequest) error {
+	if a == nil || a.store == nil {
+		return fmt.Errorf("bar runtime adapter is nil")
+	}
+	profile, exists, err := readBarProfile(request.ThemeRoot)
+	if err != nil {
+		return err
+	}
+	if !exists || profile.Implementation != barprofile.ImplementationReplacement || profile.Ownership == barprofile.OwnershipInherit || len(profile.Bar) == 0 {
+		return fmt.Errorf("target theme does not provide a compatible replacement bar")
+	}
+	snapshot, _, err := a.ensureActiveBaseline(fromTheme)
+	if err != nil {
+		return err
+	}
+	if err := a.store.ApplyFromSnapshot(snapshot, profile); err != nil {
+		return fmt.Errorf("prepare replacement bar handoff: %w", err)
+	}
+	return nil
+}
+
+func (a *BarAdapter) activeSnapshotPath() string {
+	return filepath.Join(a.store.StateRoot(), "snapshots", activeBarSnapshotID+".json")
+}
+
+func (a *BarAdapter) loadBaseline(themeName string) (barprofile.Snapshot, string, error) {
+	snapshot, err := a.store.LoadSnapshot(activeBarSnapshotID)
+	if err == nil {
+		return snapshot, activeBarSnapshotID, nil
+	}
+	if !os.IsNotExist(err) {
+		return barprofile.Snapshot{}, "", err
+	}
+	legacyID := barSnapshotID(themeName)
+	snapshot, err = a.store.LoadSnapshot(legacyID)
+	return snapshot, legacyID, err
+}
+
+func (a *BarAdapter) ensureActiveBaseline(themeName string) (barprofile.Snapshot, bool, error) {
+	snapshot, sourceID, err := a.loadBaseline(themeName)
+	if err == nil {
+		if sourceID != activeBarSnapshotID {
+			if err := a.store.SaveSnapshot(activeBarSnapshotID, snapshot); err != nil {
+				return barprofile.Snapshot{}, false, fmt.Errorf("migrate bar baseline: %w", err)
+			}
+		}
+		return snapshot, sourceID != activeBarSnapshotID, nil
+	}
+	if !os.IsNotExist(err) {
+		return barprofile.Snapshot{}, false, fmt.Errorf("load bar baseline: %w", err)
+	}
+	snapshot, err = a.store.Capture(themeName)
+	if err != nil {
+		return barprofile.Snapshot{}, false, fmt.Errorf("capture bar baseline: %w", err)
+	}
+	if err := a.store.SaveSnapshot(activeBarSnapshotID, snapshot); err != nil {
+		return barprofile.Snapshot{}, false, fmt.Errorf("save bar baseline: %w", err)
+	}
+	return snapshot, true, nil
 }
 
 func readBarProfile(themeRoot string) (barprofile.Profile, bool, error) {
@@ -181,15 +250,18 @@ func barSnapshotID(themeName string) string {
 	return "runtime-bar-" + themeName
 }
 
-// SeedBarSnapshot carries a session's pre-preview bar baseline into the
-// permanent runtime namespace. Apply uses this only when a preview has already
+// SeedBarSnapshot carries a session's pre-preview bar baseline into the stable
+// runtime namespace. Apply uses this only when a preview has already
 // materialized the bar profile; the post-commit hook can then reuse the true
 // baseline instead of capturing the themed config as if it were original.
 func SeedBarSnapshot(store *barprofile.Store, themeName string, snapshot barprofile.Snapshot) error {
 	if store == nil {
 		return fmt.Errorf("bar runtime adapter store is nil")
 	}
-	id := barSnapshotID(themeName)
+	if !validThemeName(themeName) {
+		return fmt.Errorf("invalid theme name %q", themeName)
+	}
+	id := activeBarSnapshotID
 	if _, err := store.LoadSnapshot(id); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
