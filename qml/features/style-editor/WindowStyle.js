@@ -19,7 +19,7 @@ function borderSizeFromSlider(position) {
 
 function copy(value) {
     value = value || ({})
-    return {
+    var result = {
         borderStyle: value.borderStyle || value.border_style || "solid",
         borderSize: value.borderSize !== undefined ? Number(value.borderSize) : -1,
         borderSizeMode: value.borderSizeMode || value.border_size_mode || (value.borderSize === 0 ? "none" : value.borderSize > 0 ? "fixed" : "default"),
@@ -30,6 +30,10 @@ function copy(value) {
         activeStyle: value.activeStyle || value.active_style || "native",
         inactiveStyle: value.inactiveStyle || value.inactive_style || "native"
     }
+    var opacity = value.windowOpacity !== undefined ? value.windowOpacity : value.window_opacity
+    if (opacity !== undefined && opacity !== null && isFinite(Number(opacity)))
+        result.windowOpacity = Math.max(0, Math.min(100, Math.round(Number(opacity))))
+    return result
 }
 
 function choose(value, group, key) {
@@ -37,5 +41,12 @@ function choose(value, group, key) {
     next[group] = key
     if (group === "borderSize")
         next.borderSizeMode = key < 0 ? "default" : key === 0 ? "none" : "fixed"
+    return next
+}
+
+function editOpacity(value, opacity) {
+    var next = copy(value)
+    var number = Number(opacity)
+    next.windowOpacity = isFinite(number) ? Math.max(0, Math.min(100, Math.round(number))) : 100
     return next
 }

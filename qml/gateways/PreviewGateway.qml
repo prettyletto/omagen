@@ -32,6 +32,7 @@ Item {
                 border_size: Number(desktop.borderSize !== undefined ? desktop.borderSize : desktop.border_size !== undefined ? desktop.border_size : -1),
                 border_size_mode: desktop.borderSizeMode || desktop.border_size_mode || "default",
                 border_speed: Number(desktop.borderSpeed !== undefined ? desktop.borderSpeed : desktop.border_speed || 36),
+                window_opacity: Number(desktop.windowOpacity !== undefined ? desktop.windowOpacity : desktop.window_opacity !== undefined ? desktop.window_opacity : 100),
                 shape: desktop.shape || "native",
                 spacing: desktop.spacing || "native",
                 depth: desktop.depth || "native",

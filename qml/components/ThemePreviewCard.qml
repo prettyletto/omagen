@@ -14,7 +14,7 @@ Item {
     property string borderStyle: "solid"
     property bool configurationPreview: false
     property int activeSection: 0
-    property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: -1, borderSizeMode: "default", shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: root.borderStyle, borderSize: -1, borderSizeMode: "default", windowOpacity: 100, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native" })
     property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", colors: ({}), profile: null, spec: null })
     property bool selected: false
@@ -49,6 +49,7 @@ Item {
     readonly property string inactiveWindowStyle: root.configurationPreview ? (root.desktopStyle.inactiveStyle || root.desktopStyle.inactive_style || "native") : "native"
     readonly property string shellPreset: String(root.shellStyle.preset || "default")
     readonly property bool frostedInactivePreview: inactiveWindowStyle === "blur" || inactiveWindowStyle.indexOf("frosted_") === 0
+    readonly property real windowOpacity: Math.max(0, Math.min(1, Number(root.desktopStyle.windowOpacity !== undefined ? root.desktopStyle.windowOpacity : root.desktopStyle.window_opacity !== undefined ? root.desktopStyle.window_opacity : 100) / 100))
     readonly property real previewBorderWidth: !root.configurationPreview || Number(root.desktopStyle.borderSize) < 0
         ? 2 : Number(root.desktopStyle.borderSize)
     readonly property real windowRadius: !root.configurationPreview ? Math.max(9, root.cardRadius - 11)
@@ -448,7 +449,8 @@ Item {
                     : root.accent
                 opacity: root.configurationPreview && root.activeSection === 1 ? 0.34
                     : root.configurationPreview && root.activeSection === 2 ? 0.78
-                    : root.configurationPreview && root.desktopStyle.depth === "flat" ? 0.94 : 1
+                    : root.configurationPreview && root.desktopStyle.depth === "flat" ? 0.94 * root.windowOpacity
+                    : root.configurationPreview ? root.windowOpacity : 1
 
                 Behavior on radius { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
                 Behavior on opacity { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }

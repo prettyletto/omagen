@@ -21,6 +21,26 @@ func TestLegacyBarStyleHasEffectiveVersionedSpec(t *testing.T) {
 	}
 }
 
+func TestDesktopWindowOpacityUsesPresetDefaultAndSupportsZero(t *testing.T) {
+	defaultStyle := DefaultDesktopStyle()
+	if defaultStyle.WindowOpacity == nil || *defaultStyle.WindowOpacity != 100 {
+		t.Fatalf("default window opacity = %#v, want 100", defaultStyle.WindowOpacity)
+	}
+
+	zero := 0
+	style := defaultStyle
+	style.WindowOpacity = &zero
+	if !style.Valid() {
+		t.Fatal("zero window opacity should be valid")
+	}
+
+	invalid := 101
+	style.WindowOpacity = &invalid
+	if style.Valid() {
+		t.Fatal("window opacity above 100 should be rejected")
+	}
+}
+
 func TestLegacyWorkspacePresentationMigratesIntoBarSpec(t *testing.T) {
 	profile := barprofile.DefaultProfile()
 	profile.Behavior.Workspace = "dots"

@@ -69,8 +69,10 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 	barProfileSeen := false
 	barSpecSeen := false
 	activeStyleSeen := false
+	windowOpacitySeen := false
 	var shellStyle session.ShellStyle
 	var desktopStyle session.DesktopStyle
+	var windowOpacity *int
 	var barStyle session.BarStyle
 	var animationsStyle session.AnimationsStyle
 	animationsStyleSeen := false
@@ -181,6 +183,20 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 			desktopStyle = session.DesktopStyle{BorderStyle: args[i+1], BorderSize: borderSize, BorderSizeMode: borderSizeMode, Shape: args[shapeStart], Spacing: args[shapeStart+1], Depth: args[shapeStart+2], Inactive: args[shapeStart+3]}
 			desktopStyleSeen = true
 			i += consumed
+		case arg == "--window-opacity":
+			if windowOpacitySeen {
+				return generation.Request{}, fmt.Errorf("--window-opacity specified more than once")
+			}
+			if i+1 >= len(args) {
+				return generation.Request{}, fmt.Errorf("--window-opacity requires a percentage from 0 through 100")
+			}
+			opacity, parseErr := strconv.Atoi(args[i+1])
+			if parseErr != nil || opacity < 0 || opacity > 100 {
+				return generation.Request{}, fmt.Errorf("--window-opacity must be a percentage from 0 through 100")
+			}
+			windowOpacity = &opacity
+			windowOpacitySeen = true
+			i++
 		case arg == "--bar-style":
 			if barStyleSeen {
 				return generation.Request{}, fmt.Errorf("--bar-style specified more than once")
@@ -258,6 +274,10 @@ func parseGenerateArgs(args []string) (generation.Request, error) {
 		default:
 			return generation.Request{}, fmt.Errorf("unknown generate option %q", arg)
 		}
+	}
+	if windowOpacity != nil {
+		desktopStyle.WindowOpacity = windowOpacity
+		desktopStyleSeen = true
 	}
 	if lookFeelSeen {
 		composition, err := lookfeel.Resolve(lookFeelDocument.Preset)

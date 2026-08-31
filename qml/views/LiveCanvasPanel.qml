@@ -26,7 +26,8 @@ PanelWindow {
     property bool applyBusy: false
     property bool extraConfigsEnabled: false
     property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, windowOpacity: 100, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    property int windowOpacityBaseline: 100
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
     property var lookFeel: ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) })
@@ -68,6 +69,7 @@ PanelWindow {
     property bool wizardLookFeelDecided: false
     property bool wizardOperationBusy: false
     property bool wizardPaletteSelected: false
+    property bool wizardRestoreFromFirstStep: false
     // Agent 1 may bind this to the begin-session transition. The fallback
     // preserves safe standalone rendering until that contract is connected.
     property bool wizardCanContinueWorkflow: root.workflowSelected && !root.operationBusy
@@ -496,6 +498,7 @@ PanelWindow {
                             controlsEnabled: !root.operationBusy
                             shellStyle: root.shellStyleForVariant(root.selectedVariant)
                             desktopStyle: root.desktopStyle
+                            windowOpacityDefault: root.windowOpacityBaseline
                             barStyle: root.barStyleForVariant(root.selectedVariant)
                             animationsStyle: root.animationsStyle
                             foregroundColor: root.foregroundColor
@@ -505,7 +508,6 @@ PanelWindow {
                             onStylesChanged: function(nextShell, nextDesktop, nextBar, nextAnimations) {
                                 root.advancedStylesChanged(nextShell, nextDesktop, nextBar, nextAnimations)
                             }
-                            onTestLiveRequested: root.testLiveRequested()
                             onSectionChanged: scrollArea.contentY = 0
                         }
                     }
@@ -579,13 +581,31 @@ PanelWindow {
                     Button {
                         Layout.preferredWidth: Style.space(106)
                         Layout.preferredHeight: Style.space(38)
-                        text: "Back"
+                        text: root.wizardRestoreFromFirstStep && !root.workflowStep && root.wizardStep === 0
+                            ? "Restore & close" : "Back"
                         foreground: root.foregroundColor
                         accent: root.accentColor
                         background: Util.alpha(root.foregroundColor, 0.045)
                         bordered: true
                         enabled: root.wizardCanGoBack && !root.operationBusy
                         onClicked: root.goBackRequested()
+                    }
+
+                    Button {
+                        Layout.preferredWidth: Style.space(118)
+                        Layout.preferredHeight: Style.space(38)
+                        visible: !root.workflowStep
+                            && root.wizardStep === 2
+                            && root.wizardAdvancedChoice === "customize"
+                        text: "Test Live"
+                        fontSize: Style.font.caption
+                        foreground: root.backgroundColor
+                        accent: root.accentColor
+                        background: root.accentColor
+                        bordered: true
+                        enabled: !root.operationBusy
+                        tooltipText: "Apply the current staged Window, Shell, Bar, and Motion settings temporarily"
+                        onClicked: root.testLiveRequested()
                     }
 
                     Text {

@@ -8,6 +8,7 @@ function appendConfigurationArgs(args, shellStyle, desktopStyle, barStyle, anima
               desktopStyle.borderSizeMode || desktopStyle.border_size_mode || "default",
               desktopStyle.shape, desktopStyle.spacing, desktopStyle.depth, desktopStyle.inactiveStyle,
               "--bar-style", barStyle.surface, barStyle.density, barStyle.attention, barStyle.form, barStyle.visibility,
+              "--window-opacity", Number(desktopStyle.windowOpacity !== undefined ? desktopStyle.windowOpacity : desktopStyle.window_opacity !== undefined ? desktopStyle.window_opacity : 100),
               "--window-active-style", desktopStyle.activeStyle || desktopStyle.active_style || "native",
               "--shell-preset", shellStyle.preset || "default");
     if (shellStyle.overrides && Object.keys(shellStyle.overrides).length > 0)

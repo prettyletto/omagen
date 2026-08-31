@@ -14,6 +14,7 @@ Item {
     property color foregroundColor: Color.foreground
     property color backgroundColor: Color.background
     property color accentColor: Color.accent
+    property int windowOpacityDefault: 100
 
     signal styleEdited(var desktopStyle)
 
@@ -105,6 +106,10 @@ Item {
 
     function chooseActive(key) {
         root.chooseDesktop("activeStyle", key)
+    }
+
+    function editWindowOpacity(value) {
+        root.styleEdited(WindowStyle.editOpacity(root.desktopStyle, value))
     }
 
     function beginBorderSizeEdit() {
@@ -209,6 +214,23 @@ Item {
         GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5); Repeater { model: root.shapeOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("shape", modelData.key); selected: root.desktopStyle.shape === modelData.key; onClicked: root.chooseDesktop("shape", modelData.key) } } }
         Text { Layout.fillWidth: true; text: "SPACING"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
         GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5); Repeater { model: root.spacingOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("spacing", modelData.key); selected: root.desktopStyle.spacing === modelData.key; onClicked: root.chooseDesktop("spacing", modelData.key) } } }
+        Text { Layout.fillWidth: true; text: "WINDOW OPACITY"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
+        Components.ShellRangeField {
+            Layout.fillWidth: true
+            label: "All windows"
+            description: "Shared steady-state opacity for active and inactive windows. The selected preset or reopened theme supplies the starting and Reset value; Glass Blur is 72%."
+            value: String(root.desktopStyle.windowOpacity !== undefined ? root.desktopStyle.windowOpacity : root.windowOpacityDefault)
+            fallback: root.windowOpacityDefault
+            minimum: 0
+            maximum: 100
+            step: 1
+            decimals: 0
+            suffix: "%"
+            integer: true
+            modified: Number(value) !== root.windowOpacityDefault
+            onValueEdited: root.editWindowOpacity(value)
+            onResetRequested: root.editWindowOpacity(root.windowOpacityDefault)
+        }
         Text { Layout.fillWidth: true; text: "DEPTH"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }
         GridLayout { Layout.fillWidth: true; columns: 3; columnSpacing: Style.space(5); rowSpacing: Style.space(5); Repeater { model: root.depthOptions; delegate: Components.DesktopOptionCard { required property var modelData; Layout.fillWidth: true; compact: true; title: modelData.title; description: root.optionDescription("depth", modelData.key); selected: root.desktopStyle.depth === modelData.key; onClicked: root.chooseDesktop("depth", modelData.key) } } }
         Text { Layout.fillWidth: true; text: "ACTIVE WINDOWS"; color: root.foregroundColor; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption; font.bold: true }

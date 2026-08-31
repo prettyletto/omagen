@@ -312,6 +312,30 @@ func TestWriteHyprlandGlassPresetAddsSubtleTranslucency(t *testing.T) {
 	}
 }
 
+func TestWriteHyprlandWithDesktopStyleAppliesSharedWindowOpacity(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc"}
+	opacity := 48
+	style := session.DesktopStyle{
+		BorderStyle: "solid", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36,
+		Shape: "rounded", Spacing: "airy", Depth: "shadow", WindowOpacity: &opacity,
+		Active: "native", Inactive: "native",
+	}
+	if err := WriteHyprlandWithDesktopStyleAndAnimationsAndShell(dir, p, style, session.DefaultAnimationsStyle(), session.ShellPresetDefault); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{"active_opacity = 0.48", "inactive_opacity = 0.48"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("custom window opacity output missing %q:\n%s", want, text)
+		}
+	}
+}
+
 func TestWriteHyprlandOrientalKeepsActiveWindowCrisp(t *testing.T) {
 	dir := t.TempDir()
 	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc"}

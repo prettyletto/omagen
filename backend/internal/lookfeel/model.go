@@ -271,6 +271,8 @@ func (c Composition) Validate() error {
 
 func glassWindow() session.DesktopStyle {
 	style := session.DefaultDesktopStyle()
+	opacity := 72
+	style.WindowOpacity = &opacity
 	style.BorderStyle = "blend"
 	style.Shape = "rounded"
 	style.Spacing = "airy"

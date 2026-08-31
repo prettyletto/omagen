@@ -36,7 +36,9 @@ function normalizeDesktopStyle(value) {
     } else { borderSize = -1; borderSizeMode = "default" }
     var borderSpeed = Number(value.borderSpeed !== undefined ? value.borderSpeed : value.border_speed)
     if (!isFinite(borderSpeed) || borderSpeed < 10 || borderSpeed > 100) borderSpeed = 36
-    return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
+    var windowOpacity = Number(value.windowOpacity !== undefined ? value.windowOpacity : value.window_opacity)
+    if (!isFinite(windowOpacity) || windowOpacity < 0 || windowOpacity > 100) windowOpacity = 100
+    return { borderStyle: border, borderSize: borderSize, borderSizeMode: borderSizeMode, borderSpeed: borderSpeed, windowOpacity: Math.round(windowOpacity), shape: value.shape || "native", spacing: value.spacing || "native", depth: value.depth || "native", activeStyle: value.activeStyle || value.active_style || "native", inactiveStyle: value.inactiveStyle || value.inactive_style || "native" }
 }
 
 function normalizeAnimationsStyle(value) {
@@ -205,6 +207,7 @@ function serializeLookFeelComposition(composition) {
             border_size: Number(field(window, "borderSize", "border_size", -1)),
             border_size_mode: field(window, "borderSizeMode", "border_size_mode", "default"),
             border_speed: Number(field(window, "borderSpeed", "border_speed", 36)),
+            window_opacity: Number(field(window, "windowOpacity", "window_opacity", 100)),
             shape: field(window, "shape", "shape", "native"),
             spacing: field(window, "spacing", "spacing", "native"),
             depth: field(window, "depth", "depth", "native"),

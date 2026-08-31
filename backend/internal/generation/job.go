@@ -185,7 +185,7 @@ func (j job) run(
 		}
 	}
 	if j.desktopStyle.Valid() {
-		if err := theme.WriteHyprlandWithAnimationsAndShell(variantDir, generatedPalette, j.desktopStyle.BorderStyle, j.desktopStyle.BorderSize, j.desktopStyle.Shape, j.desktopStyle.Spacing, j.desktopStyle.Depth, j.desktopStyle.Active, j.desktopStyle.Inactive, j.desktopStyle.BorderSpeed, j.animationsStyle, j.shellStyle.Preset, effectiveBarSpec); err != nil {
+		if err := theme.WriteHyprlandWithDesktopStyleAndAnimationsAndShell(variantDir, generatedPalette, j.desktopStyle, j.animationsStyle, j.shellStyle.Preset, effectiveBarSpec); err != nil {
 			return fmt.Errorf("write hyprland style: %w", err)
 		}
 	}

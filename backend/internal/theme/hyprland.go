@@ -152,11 +152,27 @@ func WriteHyprlandWithAnimations(themeDir string, p Palette, borderStyle string,
 	return WriteHyprlandWithAnimationsAndShell(themeDir, p, borderStyle, borderSize, shape, spacing, depth, active, inactive, borderSpeed, animations, session.ShellPresetDefault, barSpecs...)
 }
 
+// WriteHyprlandWithDesktopStyleAndAnimationsAndShell is the style-aware entry
+// point used by generation and Live Canvas. It carries the shared steady-state
+// window opacity alongside the existing desktop style fields while preserving
+// the legacy writer signatures for older callers.
+func WriteHyprlandWithDesktopStyleAndAnimationsAndShell(themeDir string, p Palette, desktopStyle session.DesktopStyle, animations session.AnimationsStyle, shellPreset string, barSpecs ...*bar.BarSpec) error {
+	desktopStyle = session.NormalizeDesktopStyle(desktopStyle)
+	if !desktopStyle.Valid() {
+		return fmt.Errorf("invalid desktop style")
+	}
+	return writeHyprlandWithAnimationsAndShell(themeDir, p, desktopStyle.BorderStyle, desktopStyle.BorderSize, desktopStyle.Shape, desktopStyle.Spacing, desktopStyle.Depth, desktopStyle.Active, desktopStyle.Inactive, desktopStyle.BorderSpeed, animations, desktopStyle.WindowOpacity, shellPreset, barSpecs...)
+}
+
 // WriteHyprlandWithAnimationsAndShell keeps compositor-level Shell effects in
 // the same generated theme transaction as the Window and Animations output.
 // The optional-looking wrapper above preserves the legacy API for callers that
 // do not provide a Shell preset.
 func WriteHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle string, borderSize int, shape, spacing, depth, active, inactive string, borderSpeed int, animations session.AnimationsStyle, shellPreset string, barSpecs ...*bar.BarSpec) error {
+	return writeHyprlandWithAnimationsAndShell(themeDir, p, borderStyle, borderSize, shape, spacing, depth, active, inactive, borderSpeed, animations, nil, shellPreset, barSpecs...)
+}
+
+func writeHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle string, borderSize int, shape, spacing, depth, active, inactive string, borderSpeed int, animations session.AnimationsStyle, windowOpacity *int, shellPreset string, barSpecs ...*bar.BarSpec) error {
 	animations = session.NormalizeAnimationsStyle(animations)
 	if shellPreset == "" {
 		shellPreset = session.ShellPresetDefault
@@ -236,7 +252,7 @@ func WriteHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle
 		b.WriteString("    gaps_in = 8, gaps_out = 14,\n")
 	}
 	b.WriteString("  },\n  group = { col = { border_active = active_border_color, border_inactive = inactive_border_color }, },\n")
-	if shape != "native" || depth != "native" || borderStyle == "neon" || active != "native" || inactive != "native" {
+	if shape != "native" || depth != "native" || borderStyle == "neon" || active != "native" || inactive != "native" || windowOpacity != nil {
 		b.WriteString("  decoration = {\n")
 		switch shape {
 		case "subtle":
@@ -247,6 +263,10 @@ func WriteHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle
 			b.WriteString("    rounding = 8, rounding_power = 3,\n")
 		case "pill":
 			b.WriteString("    rounding = 16, rounding_power = 3,\n")
+		}
+		if windowOpacity != nil {
+			opacity := float64(*windowOpacity) / 100.0
+			fmt.Fprintf(&b, "    active_opacity = %.2f,\n    inactive_opacity = %.2f,\n", opacity, opacity)
 		}
 		shadowEnabled := depth == "shadow" || borderStyle == "neon" || inactive == "shadow" || inactive == "shadow_only"
 		if depth == "flat" && !shadowEnabled {
@@ -282,11 +302,11 @@ func WriteHyprlandWithAnimationsAndShell(themeDir string, p Palette, borderStyle
 		if activeFrosted || inactiveFrosted {
 			// This is compositor background blur through a translucent window. It
 			// cannot blur opaque client pixels such as application text.
-			if glassPreset && activeFrosted {
+			if glassPreset && activeFrosted && windowOpacity == nil {
 				fmt.Fprintf(&b, "    active_opacity = %.2f,\n", frostedWindowOpacity)
 			}
 			if inactiveFrosted {
-				if glassPreset {
+				if glassPreset && windowOpacity == nil {
 					fmt.Fprintf(&b, "    inactive_opacity = %.2f,\n", frostedWindowOpacity)
 				}
 				fmt.Fprintf(&b, "    dim_inactive = true, dim_strength = %.2f,\n", inactiveProfile.dim)
