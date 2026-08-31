@@ -4,6 +4,7 @@ import qs.Commons
 import qs.Ui
 import "Contrast.js" as Contrast
 import "../../bar/BarSizing.js" as BarSizing
+import "../app/StyleDocuments.js" as StyleDocuments
 import "../features/style-editor" as StyleEditor
 
 // Live Canvas editor for the four native composition documents.  The
@@ -461,7 +462,7 @@ Item {
             surface: ["dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : root.barStyle.surface || "native",
             density: spec.geometry.density || root.barStyle.density || "native",
             attention: spec.attention.mode || root.barStyle.attention || "semantic",
-            form: ["continuous", "floating", "minimal"].indexOf(spec.topology) >= 0 ? "continuous" : "docked",
+            form: StyleDocuments.legacyBarFormForTopology(spec.topology),
             visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native",
             profile: profile,
             spec: spec
@@ -526,7 +527,7 @@ Item {
             surface: key === "dark" || key === "light" || key === "accent" ? key : root.barStyle.surface || "native",
             density: spec.geometry.density || root.barStyle.density || "native",
             attention: spec.attention.mode || root.barStyle.attention || "semantic",
-            form: ["continuous", "floating", "minimal"].indexOf(spec.topology) >= 0 ? "continuous" : "docked",
+            form: StyleDocuments.legacyBarFormForTopology(spec.topology),
             visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native",
             profile: profile,
             spec: spec
@@ -574,7 +575,7 @@ Item {
             var behavior = { form: spec.topology, visibility: spec.behavior.visibility === "auto_hide" ? "auto-hide" : "always", reveal: "edge", expansion: spec.behavior.hover_expand ? "hover" : "none", workspace: "native" }
             profile = { schema_version: 1, ownership: "overlay", implementation: "replacement", bar: { id: "pretty.omagen.bar" }, behavior: behavior }
         }
-        var next = { surface: ["native", "dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : "native", density: spec.geometry.density, attention: root.barStyle.attention || "semantic", form: spec.topology, visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native", profile: profile, spec: spec }
+        var next = { surface: ["native", "dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : "native", density: spec.geometry.density, attention: root.barStyle.attention || "semantic", form: StyleDocuments.legacyBarFormForTopology(spec.topology), visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native", profile: profile, spec: spec }
         root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
     }
 
@@ -618,7 +619,7 @@ Item {
             surface: root.barStyle.surface || "native",
             density: root.barStyle.density || "native",
             attention: root.barStyle.attention || "semantic",
-            form: ["continuous", "floating", "minimal"].indexOf(key) >= 0 ? "continuous" : "docked",
+            form: StyleDocuments.legacyBarFormForTopology(nextSpec ? nextSpec.topology : key),
             visibility: key === "islands" || key === "sections" ? "islands" : (root.barStyle.visibility || "native"),
             profile: profile,
             spec: nextSpec

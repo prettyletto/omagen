@@ -35,6 +35,11 @@ PanelWindow {
     readonly property int contentHeight: Math.max(bar.barSize,
         Math.ceil(presetLoader.item ? (presetLoader.item.implicitHeight || presetLoader.implicitHeight) : presetLoader.implicitHeight)
             + Style.space(16))
+    // Keep a small shared vertical safety budget around every horizontal
+    // replacement bar. Preset roots are measured at barSize, but borders,
+    // glyphs, and centered decorations can otherwise land on the layer edge
+    // and lose their outer pixels during rasterization.
+    readonly property int horizontalSafetyMargin: Style.space(8)
     readonly property int compactVerticalWidth: bar.floatingCompact && bar.vertical
         ? bar.barSize + Style.space(4) : bar.barSize
     readonly property int surfaceWidth: bar.vertical
@@ -42,7 +47,7 @@ PanelWindow {
         : (fullWidth || islandsFullLength ? 0 : contentWidth)
     readonly property int surfaceHeight: bar.vertical
         ? (fullWidth || islandsFullLength ? 0 : contentHeight)
-        : bar.barSize
+        : (bar.dock ? bar.dockThickness : bar.barSize) + horizontalSafetyMargin
     // Auto-hide must park the complete painted surface. Dock and widened
     // vertical layouts intentionally add cross-axis padding beyond barSize;
     // using only barSize leaves that extra strip visible at the monitor edge.
@@ -115,7 +120,7 @@ PanelWindow {
     implicitWidth: bar.vertical
         ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)
         : surfaceWidth
-    implicitHeight: bar.vertical ? surfaceHeight : bar.dock ? bar.dockThickness : bar.barSize
+    implicitHeight: surfaceHeight
 
     ScreenMoveRemap { id: remapGuard; window: panel }
 
@@ -309,7 +314,9 @@ PanelWindow {
                 : bar.dock
                 ? (bar.dockExpanded ? Math.min(panel.height, panel.contentHeight) : bar.dockCollapsedExtent)
                 : (bar.contentSized ? Math.min(panel.height, contentHeight) : panel.height))
-            : bar.dock ? bar.dockThickness : bar.barSize
+            : bar.dock
+                ? (bar.dockExpanded ? Math.min(panel.height, panel.contentHeight) : bar.dockCollapsedExtent)
+                : (bar.contentSized ? Math.min(panel.height, contentHeight) : panel.height)
 
         Behavior on width {
             // Do not animate PanelWindow geometry for Orbit. Resizing a
@@ -357,7 +364,7 @@ PanelWindow {
             height: bar.barSize
             x: Math.round(Math.min(panel.width - surfaceFrame.x - width - bar.outerMargin,
                 surfaceFrame.width + panel.compactTrayGap))
-            y: 0
+            y: Math.round((surfaceFrame.height - height) / 2)
 
             BorderSurface {
                 anchors.fill: parent

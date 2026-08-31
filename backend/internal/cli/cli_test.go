@@ -239,19 +239,6 @@ func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 	}
 }
 
-func TestParseRetintOptions(t *testing.T) {
-	run, skip, err := parseRetintOptions([]string{"--run", "all", "--skip", "browser,hyprland"})
-	if err != nil || run != "all" || skip != "browser,hyprland" {
-		t.Fatalf("run=%q skip=%q err=%v", run, skip, err)
-	}
-	if _, _, err := parseRetintOptions([]string{"--skip"}); err == nil {
-		t.Fatal("expected missing --skip value to fail")
-	}
-	if _, _, err := parseRetintOptions([]string{"--unknown"}); err == nil {
-		t.Fatal("expected unknown retint option to fail")
-	}
-}
-
 func TestParseStudioOptions(t *testing.T) {
 	options, err := parseStudioOptions([]string{"--scope", "theme,shell", "--wait", "full", "--run", "terminal", "--allow-trusted-hooks"})
 	if err != nil {
@@ -262,6 +249,10 @@ func TestParseStudioOptions(t *testing.T) {
 	}
 	if _, err := parseStudioOptions([]string{"--wait", "eventually"}); err == nil {
 		t.Fatal("expected invalid wait mode to fail")
+	}
+	options, err = parseStudioOptions([]string{"--apps", "browser"})
+	if err != nil || options.RetintRun != "browser" {
+		t.Fatalf("--apps alias was not preserved: options=%#v err=%v", options, err)
 	}
 }
 
@@ -333,10 +324,10 @@ func TestSessionHandlers(t *testing.T) {
 	}
 	service := session.NewService(store, cliOmarchy{})
 	var out, stderr bytes.Buffer
-	if code := runSession([]string{"begin"}, service, nil, &out, &stderr); code != 0 {
+	if code := runSessionWithDependencies([]string{"begin"}, service, nil, nil, nil, nil, nil, &out, &stderr); code != 0 {
 		t.Fatalf("begin code=%d err=%q", code, stderr.String())
 	}
-	if code := runSession([]string{"cancel", "missing"}, service, nil, &out, &stderr); code != 1 {
+	if code := runSessionWithDependencies([]string{"cancel", "missing"}, service, nil, nil, nil, nil, nil, &out, &stderr); code != 1 {
 		t.Fatalf("cancel code=%d", code)
 	}
 	if code := runGenerate([]string{"too-few"}, nil, &out, &stderr); code != 2 {
@@ -357,7 +348,7 @@ func TestSessionBeginAcceptsInactiveStyleArgumentShape(t *testing.T) {
 		"--desktop-style", "invalid", "2", "native", "native", "native", "blur",
 		"--bar-style", "native", "native", "semantic", "continuous",
 	}
-	if code := runSession(args, service, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
+	if code := runSessionWithDependencies(args, service, nil, nil, nil, nil, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
 		t.Fatalf("inactive-style argument shape was rejected before validation: code=%d stderr=%q", code, stderr.String())
 	}
 }
@@ -376,7 +367,7 @@ func TestSessionBeginAcceptsWindowOpacityAfterBarStyle(t *testing.T) {
 		"--bar-style", "native", "native", "semantic", "continuous", "native",
 		"--window-opacity", "0",
 	}
-	if code := runSession(args, service, nil, &out, &stderr); code != 0 {
+	if code := runSessionWithDependencies(args, service, nil, nil, nil, nil, nil, &out, &stderr); code != 0 {
 		t.Fatalf("window opacity argument was rejected: code=%d stderr=%q", code, stderr.String())
 	}
 	active, _, err := store.LoadActive()

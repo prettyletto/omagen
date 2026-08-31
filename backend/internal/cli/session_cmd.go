@@ -48,10 +48,6 @@ type resumeResponse struct {
 	Variants               []generation.DescribedVariant `json:"variants,omitempty"`
 }
 
-func runSession(args []string, service *session.Service, previewService *preview.Service, stdout, stderr io.Writer) int {
-	return runSessionWithDependencies(args, service, previewService, nil, nil, nil, nil, stdout, stderr)
-}
-
 func runSessionWithDependencies(args []string, service *session.Service, previewService *preview.Service, applyService *apply.Service, cleanupService *cleanup.Service, demoService *demo.Service, generationService *generation.Service, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		return fail(stderr, 2, "missing session subcommand")

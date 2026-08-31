@@ -15,9 +15,9 @@ Item {
     // The boolean above describes availability; this value is the selection
     // that the composition root carries into the remaining wizard steps.
     property string selectedVariant: ""
-    // A resumed or theme-edit session can already have a non-native preset
-    // selected before the user opens the wizard. Keep the navigation guard in
-    // sync with the card that the view renders as selected.
+    // A session can already have a preset selected before the user opens the
+    // wizard. Keep the navigation guard in sync with the card that the view
+    // renders as selected, including the native preset.
     property string selectedLookFeelPreset: "omarchy-native"
     property bool lookFeelDecided: false
     // Theme-edit sessions do not have the image-workflow history that an
@@ -63,7 +63,7 @@ Item {
         if (root.step === 0)
             return root.paletteSelected
         if (root.step === 1)
-            return root.lookFeelDecided || root.selectedLookFeelPreset !== "omarchy-native"
+            return root.lookFeelDecided || root.selectedLookFeelPreset !== ""
         if (root.step === 2)
             return root.advancedChoice === "skip" || root.advancedChoice === "customize"
         return root.step === 3
