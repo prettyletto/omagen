@@ -31,6 +31,7 @@ type InstallResult struct {
 
 type ThemeSetResult struct {
 	Theme             string                   `json:"theme"`
+	Superseded        bool                     `json:"superseded,omitempty"`
 	Advanced          bool                     `json:"advanced"`
 	RuntimeReady      bool                     `json:"runtime_ready"`
 	NativeOnly        bool                     `json:"native_only"`

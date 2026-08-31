@@ -52,9 +52,21 @@ func runRuntime(args []string, stdout, stderr io.Writer) int {
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen runtime theme-set <theme>")
 		}
-		themeRoot, _, err := runtime.ActiveThemePaths()
+		themeRoot, activeTheme, err := runtime.ActiveThemePaths()
 		if err != nil {
 			return fail(stderr, 1, "resolve active theme for runtime: %v", err)
+		}
+		// Native Omarchy releases its theme transaction lock before running user
+		// hooks. A rapid second theme selection can therefore promote a newer
+		// theme before this older hook reaches Omagen. Never interpret the newer
+		// current/theme tree using the stale hook argument or let it repaint the
+		// runtime state under the wrong name.
+		if activeTheme != args[1] {
+			return writeJSON(stdout, stderr, runtime.ThemeSetResult{
+				Theme:      args[1],
+				Superseded: true,
+				NativeOnly: true,
+			})
 		}
 		result, err := runtime.ThemeSet(themeRoot, args[1])
 		if err != nil {
