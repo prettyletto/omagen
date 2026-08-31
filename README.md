@@ -7,6 +7,11 @@
 Generate a palette from an image, explore six directions, preview the result
 on your desktop, and apply the one that feels right.
 
+Omagen is the complete renewed product: the overlay and launcher widget,
+reversible Live Canvas previews, optional desktop composition, Demo, Apply, and
+recovery. Its full-bar implementation remains a separate, opt-in Omarchy
+plugin.
+
 </div>
 
 ![Omagen demo](assets/omagen-demo.gif)
@@ -17,43 +22,45 @@ on your desktop, and apply the one that feels right.
 
 Watch the full walkthrough on [YouTube](https://youtu.be/Af06-XsdBHA).
 
-## Install
+## Install the renewed product
 
-Install and enable Omagen through Omarchy:
+The current renewed product is on the `dev` branch. Install that branch with
+the repository bootstrap:
 
-```sh
-omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
-```
+~~~sh
+OMAGEN_TEST_BRANCH=dev \
+  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/scripts/install-branch.sh | bash'
+~~~
 
-That is the complete user installation. Omarchy clones the plugin, validates
-its manifest, enables it, and places the widget in its declared default bar
-section. Go is not required because the runtime backend is bundled with the
-plugin.
+The bootstrap clones `dev` into a temporary directory, installs the complete
+overlay package (`pretty.omagen`) and the separate full-bar package
+(`pretty.omagen.bar`), enables the overlay, rescans the shell, and removes the
+temporary checkout. The backend binary is bundled, so Go is not required. The
+full-bar package is installed separately because Quattro treats a full bar and
+a bar-widget plugin as different product kinds; selecting a replacement bar is
+still opt-in.
 
-### Test the nightly branch
+For a local checkout, contributors can use:
 
-The plugin manager follows the repository's default branch. To test the
-current `nightly` branch instead, run this single command:
+~~~sh
+./dev-install.sh
+~~~
 
-```sh
-bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
-```
+See [Development](docs/development.md) for the local workflow.
 
-The bootstrap clones `nightly` into a temporary directory, installs both
-Omagen plugin packages, rescans and restarts the shell, and removes the
-temporary checkout. It uses the checked-in backend binary, so Go is not
-required. This replaces the currently installed `pretty.omagen` and
-`pretty.omagen.bar` files; use it on a test machine or when you are ready to
-switch back with the normal plugin-manager command.
+### Test another branch or fork
 
-To test another branch or fork, set the source variables before piping the
-script:
+The same bootstrap can install another branch or repository. Set the source
+variables before piping the script from the renewed `dev` branch:
 
-```sh
+~~~sh
 OMAGEN_TEST_BRANCH=my-branch \
   OMAGEN_TEST_REPOSITORY=https://github.com/your-name/omagen.git \
-  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
-```
+  bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/scripts/install-branch.sh | bash'
+~~~
+
+This replaces the installed Omagen package files for both plugin IDs. Use it
+when you intentionally want to switch the checkout being tested.
 
 ## How it works
 
@@ -61,7 +68,7 @@ OMAGEN_TEST_BRANCH=my-branch \
 | --- | --- | --- |
 | 1 | Choose an image | Omagen extracts representative colors. |
 | 2 | Explore the gallery | Six directions are generated: Source, Calm, Mute, Deep, Vibrant, and Balanced. |
-| 3 | Test the direction | Preview it live or open a temporary Demo workspace. |
+| 3 | Preview and test | Activate a direction for a Live Canvas Preview; use Test Live for staged composition changes or open a temporary Demo workspace. |
 | 4 | Apply the result | Save a named, permanent Omarchy theme. |
 
 The preview uses the same production palette and semantic-contrast pipeline as
@@ -111,7 +118,7 @@ See the [Examples gallery](docs/examples.md) for the complete set of generated t
 ## Features
 
 - Image-derived Omarchy palettes with six visual directions.
-- Live previews inside a recoverable Omagen session.
+- Palette Preview and explicit Test Live inside a recoverable Omagen session.
 - Optional Window, Shell, and Bar composition previews, including animated
   borders, border thickness, inactive-window treatment, shell feedback
   surfaces, and Docked-bar visibility.
@@ -167,9 +174,11 @@ After installation, click the Omagen widget in the Quattro bar:
 2. Choose an image.
 3. Optionally enable extra Window, Shell, and Bar configuration previews.
 4. Select a palette direction.
-5. Use **Test live**, **Demo**, **Bar Demo**, or **Apply theme**. Bar Demo
-   previews the staged BarSpec motion and topology below the real native bar;
-   it does not replace Quattro's widgets or input ownership.
+5. Activate a palette card to **Preview** it on the Live Canvas. In-depth users
+   can use **Test Live** for staged Window, Shell, Bar, Animation, or custom
+   colour changes, open **Start Full Demo** for the four-window workspace, or
+   use the read-only **Bar Demo**. Bar Demo previews the staged bar below the
+   real native bar; it does not replace Quattro's widgets or input ownership.
 
 Use **Cancel** to restore the original theme and background. If Omagen is
 interrupted during a preview, its next launch offers **Restore & close** or
@@ -183,7 +192,7 @@ the same restore path as Cancel when an active session exists.
 - Omarchy Quattro
 - Hyprland
 - Quickshell
-- Linux x86_64 for the bundled V1 backend binary
+- Linux x86_64 for the bundled backend binary
 
 Demo applications are optional. Omagen resolves available terminals, editors,
 monitors, and file managers and provides fallbacks when a preferred
@@ -213,7 +222,7 @@ Quattro fallback.
 | [Styling and palette settings](docs/styling.md) | Users | Harmony, contrast, Window, Shell, Bar, and generated assets. |
 | [Demo workspace](docs/demo.md) | Users | Temporary workspaces, capability resolution, fallbacks, and preview capture. |
 | [Recovery and safety](docs/recovery.md) | Users and maintainers | Sessions, Cancel, Quit, Apply safety, and cleanup boundaries. |
-| [Development](docs/development.md) | Contributors | Local installation, tests, linting, and the V1 validation gate. |
+| [Development](docs/development.md) | Contributors | Local installation, tests, linting, and the validation gate. |
 | [Architecture](docs/architecture/README.md) | Contributors | The plugin contract, QML/backend boundary, generation pipeline, and lifecycle. |
 
 The [documentation index](docs/README.md) mirrors this table. Contributors
@@ -227,7 +236,7 @@ To remove Omagen completely, including the separate full-bar plugin, its
 consented runtime hook, settings, and Omagen session state, run:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/uninstall.sh | bash
+curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/uninstall.sh | bash
 ```
 
 From a local checkout, the equivalent command is:
@@ -244,7 +253,9 @@ For plugin-manager removal only, without removing Omagen's user state:
 
 ```sh
 omarchy plugin remove pretty.omagen --yes
+omarchy plugin remove pretty.omagen.bar --yes
 ```
 
-The complete uninstaller is the recommended command when Omagen should be
-removed from the machine.
+This removes the two plugin packages but leaves Omagen's user state and
+permanent themes in place. The complete uninstaller is the recommended command
+when Omagen should be removed from the machine.

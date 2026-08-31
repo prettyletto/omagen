@@ -452,6 +452,33 @@ shell_ipc() {
   timeout 2 omarchy-shell "$@" >/dev/null 2>&1
 }
 
+instant_background_handoff() {
+  local new_background="$1"
+  local detour="${2:-}"
+  local temporary_detour=0
+
+  # Quickshell's `setInstant` still compares the requested pathname before it
+  # reaches the instant branch. Theme swaps can replace the file behind an
+  # unchanged `current/theme/backgrounds/wallpaper.png` pathname, so briefly
+  # use a distinct hard-link pathname to invalidate that comparison. The
+  # detour has the old image for Preview (or the new image as a fallback), so
+  # it is visually harmless.
+  if [[ -z "$detour" || ! -f "$detour" || "$detour" == "$new_background" ]]; then
+    if detour=$(snapshot_background_path "$new_background" "instant"); then
+      temporary_detour=1
+    else
+      detour=""
+    fi
+  fi
+  if [[ -n "$detour" && "$detour" != "$new_background" && -f "$detour" ]]; then
+    shell_ipc background setInstant "$detour" || true
+  fi
+  shell_ipc background setInstant "$new_background" || true
+  if (( temporary_detour )); then
+    rm -f "$detour"
+  fi
+}
+
 snapshot_background_path() {
   local background="$1"
   local name="$2"
@@ -529,7 +556,7 @@ set_theme_background() {
     fi
     ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
     if [[ "$THEME_HEADLESS" != "1" ]]; then
-      shell_ipc background setInstant "$new_background" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
     fi
     rm -f "$OLD_BACKGROUND_SNAPSHOT"
     return 0
@@ -555,16 +582,22 @@ set_theme_background() {
   fi
 
   if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
-    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
     (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
   elif [[ -f "$new_background_snapshot" ]]; then
-    shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$new_background_snapshot"
+    fi
     (exec 9>&-; sleep 3; rm -f "$new_background_snapshot") &
   else
-    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
     if [[ -f "$OLD_BACKGROUND_SNAPSHOT" ]]; then
       (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
     fi

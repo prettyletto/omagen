@@ -5,13 +5,13 @@ set -Eeuo pipefail
 # It clones that branch first, so install.sh still resolves all package files
 # relative to a real checkout.
 REPOSITORY="${OMAGEN_TEST_REPOSITORY:-https://github.com/prettyletto/omagen.git}"
-BRANCH="${OMAGEN_TEST_BRANCH:-nightly}"
+BRANCH="${OMAGEN_TEST_BRANCH:-dev}"
 
 usage() {
     cat <<EOF
-Usage: bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
+Usage: bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/scripts/install-branch.sh | bash'
 
-The default installs the nightly branch. Override the source when needed:
+The default installs the dev branch. Override the source when needed:
   OMAGEN_TEST_BRANCH=<branch> OMAGEN_TEST_REPOSITORY=<url> bash
 EOF
 }

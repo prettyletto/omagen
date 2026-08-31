@@ -17,10 +17,25 @@ Start lifecycle work in `qml/controllers/` after reading the lifecycle recipe.
 the current frontend state-machine boundary. Do not bypass them by adding
 another Apply/Demo/Preview handler to `Omagen.qml`.
 
+`qml/gateways` owns bounded backend process access and `qml/services` owns the
+compatibility façade plus settings/image helpers. `qml/features/style-editor`
+contains pure staged-document transformations. Views/components render and
+emit intent; they do not own durable session state, rollback, filesystem writes,
+or native desktop state.
+
 For Window or Animations styling, use the focused style-editor recipe and
 `qml/features/style-editor/`. Do not load lifecycle controllers or Bar runtime
 files for a pure style-document transformation.
 
-Run `qmllint` when available and `GOCACHE=/tmp/omagen-gocache
-./scripts/v1-check.sh` from the repository root. Manually exercise the
-affected route in the running Quickshell when possible.
+Run when available from the repository root:
+
+```zsh
+find qml bar -name '*.qml' -print0 | xargs -0 qmllint
+qmllint Omagen.qml OmagenBarWidget.qml OmagenBar.qml
+GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
+git diff --check
+```
+
+Manually exercise the affected route in the running Quickshell when possible;
+use `skills/testing-omagen/SKILL.md` for guarded UI testing. `qmllint` is not
+visual or lifecycle coverage.

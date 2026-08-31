@@ -58,7 +58,7 @@ jobs:
           go version -m bin/omagen
 
       - name: Attest the verified package executable
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: bin/omagen

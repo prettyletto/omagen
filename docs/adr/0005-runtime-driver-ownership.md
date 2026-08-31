@@ -1,6 +1,6 @@
 # ADR-0005: Runtime driver ownership remains explicit
 
-- Status: Accepted for nightly; consolidation deferred
+- Status: Accepted; staged coexistence is intentional
 - Date: 2026-08-28
 
 ## Decision
@@ -8,8 +8,8 @@
 Go `backend/internal/runtime` is the model/adapter authority. The shell
 `bin/studio-theme-set` remains a compatibility transaction driver for current
 Omarchy path resolution, locking, scopes, hook policy, and post-commit adapter
-execution. This rehabilitation documents the seam but does not risk a runtime
-rewrite.
+execution. The two-layer seam is part of the current product contract; this
+ADR does not authorize a runtime rewrite by implication.
 
 ## Follow-up trigger
 

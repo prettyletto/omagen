@@ -19,9 +19,9 @@ visible.
 
 ## Cancel and Quit
 
-**Cancel** from the palette gallery restores the original theme and background,
+**Cancel** or **Restore & close** restores the original theme and background,
 closes the session's Demo windows, removes temporary preview state, and clears
-the active session record.
+the active session record. Restore & close also closes the Live Canvas wizard.
 
 **Quit** from the bar widget uses the backend recovery path. If there is no
 active session, it does nothing beyond closing any visible Omagen surface. If

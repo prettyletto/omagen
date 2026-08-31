@@ -4,13 +4,23 @@ The repository is itself the Omarchy plugin package. A checkout must remain
 runnable as a plugin without requiring a separate build tree or installation
 script at runtime.
 
+## First contribution
+
+Read the root `AGENTS.md`, run `scripts/agent-context <domain>`, and follow one
+recipe under `docs/agents/recipes/` before editing. Inspect the target and its
+direct callers, run focused checks first, then the full gate. The active
+product-development branch is `dev`; do not introduce historical branch or
+deleted-path assumptions into new documentation.
+
 ## Repository layout
 
 ~~~text
 manifest.json             Omarchy plugin contract
+bar-manifest.json          Separate full-bar plugin contract
 preview.png               Optional marketplace listing preview
 Omagen.qml                Overlay entry point
 OmagenBarWidget.qml       Bar-widget entry point
+OmagenBar.qml              Full replacement bar entry point
 qml/                      QML views, components, services, and state
 backend/                  Go backend and internal services
 bin/omagen                Bundled runtime backend binary
@@ -27,6 +37,13 @@ The plugin manifest declares the ID <code>pretty.omagen</code>, the
 <code>overlay</code> and <code>bar-widget</code> kinds, the two QML entry points,
 and the default right-side bar section. See the root
 [manifest.json](../manifest.json).
+
+The separate <code>pretty.omagen.bar</code> manifest owns the full bar; keep
+the two plugin payloads and their ownership boundaries separate.
+
+Before deleting code, search production callers, dynamic QML loads, manifests,
+install payloads, tests, and documentation. Compatibility and ownership code
+can look obsolete while still protecting user state.
 
 ## Bundled backend provenance
 
@@ -48,10 +65,10 @@ read-only module resolution. The verifier rebuilds into a temporary directory
 and compares the result byte-for-byte with <code>bin/omagen</code>.
 
 The same verifier runs on every relevant pull request and push in
-<code>.github/workflows/verify-bundled-backend.yml</code>. Pushes to
-<code>main</code> also receive a GitHub build-provenance attestation for the
-verified executable. A binary change without a matching source build fails
-the check.
+<code>.github/workflows/verify-bundled-backend.yml</code>. Pushes to the active
+<code>dev</code> product branch also receive a GitHub build-provenance
+attestation for the verified executable. A binary change without a matching
+source build fails the check.
 
 The root <code>preview.png</code> is a marketplace showcase image. It is not a
 runtime entry point and is not required by the Omarchy shell loader; the
@@ -74,10 +91,11 @@ To install a branch checkout for testers without requiring Go, use the
 branch bootstrap from that branch. The checked-in backend is used as-is:
 
 ~~~sh
-bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
+OMAGEN_TEST_BRANCH=dev OMAGEN_TEST_REPOSITORY=https://github.com/prettyletto/omagen.git \
+zsh -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/scripts/install-branch.sh | bash'
 ~~~
 
-The bootstrap clones `nightly` into a temporary directory, runs
+The bootstrap clones the selected branch into a temporary directory, runs
 `dev-install.sh --skip-build`, and removes the checkout after installation.
 Set `OMAGEN_TEST_BRANCH` and `OMAGEN_TEST_REPOSITORY` to test a different
 branch or fork. The bootstrap replaces both installed Omagen plugin packages
@@ -185,6 +203,9 @@ Focused checks can be run from the backend module, for example:
 ~~~sh
 go test ./internal/demo
 ~~~
+
+See [Backend CLI reference](development/cli.md) for command families,
+session lifecycle, and safe inspection/mutation guidance.
 
 The repository also contains QtTest files under `qml/tests/`. They are separate
 from `qmllint`: `qmllint` checks syntax and static QML issues, while
