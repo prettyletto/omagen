@@ -167,6 +167,7 @@ CURRENT_BACKGROUND_LINK="$HOME/.local/state/omarchy/current/background"
 BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
 THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
 POST_COMMIT_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-post-commit.lock"
+CACHE_WARM_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-cache-warm.lock"
 USER_THEMES_PATH="$HOME/.config/omarchy/themes"
 OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
 
@@ -214,6 +215,20 @@ run_parallel() {
   for pid in "${pids[@]}"; do
     wait "$pid"
   done
+}
+
+run_low_priority() {
+  # Post-commit retints and cache warmers are correctness-independent. Keep
+  # them from competing with Quickshell's scene rebuild and Hyprland's first
+  # frames after the critical theme handoff. nice/ionice priority is inherited
+  # by helpers and their children; fall back cleanly on minimal installations.
+  if command -v ionice >/dev/null 2>&1 && command -v nice >/dev/null 2>&1; then
+    ionice -c 3 nice -n 10 "$@"
+  elif command -v nice >/dev/null 2>&1; then
+    nice -n 10 "$@"
+  else
+    "$@"
+  fi
 }
 
 # Keep this declaration in the same order as Omarchy's post_theme_commands
@@ -313,6 +328,7 @@ selected_retint_adapters() {
 run_retint_adapter() {
   local adapter="$1"
   local command
+  local -a adapter_runner
   # A newer Apply may have superseded this post-commit job while it was
   # waiting for an adapter. Never let stale work repaint the newer theme.
   activation_is_current || {
@@ -325,7 +341,15 @@ run_retint_adapter() {
     return 0
   fi
   printf 'preview retint adapter=%s status=started command=%s\n' "$adapter" "$command"
-  if bash -lc "$command"; then
+  # Terminal signalling and the compositor reload are short, visible parts of
+  # the handoff. Deprioritize the filesystem/editor/browser adapters that can
+  # otherwise saturate CPU or storage immediately after Preview returns.
+  if [[ "$adapter" == "terminal" || "$adapter" == "hyprland" ]]; then
+    adapter_runner=(bash -lc "$command")
+  else
+    adapter_runner=(run_low_priority bash -lc "$command")
+  fi
+  if "${adapter_runner[@]}"; then
     printf 'preview retint adapter=%s status=success\n' "$adapter"
   else
     printf 'preview retint adapter=%s status=failed command=%s\n' "$adapter" "$command" >&2
@@ -438,14 +462,24 @@ warm_apply_caches() {
   # Applying a new user theme changes the theme directory signature used by
   # the native image-based theme picker. Warm it after the permanent theme is
   # live so the next Super+Ctrl+Shift+Space does not pay that scan/thumbnail
-  # cost. These are cache-only helpers and must never delay Apply or affect
-  # its success.
-  if command -v omarchy-theme-switcher >/dev/null 2>&1; then
-    omarchy-theme-switcher --preload >/dev/null 2>&1 &
-  fi
-  if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
-    omarchy-theme-bg-cache >/dev/null 2>&1 &
-  fi
+  # cost. Keep only one cache worker alive: rapid Apply/re-Apply used to stack
+  # selector scans and image thumbnailers, which could still contend with the
+  # compositor despite their reduced priority. A newer Apply may make this
+  # worker stale between stages, so re-check ownership before warming the
+  # theme-specific background cache.
+  (
+    exec 9>&-
+    exec 7>"$CACHE_WARM_LOCK"
+    flock -n 7 || exit 0
+    activation_is_current || exit 0
+    if command -v omarchy-theme-switcher >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-switcher --preload
+    fi
+    activation_is_current || exit 0
+    if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-bg-cache
+    fi
+  ) >/dev/null 2>&1 </dev/null &
 }
 
 shell_ipc() {

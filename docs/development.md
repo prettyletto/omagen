@@ -165,6 +165,14 @@ and retint failures are non-fatal after the core theme transaction commits.
 An adapter cannot strand Apply in the prepared state. Arbitrary user theme
 hooks remain excluded from Studio-controlled Preview and Apply.
 
+Filesystem-heavy application retints and permanent-Apply cache warmers run at
+background CPU/I/O priority so they do not compete with Quickshell's scene
+update or Hyprland's first frames after the handoff. The short terminal signal
+and required Hyprland reload retain normal priority. Cache warming is
+single-flight: rapid Apply/re-Apply requests do not stack selector scans or
+thumbnail generation, and a stale worker does not start the next theme-specific
+cache stage.
+
 Apply returns after the critical theme promotion and shell/background update;
 the selected post-commit retint adapters continue in parallel. This keeps the
 UI responsive even when an application-specific helper is slow or unavailable.
@@ -174,11 +182,14 @@ only the newest pending appearance, and an already-live request is completed as
 a no-op so it cannot leave Apply waiting for a process that was intentionally
 deduplicated. Deferred retint/runtime work is fenced to the activation that
 created it; if a newer theme is current, the older job exits without repainting
-the desktop.
+the desktop. The installed post-theme runtime hook performs the same active-name
+check because native Omarchy releases its theme lock before invoking user hooks;
+a superseded hook reports a no-op instead of interpreting the newer theme tree
+under its stale argument.
 Permanent Apply also starts the native theme-selector and background cache
-warmers in the background, after the new user theme is visible. Test Live does
-not warm these caches because its temporary preview alias is removed or
-renamed immediately afterward.
+warmers in a single low-priority background worker after the new user theme is
+visible. Test Live does not warm these caches because its temporary preview
+alias is removed or renamed immediately afterward.
 
 When Apply follows a matching successful Test Live for the same session,
 generation, and variant, Omagen promotes the already-materialized live preview
