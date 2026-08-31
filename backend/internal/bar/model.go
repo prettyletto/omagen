@@ -460,8 +460,8 @@ func Preset(name string) (BarSpec, error) {
 		s.Motion = Motion{Preset: "subtle", DurationMs: 180, Easing: "out_cubic"}
 	case "cathedral":
 		s.Topology, s.Engine = TopologySections, EngineOmagen
-		s.Surface = Surface{Treatment: "metal", Role: "dark", Opacity: .96, BorderRole: "foreground", BorderOpacity: .36, BorderWidth: 1, Shadow: "raised"}
-		s.Geometry.Density, s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.SectionGap, s.Geometry.Radius = "comfortable", 10, 10, 8, 8
+		s.Surface = Surface{Treatment: "opaque", Role: "dark", Opacity: 1, BorderRole: "foreground", BorderOpacity: .58, BorderWidth: 2, Shadow: "raised"}
+		s.Geometry.Density, s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.SectionGap, s.Geometry.Radius = "comfortable", 10, 10, 10, 4
 		s.Motion = Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
 	case "pulse":
 		s.Topology, s.Engine = TopologyRail, EngineOmagen

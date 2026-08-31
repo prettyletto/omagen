@@ -97,7 +97,7 @@ func Catalog() []CatalogEntry {
 		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
 		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 4},
 		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a quiet Zen island bar, a classical clock, Japanese workspaces, and ink-brush motion", Revision: 6},
-		{ID: PresetGothic, Name: "Gothic Cathedral", Description: "Ceremonial dark surfaces, a pointed Cathedral bar, stained-glass depth, and deliberate cinematic motion", Revision: 2},
+		{ID: PresetGothic, Name: "Gothic Cathedral", Description: "Opaque ironwork surfaces, pointed framing, stained-glass accents, and deliberate cinematic motion", Revision: 3},
 		{ID: PresetAcid, Name: "Acid Pulse", Description: "Reactive spinning borders, a conductive Pulse rail, chemical workspace glyphs, and sharp fluid motion", Revision: 2},
 	}
 }
@@ -191,7 +191,7 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = orientalBar()
 		composition.Animations = orientalMotion()
 	case PresetGothic:
-		composition.PresetRevision = 2
+		composition.PresetRevision = 3
 		composition.Window = gothicWindow()
 		composition.Shell = gothicShell()
 		composition.Bar = gothicBar()
@@ -676,9 +676,9 @@ func gothicBar() session.BarStyle {
 	style := replacementBar("cathedral", "glyphs", []string{"✠", "◆", "◈", "◇", "✦"})
 	spec := style.Spec
 	spec.Clock.Style = "gothic"
-	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "metal", "dark", .96, 0
-	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "foreground", .32, 1, "raised"
-	spec.Geometry.Density, spec.Geometry.EdgeOffset, spec.Geometry.OuterMargin, spec.Geometry.Radius = "comfortable", 10, 10, 8
+	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "opaque", "dark", 1, 0
+	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "foreground", .58, 2, "raised"
+	spec.Geometry.Density, spec.Geometry.EdgeOffset, spec.Geometry.OuterMargin, spec.Geometry.Radius = "comfortable", 10, 10, 4
 	spec.Behavior.HoverExpand = true
 	spec.Motion = bar.Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
 	style.Density = "comfortable"

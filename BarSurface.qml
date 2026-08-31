@@ -17,6 +17,9 @@ PanelWindow {
     readonly property bool bottomEdge: bar.position === "bottom"
     readonly property bool leftEdge: bar.position === "left"
     readonly property bool rightEdge: bar.position === "right"
+    readonly property bool cathedralBar: bar && bar.spec && bar.spec.preset === "cathedral"
+    readonly property int visualEdgeOffset: cathedralBar && !bar.vertical
+        ? Math.max(4, bar.edgeOffset - Style.space(4)) : bar.edgeOffset
     readonly property bool surfaceHidden: bar.barHidden === true || bar.autoHideHidden === true
     readonly property bool fullWidth: !bar.contentSized && bar.topology !== "dock"
     readonly property bool islandsFullLength: bar.topology === "islands"
@@ -48,6 +51,7 @@ PanelWindow {
     readonly property int surfaceHeight: bar.vertical
         ? (fullWidth || islandsFullLength ? 0 : contentHeight)
         : (bar.dock ? bar.dockThickness : bar.barSize) + horizontalSafetyMargin
+            + (cathedralBar && !bar.vertical ? Style.space(8) : 0)
     // Auto-hide must park the complete painted surface. Dock and widened
     // vertical layouts intentionally add cross-axis padding beyond barSize;
     // using only barSize leaves that extra strip visible at the monitor edge.
@@ -112,8 +116,8 @@ PanelWindow {
         right: !bar.vertical || rightEdge
     }
     margins {
-        top: topEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : 0
-        bottom: bottomEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : 0
+        top: topEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + panel.visualEdgeOffset) : panel.visualEdgeOffset) : 0
+        bottom: bottomEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + panel.visualEdgeOffset) : panel.visualEdgeOffset) : 0
         left: leftEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
         right: rightEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
     }
@@ -335,7 +339,8 @@ PanelWindow {
             // Dock paints its own rounded surface inside this frame. The
             // generic outer border would sit over the widget row and read
             // as a line cutting through the icons.
-            visible: bar.topology !== "islands" && bar.topology !== "minimal" && !bar.dock
+            visible: bar.topology !== "islands" && bar.topology !== "minimal"
+                && !panel.cathedralBar && !bar.dock
             anchors.fill: parent
             color: bar.transparent ? "transparent" : Util.alpha(bar.surfaceColor, bar.surfaceOpacity)
             radius: bar.radius > 0 ? bar.radius : Style.cornerRadius

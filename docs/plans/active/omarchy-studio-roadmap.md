@@ -226,7 +226,6 @@ The current repository already contains useful pieces:
 - `qml/components/AdvancedStyleEditor.qml`: progressive Window/Shell/Bar
   controls for border, shape, spacing, depth, inactive-window treatment, and
   animation speed.
-- `qml/components/ThemePreviewCard.qml`: current synthetic composition preview.
 - `/usr/bin/omarchy-theme-set`: installed Omarchy theme compiler/apply script
   whose behavior must be versioned and adapted, not edited in place.
 

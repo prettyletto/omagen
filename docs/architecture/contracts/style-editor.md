@@ -18,7 +18,7 @@ The editor has focused implementation seams:
   surface, while `AnimationStyle.js` owns motion normalization, effect
   defaults, trigger editing, numeric edits, and animation presets.
 - `qml/components/ShellLab.qml` owns the cohesive Shell editing surface.
-- `qml/components/BarRegionControls.qml`, `BarSpecControls.qml`, and
+- `qml/components/BarDockControls.qml` and
   `BarWorkspaceControls.qml` own the reusable Bar editing surfaces. BarSpec
   normalization remains governed by the [BarSpec contract](bar-spec.md).
 

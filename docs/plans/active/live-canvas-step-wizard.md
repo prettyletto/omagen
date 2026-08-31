@@ -208,8 +208,7 @@ Primary files:
   `qml/components/live-canvas/`, for example `WizardChrome.qml`,
   `PaletteStep.qml`, `LookFeelStep.qml`, `AdvancedStep.qml`, `DemoStep.qml`,
   and `FinishStep.qml`
-- `qml/components/LookFeelControls.qml` only where it becomes a presentational
-  child of the Look & Feel/Advanced pages
+- `qml/views/live-canvas/LookFeelStep.qml` for the Look & Feel page
 - `qml/components/AdvancedStyleEditor.qml` only for focused page embedding;
   do not rewrite its protected engine semantics
 
