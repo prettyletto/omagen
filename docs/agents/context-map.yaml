@@ -103,7 +103,7 @@ domains:
       - qml/controllers/PreviewController.qml
       - qml/controllers/DemoController.qml
       - qml/components/AdvancedStyleEditor.qml
-      - qml/components/LookFeelControls.qml
+      - qml/views/live-canvas/LookFeelStep.qml
       - backend/internal/studio
       - backend/internal/preview
     tests:
@@ -153,8 +153,7 @@ domains:
       - qml/components/AdvancedStyleEditor.qml
       - qml/features/style-editor
       - qml/components/ShellLab.qml
-      - qml/components/BarRegionControls.qml
-      - qml/components/BarSpecControls.qml
+      - qml/components/BarDockControls.qml
       - qml/components/BarWorkspaceControls.qml
     tests:
       - scripts/v1-check.sh
@@ -248,7 +247,7 @@ domains:
       - docs/agents/recipes/look-feel-change.md
     source:
       - backend/internal/lookfeel
-      - qml/components/LookFeelControls.qml
+      - qml/views/live-canvas/LookFeelStep.qml
       - qml/gateways/LookFeelGateway.qml
       - qml/services/BackendService.qml
     tests:

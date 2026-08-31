@@ -23,7 +23,6 @@ canonical=(
     "docs/architecture/lifecycle.md"
     "docs/architecture/contracts/engine.md"
     "docs/architecture/contracts/qml-backend.md"
-    "docs/architecture/contracts/studio-protocol.md"
     "docs/architecture/contracts/runtime.md"
     "docs/architecture/contracts/look-feel.md"
     "docs/architecture/contracts/bar-spec.md"

@@ -32,7 +32,7 @@ mutation, Demo, Apply, and recovery.
 | Live Canvas/Studio | `docs/agents/recipes/live-canvas-change.md` | `qml/views/LiveCanvasPanel.qml`, `qml/components/AdvancedStyleEditor.qml`, `qml/controllers`, `backend/internal/studio` |
 | Style editor | `docs/agents/recipes/style-editor-change.md` | `qml/components/AdvancedStyleEditor.qml`, `qml/features/style-editor`, focused style controls |
 | Bar | `docs/agents/recipes/bar-change.md` | `bar`, `OmagenBar.qml`, `NativeBarClone.qml`, `backend/internal/bar`, `barprofile` |
-| Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/components/LookFeelControls.qml` |
+| Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/views/live-canvas/LookFeelStep.qml` |
 | Runtime | `docs/agents/recipes/runtime-adapter-change.md` | `backend/internal/runtime`, `bin/studio-theme-set` |
 | Packaging | `docs/agents/recipes/packaging-release.md` | `manifest.json`, `bar-manifest.json`, `install.sh`, `scripts`, `.github` |
 

@@ -9,59 +9,41 @@ Item {
     anchors.fill: parent
     implicitHeight: bar ? bar.barSize : Style.bar.sizeHorizontal
 
-    Row {
+    CathedralFrame {
+        id: barFrame
+        bar: root.bar
         anchors.fill: parent
-        anchors.leftMargin: Style.space(12)
-        anchors.rightMargin: Style.space(12)
-        spacing: Style.space(8)
+        anchors.leftMargin: Style.space(14)
+        anchors.rightMargin: Style.space(14)
+        // Let the single bar use nearly the full host height so the heavy
+        // frame does not collapse into a compact strip.
+        anchors.topMargin: Style.space(2)
+        anchors.bottomMargin: Style.space(2)
 
-        CathedralFrame {
-            id: leftFrame
+        Bar.WidgetGroup {
+            id: leftGroup
             bar: root.bar
-            implicitWidth: leftGroup.implicitWidth + Style.space(20)
-            implicitHeight: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+            region: "left"
+            entries: root.bar ? root.bar.layoutConfig.left : []
+            anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            Bar.WidgetGroup {
-                id: leftGroup
-                bar: root.bar
-                region: "left"
-                entries: root.bar ? root.bar.layoutConfig.left : []
-                anchors.centerIn: parent
-            }
         }
 
-        CathedralFrame {
-            id: centerFrame
+        Bar.CenterGestureGroup {
+            id: centerGroup
             bar: root.bar
-            implicitWidth: Math.max(Style.space(120), centerGroup.implicitWidth + Style.space(28))
-            implicitHeight: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
-            Bar.CenterGestureGroup {
-                id: centerGroup
-                bar: root.bar
-                entries: root.bar ? root.bar.layoutConfig.center : []
-                anchors.centerIn: parent
-            }
+            entries: root.bar ? root.bar.layoutConfig.center : []
         }
 
-        Item {
-            width: Math.max(0, parent.width - leftFrame.width - centerFrame.width - rightFrame.width - Style.space(16))
-            height: 1
-        }
-
-        CathedralFrame {
-            id: rightFrame
+        Bar.WidgetGroup {
+            id: rightGroup
             bar: root.bar
-            implicitWidth: rightGroup.implicitWidth + Style.space(20)
-            implicitHeight: root.bar ? root.bar.barSize : Style.bar.sizeHorizontal
+            region: "right"
+            entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
+            anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            Bar.WidgetGroup {
-                id: rightGroup
-                bar: root.bar
-                region: "right"
-                entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
-                anchors.centerIn: parent
-            }
         }
     }
 }

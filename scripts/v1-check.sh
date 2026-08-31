@@ -140,9 +140,8 @@ required=(
     "qml/views/ShellDemoPanel.qml"
     "qml/views/BarDemoPanel.qml"
     "qml/components/ShellLab.qml"
-    "qml/components/ShellValueField.qml"
     "qml/components/ShellRangeField.qml"
-    "qml/components/BarRegionControls.qml"
+    "qml/components/BarDockControls.qml"
     "qml/components/BarWorkspaceControls.qml"
 )
 for relative in "${required[@]}"; do

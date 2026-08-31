@@ -6,21 +6,21 @@ import ".." as Bar
 Item {
     id: root
     property var bar: null
-    width: bar ? bar.barSize + Style.space(12) : Style.bar.sizeVertical
+    width: bar ? bar.barSize + Style.space(16) : Style.bar.sizeVertical
     height: parent ? parent.height : 0
 
     Column {
         anchors.fill: parent
-        anchors.topMargin: Style.space(10)
-        anchors.bottomMargin: Style.space(10)
-        spacing: Style.space(8)
+        anchors.topMargin: Style.space(12)
+        anchors.bottomMargin: Style.space(12)
+        spacing: Style.space(10)
 
         CathedralFrame {
             id: topFrame
             bar: root.bar
             width: parent.width
             height: Math.max(root.bar ? root.bar.barSize : Style.bar.sizeVertical,
-                rightGroup.implicitHeight + Style.space(12))
+                rightGroup.implicitHeight + Style.space(16))
             Bar.VerticalWidgetGroup {
                 id: rightGroup
                 bar: root.bar
@@ -39,7 +39,7 @@ Item {
             bar: root.bar
             width: parent.width
             height: Math.max(root.bar ? root.bar.barSize : Style.bar.sizeVertical,
-                centerGroup.implicitHeight + Style.space(12))
+                centerGroup.implicitHeight + Style.space(16))
             Bar.CenterGestureGroup {
                 id: centerGroup
                 bar: root.bar
@@ -56,7 +56,7 @@ Item {
             bar: root.bar
             width: parent.width
             height: Math.max(root.bar ? root.bar.barSize : Style.bar.sizeVertical,
-                leftGroup.implicitHeight + Style.space(12))
+                leftGroup.implicitHeight + Style.space(16))
             Bar.VerticalWidgetGroup {
                 id: leftGroup
                 bar: root.bar

@@ -12,9 +12,9 @@ changes and were not modified. The behavior-neutral cleanup described in
 ## Executive summary
 
 The repository has a strong documented ownership model and a healthy Go test,
-vet, architecture-routing, and documentation-link baseline. No production Go
-package or major QML module was proven safe to delete from static inspection
-alone.
+vet, architecture-routing, and documentation-link baseline. The first cleanup
+pass also removed several unreachable QML editor/preview modules and one
+unreferenced developer helper without changing the product contracts.
 
 The audit's highest-confidence maintenance candidates were small and
 behavior-neutral, and they have now been applied:
@@ -159,13 +159,6 @@ package-content assertion would make this rule explicit in the validation gate.
 
 Do not delete these from a static audit alone.
 
-### `scripts/mdbook-live.sh`
-
-The script has no repository caller or documentation link, but it may be a
-manual developer convenience. Either document it as supported, including its
-`mdbook` and `rsync` prerequisites, or confirm that no developer relies on it
-before removal.
-
 ### GLSL sources beside compiled QSB files
 
 [`qml/components/glitch.frag`](../../qml/components/glitch.frag) and
@@ -175,13 +168,13 @@ the intended source of truth. The missing compiler/version/provenance path is
 the problem. Keep the sources until the project explicitly chooses a different
 authority, and document or automate GLSL-to-QSB generation.
 
-### Empty or test-only packages
+### Test-only packages and bundled binaries
 
-`backend/internal/protocol` is an empty compatibility marker for removed Studio
-history functionality. `internal/contract` and `internal/testenv` are test-only
-support. Empty command directories and bundled binaries are not evidence of
-dead production behavior. Check callers and packaging before removing any of
-them.
+`internal/contract` and `internal/testenv` are test-only support packages. They
+remain in the source checkout because they protect service contracts and
+isolated filesystem behavior; they are not runtime plugin payload. Empty
+command directories and bundled binaries are not evidence of dead production
+behavior. Check callers and packaging before removing any of them.
 
 ## Architecture opportunities
 
@@ -355,7 +348,6 @@ After the cleanup above, the architecture checker currently reports:
 
 - `Omagen.qml` — about 2,000 lines;
 - `qml/components/AdvancedStyleEditor.qml` — about 1,094 lines;
-- `qml/components/ThemePreviewCard.qml` — about 1,011 lines;
 - `qml/components/ShellLab.qml` — about 842 lines;
 
 These warnings do not authorize a split. Before extracting a module, record:
@@ -382,8 +374,8 @@ The following documentation work is worth keeping visible:
 - Add documentation-only validation to CI, or at least include `README.md`,
   `SUMMARY.md`, `docs/**`, `book.toml`, and `AGENTS.md` in the relevant pull
   request paths.
-- Document shader source/compiler provenance and the status of
-  `scripts/mdbook-live.sh`.
+- Document shader source/compiler provenance and the status of the compiled
+  QSB assets.
 - Explain the runtime/native transaction lock relationship and which steps are
   critical, post-commit, or independently recoverable.
 - Add a release checklist for source changes, deterministic rebuild, both

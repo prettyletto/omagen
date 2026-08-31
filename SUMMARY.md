@@ -11,4 +11,3 @@
     - [Repository health and architecture notes](docs/development/architecture-health.md)
   - [Architecture](docs/architecture/README.md)
   - [Agent navigation](docs/agents/README.md)
-  - [Studio protocol](docs/architecture/contracts/studio-protocol.md)

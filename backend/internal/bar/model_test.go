@@ -351,6 +351,16 @@ func TestSpecialtyPresetsUseDistinctCompositions(t *testing.T) {
 	}
 }
 
+func TestCathedralPresetUsesOpaqueHeavySurface(t *testing.T) {
+	spec, err := Preset("cathedral")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.Surface.Treatment != "opaque" || spec.Surface.Opacity != 1 || spec.Surface.BorderWidth != 2 || spec.Surface.BorderOpacity != .58 || spec.Geometry.Radius != 4 {
+		t.Fatalf("cathedral surface should be opaque and heavy: %#v", spec)
+	}
+}
+
 func TestDockPresetUsesAutoHideContentSizedOmagenComposition(t *testing.T) {
 	spec, err := Preset("dock")
 	if err != nil {

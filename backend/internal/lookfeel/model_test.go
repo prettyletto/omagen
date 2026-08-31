@@ -24,7 +24,7 @@ func TestCatalogContainsStableInitialPresets(t *testing.T) {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 1 || entries[7].Revision != 4 || entries[8].Revision != 2 || entries[9].Revision != 4 || entries[10].Revision != 6 || entries[11].Revision != 2 || entries[12].Revision != 2 {
+	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 1 || entries[7].Revision != 4 || entries[8].Revision != 2 || entries[9].Revision != 4 || entries[10].Revision != 6 || entries[11].Revision != 3 || entries[12].Revision != 2 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
@@ -214,7 +214,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 		{PresetOrbit, "glyphs", "orbit", "lcd", "none", 2},
 		{PresetNature, "glyphs", "islands", "classical", "none", 4},
 		{PresetOriental, "kanji", "zen", "classical", "none", 6},
-		{PresetGothic, "glyphs", "cathedral", "gothic", "none", 2},
+		{PresetGothic, "glyphs", "cathedral", "gothic", "none", 3},
 		{PresetAcid, "glyphs", "pulse", "native", "none", 2},
 	}
 	for _, test := range tests {
@@ -267,13 +267,13 @@ func TestResolveGothicAndAcidHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gothic.PresetRevision != 2 || gothic.Window.BorderStyle != "split_top" || gothic.Window.BorderSize != 3 || gothic.Window.Shape != "soft" || gothic.Window.Active != "native" || gothic.Window.Inactive != "frosted_rich" {
+	if gothic.PresetRevision != 3 || gothic.Window.BorderStyle != "split_top" || gothic.Window.BorderSize != 3 || gothic.Window.Shape != "soft" || gothic.Window.Active != "native" || gothic.Window.Inactive != "frosted_rich" {
 		t.Fatalf("gothic window identity = %#v", gothic.Window)
 	}
 	if gothic.Shell.Surface != "contrast" || gothic.Shell.Detail != "framed" || gothic.Shell.Tooltip != "accent" || gothic.Shell.Notifications != "accent" {
 		t.Fatalf("gothic shell identity = %#v", gothic.Shell)
 	}
-	if gothic.Bar.Spec == nil || gothic.Bar.Spec.Preset != "cathedral" || gothic.Bar.Spec.Topology != bar.TopologySections || gothic.Bar.Spec.Clock.Style != "gothic" || gothic.Bar.Spec.Surface.Treatment != "metal" || gothic.Bar.Spec.Behavior.HoverExpand != true || gothic.Bar.Profile == nil || gothic.Bar.Profile.Behavior.Expansion != "hover" {
+	if gothic.Bar.Spec == nil || gothic.Bar.Spec.Preset != "cathedral" || gothic.Bar.Spec.Topology != bar.TopologySections || gothic.Bar.Spec.Clock.Style != "gothic" || gothic.Bar.Spec.Surface.Treatment != "opaque" || gothic.Bar.Spec.Surface.Opacity != 1 || gothic.Bar.Spec.Surface.BorderWidth != 2 || gothic.Bar.Spec.Behavior.HoverExpand != true || gothic.Bar.Profile == nil || gothic.Bar.Profile.Behavior.Expansion != "hover" {
 		t.Fatalf("gothic bar identity = %#v", gothic.Bar)
 	}
 	if gothic.Animations.Preset != "custom" || gothic.Animations.Window != "cinematic" || gothic.Animations.WindowOpen != "slide" || gothic.Animations.WindowClose != "fade" || gothic.Animations.WorkspaceAxis != "vertical" || gothic.Animations.Border != "static" || gothic.Animations.EffectiveScreenEffect().ID != "none" {

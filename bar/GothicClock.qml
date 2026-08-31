@@ -2,8 +2,8 @@ import QtQuick
 import qs.Commons
 
 // Presentation-only gothic clock. The bold serif numerals, dark inset, and
-// hand-drawn chamfered frame keep the style distinctive without depending on
-// an optional blackletter font or taking ownership of clock behavior.
+// hand-drawn pointed frame keeps the style distinctive without depending on an
+// optional blackletter font or taking ownership of clock behavior.
 Item {
     id: root
 
@@ -14,6 +14,10 @@ Item {
     readonly property int barSize: bar ? bar.barSize : Style.bar.sizeHorizontal
     readonly property int lineHeight: vertical ? Style.bar.iconSlot : barSize
     readonly property color inkColor: bar && bar.transparent ? bar.barForeground : Color.accent
+    readonly property color faceColor: {
+        var source = bar ? bar.surfaceColor : Color.background
+        return Qt.rgba(source.r, source.g, source.b, 1)
+    }
     readonly property var lines: String(value || "").split("\n")
     readonly property real textSize: vertical
         ? Math.max(7, Math.min(11, lineHeight * 0.86))
@@ -28,10 +32,13 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        color: Util.alpha(Color.background, root.vertical ? 0.13 : 0.22)
-        radius: root.vertical ? 1 : 3
-        border.width: 1
-        border.color: Util.alpha(root.inkColor, 0.28)
+        anchors.margins: root.vertical ? 1 : 2
+        color: root.bar && root.bar.transparent ? "transparent" : root.faceColor
+        radius: root.vertical ? 1 : 2
+        border.width: root.bar && root.bar.transparent ? 1 : 2
+        border.color: root.bar && root.bar.transparent
+            ? Util.alpha(root.inkColor, 0.42)
+            : Util.alpha(root.inkColor, 0.62)
     }
 
     Canvas {
@@ -45,7 +52,7 @@ Item {
             var inset = root.vertical ? 2 : 3
             var cut = Math.max(2, Math.min(5, height * 0.20))
             context.strokeStyle = root.inkColor
-            context.globalAlpha = 0.78
+            context.globalAlpha = 0.86
             context.lineWidth = 1
             context.beginPath()
             context.moveTo(inset + cut, inset)
@@ -92,15 +99,13 @@ Item {
         font.family: "Noto Serif Display"
         font.pixelSize: root.textSize
         font.weight: Font.Black
-        font.italic: true
-        font.letterSpacing: root.vertical ? -0.15 : -0.55
+        font.italic: false
+        font.letterSpacing: root.vertical ? -0.15 : -0.35
         lineHeight: root.lineHeight
         lineHeightMode: root.vertical ? Text.FixedHeight : Text.ProportionalHeight
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight
-        style: Text.Outline
-        styleColor: Util.alpha(Color.background, 0.94)
     }
 
     onInkColorChanged: gothicFrame.requestPaint()
