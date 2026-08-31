@@ -31,6 +31,8 @@ Item {
     signal lookFeelCatalogFailed(string message)
     signal lookFeelResolved(var composition)
     signal lookFeelResolveFailed(string message)
+    signal lookFeelPresetSaved(var entry)
+    signal lookFeelPresetSaveFailed(string message)
 
     signal themeCatalogLoaded(var themes)
     signal themeCatalogFailed(string message)
@@ -76,6 +78,7 @@ Item {
     function checkBackend() { pingCommand.exec([root.executable, "ping"]) }
     function listLookFeel() { lookFeelGateway.list() }
     function resolveLookFeel(preset) { lookFeelGateway.resolve(preset) }
+    function saveLookFeelPreset(name, composition) { lookFeelGateway.save(name, composition) }
     function listThemes() { themeGateway.list() }
     function openThemeForEdit(themeId) { themeGateway.openForEdit(themeId) }
     function checkRuntime() { runtimeGateway.check() }
@@ -148,6 +151,8 @@ Item {
         onCatalogFailed: function(message) { root.lookFeelCatalogFailed(message) }
         onResolved: function(composition) { root.lookFeelResolved(composition) }
         onResolveFailed: function(message) { root.lookFeelResolveFailed(message) }
+        onPresetSaved: function(entry) { root.lookFeelPresetSaved(entry) }
+        onPresetSaveFailed: function(message) { root.lookFeelPresetSaveFailed(message) }
     }
 
     Gateways.ThemeGateway {

@@ -167,3 +167,95 @@ function mergeStyleDocument(current, incoming) {
 function styleJson(value) {
     return JSON.stringify(value || ({}))
 }
+
+function field(value, camel, snake, fallback) {
+    value = value || ({})
+    if (value[camel] !== undefined)
+        return value[camel]
+    if (value[snake] !== undefined)
+        return value[snake]
+    return fallback
+}
+
+// The editor keeps ergonomic camelCase documents, while the Go backend's
+// durable JSON contract is snake_case. Keep this conversion at the boundary
+// so a saved local recipe retains every staged advanced value.
+function serializeLookFeelComposition(composition) {
+    composition = composition || ({})
+    var window = composition.window || ({})
+    var shell = composition.shell || ({})
+    var bar = composition.bar || ({})
+    var animations = composition.animations || ({})
+    var terminal = composition.terminal || ({})
+    var rawEffect = field(animations, "screenEffect", "screen_effect", null)
+    var screenEffect = rawEffect ? {
+        id: field(rawEffect, "id", "id", "none"),
+        strength: field(rawEffect, "strength", "strength", "medium"),
+        duration_ms: Number(field(rawEffect, "durationMs", "duration_ms", 0)),
+        triggers: copyValue(field(rawEffect, "triggers", "triggers", [])),
+        coalesce: field(rawEffect, "coalesce", "coalesce", true)
+    } : null
+    return {
+        schema_version: Number(field(composition, "schemaVersion", "schema_version", 1)),
+        preset: field(composition, "preset", "preset", "omarchy-native"),
+        preset_revision: Number(field(composition, "presetRevision", "preset_revision", 1)),
+        customized: copyValue(composition.customized || ({})),
+        window: {
+            border_style: field(window, "borderStyle", "border_style", "solid"),
+            border_size: Number(field(window, "borderSize", "border_size", -1)),
+            border_size_mode: field(window, "borderSizeMode", "border_size_mode", "default"),
+            border_speed: Number(field(window, "borderSpeed", "border_speed", 36)),
+            shape: field(window, "shape", "shape", "native"),
+            spacing: field(window, "spacing", "spacing", "native"),
+            depth: field(window, "depth", "depth", "native"),
+            active_style: field(window, "activeStyle", "active_style", "native"),
+            inactive_style: field(window, "inactiveStyle", "inactive_style", "native")
+        },
+        shell: {
+            preset: field(shell, "preset", "preset", "default"),
+            surface: field(shell, "surface", "surface", "flat"),
+            detail: field(shell, "detail", "detail", "native"),
+            tooltip: field(shell, "tooltip", "tooltip", "native"),
+            notifications: field(shell, "notifications", "notifications", "native"),
+            overrides: copyValue(shell.overrides || ({}))
+        },
+        bar: {
+            surface: field(bar, "surface", "surface", "native"),
+            density: field(bar, "density", "density", "native"),
+            attention: field(bar, "attention", "attention", "semantic"),
+            form: field(bar, "form", "form", "continuous"),
+            visibility: field(bar, "visibility", "visibility", "native"),
+            profile: copyValue(bar.profile || null),
+            spec: copyValue(bar.spec || null)
+        },
+        animations: {
+            version: Number(field(animations, "version", "version", 1)),
+            preset: field(animations, "preset", "preset", "native"),
+            window: field(animations, "window", "window", "native"),
+            window_open: field(animations, "windowOpen", "window_open", "popin"),
+            window_close: field(animations, "windowClose", "window_close", "popin"),
+            window_move: field(animations, "windowMove", "window_move", "native"),
+            window_amount: Number(field(animations, "windowAmount", "window_amount", 87)),
+            window_opacity: Number(field(animations, "windowOpacity", "window_opacity", 100)),
+            window_speed: Number(field(animations, "windowSpeed", "window_speed", 4)),
+            workspace: field(animations, "workspace", "workspace", "native"),
+            workspace_axis: field(animations, "workspaceAxis", "workspace_axis", "horizontal"),
+            workspace_travel: Number(field(animations, "workspaceTravel", "workspace_travel", 18)),
+            special_workspace: field(animations, "specialWorkspace", "special_workspace", "inherit"),
+            focus: field(animations, "focus", "focus", "native"),
+            layers: field(animations, "layers", "layers", "native"),
+            curve: field(animations, "curve", "curve", "bezier"),
+            border: field(animations, "border", "border", "native"),
+            border_speed: Number(field(animations, "borderSpeed", "border_speed", 36)),
+            glitch: field(animations, "glitch", "glitch", "none"),
+            screen_effect: screenEffect,
+            reduced_motion: field(animations, "reducedMotion", "reduced_motion", false) === true
+        },
+        terminal: {
+            schema_version: Number(field(terminal, "schemaVersion", "schema_version", 1)),
+            mode: field(terminal, "mode", "mode", "preserve"),
+            opacity: Number(field(terminal, "opacity", "opacity", 1)),
+            cell_mode: field(terminal, "cellMode", "cell_mode", "background")
+        }
+    }
+}

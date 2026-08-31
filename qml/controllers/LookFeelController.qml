@@ -13,6 +13,7 @@ Item {
     property bool cancelBusy: false
 
     property bool busy: false
+    property bool saving: false
     property bool catalogLoading: false
     property string catalogError: ""
     property bool resolveApplies: true
@@ -32,6 +33,7 @@ Item {
     property var resolvedCache: ({})
 
     signal resolved(var composition, bool applies)
+    signal presetSaved(var entry)
     signal errorRaised(string message)
 
     function list() {
@@ -102,7 +104,33 @@ Item {
         return true
     }
 
+    function cloneComposition(composition) {
+        return JSON.parse(JSON.stringify(composition))
+    }
+
+    function savePreset(name, composition) {
+        if (root.saving) {
+            root.errorRaised("A Look & Feel preset save is already in progress")
+            return false
+        }
+        if (root.busy || root.previewBusy || root.applyBusy || root.cancelBusy) {
+            root.errorRaised("Finish the current Look & Feel operation before saving a preset")
+            return false
+        }
+        var snapshot
+        try {
+            snapshot = root.cloneComposition(composition || ({}))
+        } catch (error) {
+            root.errorRaised("Could not prepare the Look & Feel preset for saving")
+            return false
+        }
+        root.saving = true
+        root.backend.saveLookFeelPreset(String(name || "").trim(), snapshot)
+        return true
+    }
+
     function reset() {
+        root.saving = false
         root.busy = false
         root.resolveApplies = true
         root.requestedPreset = ""
@@ -110,10 +138,6 @@ Item {
         root.pendingPreset = ""
         root.pendingApplies = true
         root.activeApplies = true
-    }
-
-    function cloneComposition(composition) {
-        return JSON.parse(JSON.stringify(composition))
     }
 
     Connections {
@@ -182,6 +206,16 @@ Item {
             root.activePreset = ""
             if (!hadNewerIntent)
                 root.errorRaised(message)
+        }
+
+        function onLookFeelPresetSaved(entry) {
+            root.saving = false
+            root.presetSaved(entry)
+        }
+
+        function onLookFeelPresetSaveFailed(message) {
+            root.saving = false
+            root.errorRaised(message)
         }
     }
 }

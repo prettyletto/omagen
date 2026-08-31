@@ -100,7 +100,7 @@ Item {
 		var screenEffect = motion.screen_effect || motion.screenEffect || null
 		var effectName = screenEffect ? String(screenEffect.id || "none") : (motion.glitch && motion.glitch !== "none" ? "rgb-tear" : "none")
 		var effectStrength = screenEffect ? String(screenEffect.strength || "medium") : String(motion.glitch === "flicker" ? "medium" : motion.glitch || "medium")
-		var effectDuration = screenEffect ? Number(screenEffect.duration_ms !== undefined ? screenEffect.duration_ms : screenEffect.durationMs || 0) : (effectName === "rgb-tear" ? 1250 : 0)
+		var effectDuration = screenEffect ? Number(screenEffect.duration_ms !== undefined ? screenEffect.duration_ms : screenEffect.durationMs || 0) : (effectName === "rgb-tear" ? 1250 : effectName === "retro-vhs" ? 1100 : 0)
         var terminal = recipe.terminal || root.terminalTranslucency || ({})
         var shellPreset = String(shell.preset || "default")
         var shellMeaning = shellPreset === "glass"

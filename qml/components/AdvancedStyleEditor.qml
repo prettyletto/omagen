@@ -98,7 +98,10 @@ Item {
         { key: "dock", title: "Dock" },
         { key: "minimal", title: "Minimal" },
         { key: "orbit", title: "Orbit" },
-        { key: "ribbon", title: "Segmented Ribbon" }
+        { key: "ribbon", title: "Segmented Ribbon" },
+        { key: "cathedral", title: "Cathedral" },
+        { key: "pulse", title: "Pulse" },
+        { key: "zen", title: "Zen" }
     ]
     readonly property var clockStyleOptions: [
         { key: "native", title: "Native" },
@@ -231,6 +234,12 @@ Item {
             return { role: "background", opacity: 1, blur: 0 }
         case "ribbon":
             return { role: "dark", opacity: 1, blur: 0 }
+        case "cathedral":
+            return { role: "dark", opacity: 0.96, blur: 0 }
+        case "pulse":
+            return { role: "dark", opacity: 0.96, blur: 0 }
+        case "zen":
+            return { role: "background", opacity: 0.86, blur: 6 }
         case "dock":
             return { role: "dark", opacity: 1, blur: 0 }
         case "islands":
@@ -547,6 +556,9 @@ Item {
         case "minimal": spec.engine = "omagen"; spec.topology = "minimal"; spec.surface = { role: "native", opacity: 1, blur: 0, border_role: "foreground", border_opacity: 0.35, border_width: 1, shadow: "none" }; spec.behavior.hover_expand = true; spec.motion = { preset: "smooth", duration_ms: 260, easing: "out_cubic" }; break
         case "orbit": spec.engine = "omagen"; spec.topology = "floating"; spec.surface = { role: "background", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.42, border_width: 1, shadow: "raised" }; spec.geometry.density = "compact"; spec.geometry.edge_offset = 10; spec.geometry.outer_margin = 10; spec.geometry.radius = 18; spec.motion = { preset: "smooth", duration_ms: 220, easing: "out_cubic" }; break
         case "ribbon": spec.engine = "omagen"; spec.topology = "sections"; spec.surface = { role: "dark", opacity: 1, blur: 0, border_role: "accent", border_opacity: 0.36, border_width: 1, shadow: "flat" }; spec.geometry.section_gap = 2; spec.geometry.radius = 10; spec.motion = { preset: "subtle", duration_ms: 180, easing: "out_cubic" }; break
+        case "cathedral": spec.engine = "omagen"; spec.topology = "sections"; spec.surface = { role: "dark", opacity: 0.96, blur: 0, border_role: "foreground", border_opacity: 0.36, border_width: 1, shadow: "raised" }; spec.geometry.density = "comfortable"; spec.geometry.edge_offset = 10; spec.geometry.outer_margin = 10; spec.geometry.section_gap = 8; spec.geometry.radius = 8; spec.motion = { preset: "none", duration_ms: 0, easing: "linear" }; break
+        case "pulse": spec.engine = "omagen"; spec.topology = "rail"; spec.surface = { role: "dark", opacity: 0.96, blur: 0, border_role: "accent", border_opacity: 0.65, border_width: 2, shadow: "raised" }; spec.geometry.density = "compact"; spec.geometry.section_gap = 4; spec.geometry.radius = 6; spec.motion = { preset: "expressive", duration_ms: 160, easing: "out_cubic" }; break
+        case "zen": spec.engine = "omagen"; spec.topology = "islands"; spec.surface = { role: "background", opacity: 0.86, blur: 6, border_role: "accent", border_opacity: 0.18, border_width: 1, shadow: "flat" }; spec.geometry.density = "compact"; spec.geometry.section_gap = 12; spec.geometry.radius = 12; spec.motion = { preset: "smooth", duration_ms: 220, easing: "out_cubic" }; break
         }
 		spec.surface.treatment = "preset"
         var profile = {
@@ -558,10 +570,10 @@ Item {
         }
 
         if (spec.topology !== "continuous") {
-			var behavior = { form: spec.topology, visibility: spec.behavior.visibility === "auto_hide" ? "auto-hide" : "always", reveal: "edge", expansion: spec.behavior.hover_expand ? "hover" : "none", workspace: "native" }
-			profile = { schema_version: 1, ownership: "overlay", implementation: "replacement", bar: { id: "pretty.omagen.bar" }, behavior: behavior }
+            var behavior = { form: spec.topology, visibility: spec.behavior.visibility === "auto_hide" ? "auto-hide" : "always", reveal: "edge", expansion: spec.behavior.hover_expand ? "hover" : "none", workspace: "native" }
+            profile = { schema_version: 1, ownership: "overlay", implementation: "replacement", bar: { id: "pretty.omagen.bar" }, behavior: behavior }
         }
-        var next = { surface: ["native", "dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : "native", density: spec.geometry.density, attention: root.barStyle.attention || "semantic", form: ["continuous", "floating", "minimal"].indexOf(spec.topology) >= 0 ? "continuous" : "docked", visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native", profile: profile, spec: spec }
+        var next = { surface: ["native", "dark", "light", "accent"].indexOf(spec.surface.role) >= 0 ? spec.surface.role : "native", density: spec.geometry.density, attention: root.barStyle.attention || "semantic", form: spec.topology, visibility: spec.topology === "sections" || spec.topology === "islands" ? "islands" : "native", profile: profile, spec: spec }
         root.stylesChanged(root.shellStyle, root.desktopStyle, next, root.animationsStyle)
     }
 
@@ -651,6 +663,9 @@ Item {
             if (key === "dock") return "A centered content-sized capsule that expands along the bar axis while the full edge remains the hover and drag host."
             if (key === "orbit") return "A compact floating capsule with a highlighted center orbit and a detached tray cap."
             if (key === "ribbon") return "A connected three-band ribbon that reflows into top, center, and bottom bands on vertical monitors."
+            if (key === "cathedral") return "A pointed architectural bar with chapel bays, a central nave, and a Gothic frame."
+            if (key === "pulse") return "A conductive signal rail with a reactive center pulse and edge-anchored tray."
+            if (key === "zen") return "Quiet ink-stone islands with generous negative space, Kanji workspaces, and a calm classical clock."
             return key === "custom" ? "Keep the current structural choices while editing them below." : "Apply a complete recipe, including a clean placement and behavior baseline."
         }
         if (group === "topology") return key === "rail" ? "Use a vertical reader at the left edge; choosing another topology restores the top placement." : "Choose the structural shape independently from the recipe controls."

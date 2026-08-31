@@ -666,6 +666,9 @@ func TestWriteHyprlandBuildsFiniteAlternativeScreenEffects(t *testing.T) {
 		{name: "phosphor", id: "phosphor-scan", file: "omagen-phosphor-scan.frag", duration: 850,
 			shaderWants: []string{"time / 0.850", "0.0024 * syncBand", "0.026 * envelope", "0.055 * envelope"},
 			luaWants:    []string{"omagen-phosphor-scan.frag", "timeout = 850", `hl.on("window.urgent"`, "_omagen_screen_effect_layers", `string.find(namespace, "omagen-background-signal-", 1, true) == 1`}},
+		{name: "retro", id: "retro-vhs", file: "omagen-retro-vhs.frag", duration: 1100,
+			shaderWants: []string{"precision highp float", "time / 1.100", "0.0030", "0.0022", "0.085", "0.035", "0.0030", "0.34", "clamp(v_texcoord, vec2(0.0), vec2(1.0))", "clamp(uv, vec2(0.001), vec2(0.999))", "fract(point * 0.1031)"},
+			luaWants:    []string{"omagen-retro-vhs.frag", "timeout = 1100", `hl.on("window.open"`, `hl.on("workspace.active"`}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

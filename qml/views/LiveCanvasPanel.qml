@@ -33,6 +33,7 @@ PanelWindow {
     property var lookFeelRecipe: null
     property var lookFeelCatalog: []
     property bool lookFeelBusy: false
+    property bool lookFeelPresetBusy: false
     property bool lookFeelCatalogLoading: false
     property string lookFeelCatalogError: ""
     property var terminalTranslucency: ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" })
@@ -71,7 +72,7 @@ PanelWindow {
     // preserves safe standalone rendering until that contract is connected.
     property bool wizardCanContinueWorkflow: root.workflowSelected && !root.operationBusy
 
-    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy || root.wizardOperationBusy
+    readonly property bool operationBusy: root.generationBusy || root.previewBusy || root.demoBusy || root.cancelBusy || root.applyBusy || root.lookFeelBusy || root.lookFeelPresetBusy || root.wizardOperationBusy
     readonly property color foregroundColor: Color.foreground
     readonly property color backgroundColor: Color.background
     readonly property color accentColor: Color.accent
@@ -84,13 +85,15 @@ PanelWindow {
             ? "Previewing the latest choice on the real desktop…"
             : root.lookFeelBusy
                 ? "Resolving the selected Look & Feel…"
-                : root.demoBusy
-                    ? (root.demoActive ? "Stopping the session-owned Demo…" : "Opening the session-owned Demo…")
-                    : root.cancelBusy
-                        ? "Restoring the original desktop and closing this session…"
-                        : root.applyBusy
-                            ? "Saving the selected theme…"
-                            : ""
+                : root.lookFeelPresetBusy
+                    ? "Saving the Look & Feel preset…"
+                    : root.demoBusy
+                        ? (root.demoActive ? "Stopping the session-owned Demo…" : "Opening the session-owned Demo…")
+                        : root.cancelBusy
+                            ? "Restoring the original desktop and closing this session…"
+                            : root.applyBusy
+                                ? "Saving the selected theme…"
+                                : ""
 
     signal hideRequested()
     signal closeCanvasRequested()
@@ -105,7 +108,9 @@ PanelWindow {
     signal variantRequested(string variant)
     signal colorTestLiveRequested(string variant, var overrides, var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
     signal advancedStylesChanged(var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
+    signal testLiveRequested()
     signal lookFeelPresetRequested(string preset)
+    signal saveLookFeelPresetRequested(string name)
     signal lookFeelCatalogRetryRequested()
     signal lookFeelResetRequested(string scope)
     signal terminalIntentChanged(var terminal)
@@ -123,9 +128,23 @@ PanelWindow {
     signal workflowModeSelected(string mode)
     signal workflowContinueRequested()
 
+    function openLookFeelPresetDialog(name) {
+        root.errorMessage = ""
+        lookFeelPresetDialog.openForPreset(name)
+    }
+
+    function closeLookFeelPresetDialog() {
+        lookFeelPresetDialog.close()
+    }
+
     visible: root.active
     screen: root.resolveScreen()
     color: "transparent"
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.active
+        onActivated: root.hideRequested()
+    }
     surfaceFormat.opaque: false
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "omagen-live-canvas"
@@ -238,7 +257,15 @@ PanelWindow {
     }
 
     function barStyleForVariant(_variant) { return root.barStyle }
-    function resetApplyDialog() { themeNameDialog.reset() }
+    function resetApplyDialog() {
+        themeNameDialog.reset()
+        lookFeelPresetDialog.reset()
+    }
+
+    function openApplyDialog() {
+        root.errorMessage = ""
+        themeNameDialog.openWith(root.suggestedThemeName)
+    }
     function clearColorSession() {
         root.stagedColors = ({})
         root.colorOverridesByVariant = ({})
@@ -478,6 +505,7 @@ PanelWindow {
                             onStylesChanged: function(nextShell, nextDesktop, nextBar, nextAnimations) {
                                 root.advancedStylesChanged(nextShell, nextDesktop, nextBar, nextAnimations)
                             }
+                            onTestLiveRequested: root.testLiveRequested()
                             onSectionChanged: scrollArea.contentY = 0
                         }
                     }
@@ -517,15 +545,18 @@ PanelWindow {
                             selectedPreset: root.selectedPresetLabel()
                             advancedChoice: root.wizardAdvancedChoice
                             demoActive: root.demoActive
+                            previewBusy: root.previewBusy
                             applyBusy: root.applyBusy
                             cancelBusy: root.cancelBusy
+                            lookFeelBusy: root.lookFeelBusy
+                            lookFeelPresetBusy: root.lookFeelPresetBusy
                             foregroundColor: root.foregroundColor
                             backgroundColor: root.backgroundColor
                             accentColor: root.accentColor
                             onApplyRequested: {
-                                root.errorMessage = ""
-                                themeNameDialog.openWith(root.suggestedThemeName)
+                                root.openApplyDialog()
                             }
+                            onSavePresetRequested: root.openLookFeelPresetDialog(root.suggestedThemeName)
                             onRestoreAndCloseRequested: root.restoreAndCloseRequested()
                         }
                     }
@@ -603,6 +634,14 @@ PanelWindow {
         onConfirmed: function(name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName) {
             root.applyRequested(root.selectedVariant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName)
         }
+    }
+
+    Components.ThemeNameDialog {
+        id: lookFeelPresetDialog
+        anchors.fill: parent
+        busy: root.lookFeelPresetBusy
+        errorMessage: root.errorMessage
+        onPresetConfirmed: root.saveLookFeelPresetRequested(name)
     }
 
     onActiveChanged: if (active)

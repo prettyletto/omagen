@@ -69,6 +69,7 @@ Item {
     property var lookFeelRecipe: null
     property alias lookFeelCatalog: lookFeelController.catalog
     property alias lookFeelBusy: lookFeelController.busy
+    property alias lookFeelPresetBusy: lookFeelController.saving
     property alias lookFeelCatalogLoading: lookFeelController.catalogLoading
     property alias lookFeelCatalogError: lookFeelController.catalogError
     property alias wizardStep: wizardController.step
@@ -765,6 +766,25 @@ Item {
         applyController.apply(variant, name, generateUnlock, capturePreview, replaceSource === true, saveLookFeelPreset === true, lookFeelPresetName)
     }
 
+    function currentLookFeelComposition() {
+        return StyleDocuments.serializeLookFeelComposition({
+            schemaVersion: Number(root.lookFeel.schemaVersion || root.lookFeel.schema_version || 1),
+            preset: String(root.lookFeel.preset || "omarchy-native"),
+            presetRevision: Number(root.lookFeel.presetRevision || root.lookFeel.preset_revision || 1),
+            customized: root.lookFeel.customized || ({}),
+            window: root.desktopStyle,
+            shell: root.shellStyle,
+            bar: root.barStyle,
+            animations: root.animationsStyle,
+            terminal: root.terminalTranslucency
+        })
+    }
+
+    function saveLookFeelPreset(name) {
+        root.errorMessage = ""
+        lookFeelController.savePreset(name, root.currentLookFeelComposition())
+    }
+
     function startDemo(variant) {
         demoController.startDemo(variant)
     }
@@ -958,7 +978,7 @@ Item {
         sessionReady: session.workspaceReady
         operationBusy: root.sessionBusy || root.generationBusy || root.describeBusy
                 || root.backBusy || root.previewBusy || root.demoBusy
-                || root.cancelBusy || root.applyBusy || root.lookFeelBusy
+                || root.cancelBusy || root.applyBusy || root.lookFeelBusy || root.lookFeelPresetBusy
         // The generated source palette is already a valid selection before
         // any optional live preview mutation. Using previewVariant here made
         // the first Next button stay disabled until the user clicked a card.
@@ -1269,6 +1289,11 @@ Item {
                 root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
                 root.refreshLookFeelCustomized()
             }
+        }
+        onPresetSaved: function(entry) {
+            root.errorMessage = "Saved Look & Feel preset: " + String(entry.name || entry.id || "local preset")
+            liveCanvasPanel.closeLookFeelPresetDialog()
+            lookFeelController.list()
         }
         onErrorRaised: root.errorMessage = message
     }
@@ -1803,6 +1828,7 @@ Item {
         lookFeelRecipe: root.lookFeelRecipe
         lookFeelCatalog: root.lookFeelCatalog
         lookFeelBusy: root.lookFeelBusy
+        lookFeelPresetBusy: root.lookFeelPresetBusy
         lookFeelCatalogLoading: root.lookFeelCatalogLoading
         lookFeelCatalogError: root.lookFeelCatalogError
         terminalTranslucency: root.terminalTranslucency
@@ -1834,6 +1860,7 @@ Item {
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
         onColorTestLiveRequested: function(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) { root.testLiveColors(variant, overrides, shellStyle, desktopStyle, barStyle, animationsStyle) }
+        onTestLiveRequested: root.previewCurrentState(session.selectedVariant)
         onGoBackRequested: root.wizardBack()
         onGoNextRequested: root.wizardNext()
         onAdvancedChoiceRequested: function(choice) { root.chooseWizardAdvanced(choice) }
@@ -1854,6 +1881,7 @@ Item {
             root.refreshLookFeelCustomized()
         }
         onLookFeelPresetRequested: { root.markThemeEditScope("shell-bar"); root.markThemeEditScope("window-motion"); root.requestLookFeelPreset(preset) }
+        onSaveLookFeelPresetRequested: root.saveLookFeelPreset(name)
         onLookFeelResetRequested: { root.markThemeEditScope(scope === "terminal" ? "terminal" : scope === "shell" || scope === "bar" ? "shell-bar" : "window-motion"); root.resetLookFeelScope(scope) }
         onTerminalIntentChanged: function(terminal) {
             root.markThemeEditScope("terminal")
@@ -1891,7 +1919,20 @@ Item {
         glitchEnabled: root.cyberpunkSignalActive
         glitchEpoch: root.shellGlitchEpoch
         monitorName: root.liveCanvasMonitor
+        demoActive: root.demoActive
+        actionBusy: root.demoBusy || root.previewBusy || root.applyBusy || root.cancelBusy
         onReopenRequested: root.reopenLiveCanvasPanel()
+        onSaveApplyRequested: {
+            if (root.demoBusy || root.previewBusy || root.applyBusy || root.cancelBusy)
+                return
+            // Full Demo intentionally hides the side panel. This direct
+            // affordance keeps Save & Apply available without making users
+            // discover the tiny reopen handle and navigate to Finish first.
+            wizardController.step = wizardController.stepCount - 1
+            root.livePanelOpen = true
+            root.opened = false
+            Qt.callLater(function() { liveCanvasPanel.openApplyDialog() })
+        }
     }
 
     Views.SettingsWindow {

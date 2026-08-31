@@ -19,6 +19,9 @@ Item {
     case "minimal": return Qt.resolvedUrl("presets/MinimalBarPreset.qml")
     case "orbit": return Qt.resolvedUrl("presets/OrbitBarPreset.qml")
     case "ribbon": return Qt.resolvedUrl("presets/SegmentedRibbonBarPreset.qml")
+    case "cathedral": return Qt.resolvedUrl("presets/CathedralBarPreset.qml")
+    case "pulse": return Qt.resolvedUrl("presets/PulseBarPreset.qml")
+    case "zen": return Qt.resolvedUrl("presets/ZenBarPreset.qml")
     default: return Qt.resolvedUrl("presets/CustomBarPreset.qml")
     }
   }

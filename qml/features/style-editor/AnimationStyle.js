@@ -53,6 +53,8 @@ function defaultEffect(id, strength) {
         return { id: id, strength: strength || "medium", durationMs: 500, triggers: ["window-open", "window-close", "workspace", "panel"], coalesce: true }
     if (id === "phosphor-scan")
         return { id: id, strength: strength || "medium", durationMs: 850, triggers: ["window-open", "window-close", "workspace", "panel", "notification", "urgent"], coalesce: true }
+    if (id === "retro-vhs")
+        return { id: id, strength: strength || "medium", durationMs: 1100, triggers: ["window-open", "window-close", "workspace", "panel"], coalesce: true }
     return { id: "rgb-tear", strength: strength || "medium", durationMs: 1250, triggers: ["window-open", "window-close", "workspace", "panel", "notification", "urgent"], coalesce: true }
 }
 

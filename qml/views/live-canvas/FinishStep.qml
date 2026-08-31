@@ -12,13 +12,17 @@ Item {
     property string selectedPreset: "Keep native"
     property string advancedChoice: "undecided"
     property bool demoActive: false
+    property bool previewBusy: false
     property bool applyBusy: false
     property bool cancelBusy: false
+    property bool lookFeelBusy: false
+    property bool lookFeelPresetBusy: false
     property color foregroundColor: Color.foreground
     property color backgroundColor: Color.background
     property color accentColor: Color.accent
 
     signal applyRequested()
+    signal savePresetRequested()
     signal restoreAndCloseRequested()
 
     implicitHeight: content.implicitHeight
@@ -40,7 +44,7 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "Review the reversible preview, then save it permanently or restore the original desktop and close Omagen."
+            text: "Review the reversible preview, then apply the theme, save the complete Look & Feel recipe for later, or restore the original desktop."
             color: root.foregroundColor
             opacity: 0.62
             font.family: Style.font.family
@@ -68,21 +72,39 @@ Item {
                 Text { Layout.fillWidth: true; text: "Palette  ·  " + root.selectedVariantLabel + " (" + root.selectedVariant.toUpperCase() + ")"; color: root.foregroundColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                 Text { Layout.fillWidth: true; text: "Look & Feel  ·  " + root.selectedPreset; color: root.foregroundColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                 Text { Layout.fillWidth: true; text: "Advanced  ·  " + (root.advancedChoice === "customize" ? "Customized" : "Native recipe"); color: root.foregroundColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
-                Text { Layout.fillWidth: true; text: "Demo  ·  " + (root.demoActive ? "Running — stop before saving" : "Not running"); color: root.foregroundColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                Text { Layout.fillWidth: true; text: "Demo  ·  " + (root.demoActive ? "Running — Save & Apply will close it" : "Not running"); color: root.foregroundColor; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
             }
         }
 
         Button {
             Layout.fillWidth: true
             Layout.preferredHeight: Style.space(44)
-            text: root.applyBusy ? "Saving theme…" : "Save & Apply"
+            text: root.applyBusy ? "Saving theme…" : root.demoActive ? "Save & Apply — close Demo" : "Save & Apply"
             foreground: Contrast.textFor(root.accentColor, root.backgroundColor, root.foregroundColor)
             accent: root.accentColor
             background: root.accentColor
             bordered: true
-            enabled: !root.applyBusy && !root.cancelBusy && !root.demoActive
-            tooltipText: "Open the final save confirmation"
+            // ApplyController owns the safe sequence for a backend Full or
+            // Window Demo: final preview, close the session-owned Demo, then
+            // commit. Keep that supported path reachable from Finish.
+            enabled: !root.previewBusy && !root.applyBusy && !root.cancelBusy && !root.lookFeelBusy && !root.lookFeelPresetBusy
+            tooltipText: root.demoActive
+                ? "Close the session-owned Demo, then open the final save confirmation"
+                : "Open the final save confirmation"
             onClicked: root.applyRequested()
+        }
+
+        Button {
+            Layout.fillWidth: true
+            Layout.preferredHeight: Style.space(40)
+            text: "Save current Look & Feel preset"
+            foreground: root.foregroundColor
+            accent: root.accentColor
+            background: Util.alpha(root.accentColor, 0.12)
+            bordered: true
+            enabled: !root.previewBusy && !root.applyBusy && !root.cancelBusy && !root.demoActive && !root.lookFeelBusy && !root.lookFeelPresetBusy
+            tooltipText: "Save all current styling tweaks as a reusable local preset"
+            onClicked: root.savePresetRequested()
         }
 
         Rectangle {
