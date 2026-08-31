@@ -51,10 +51,9 @@ Omarchy 4.0.1-1, `grim`, `jq`, `wtype`, and the `omarchy-shell` IPC wrapper.
 `wtype` supplies user-level key and text input through the Wayland
 virtual-keyboard protocol. Pointer injection is optional: `click` only runs
 when an already configured `ydotool` and `ydotoold` are present and
-`/dev/uinput` exists. On this machine, the packaged `ydotool.service` is
-enabled as a user service and owns no root process. The helper never starts a
-daemon as root or changes input-device permissions. Prefer keyboard navigation
-and semantic shell/Hyprland operations whenever possible.
+`/dev/uinput` exists. The helper never starts a daemon as root or changes
+input-device permissions. Prefer keyboard navigation and semantic
+shell/Hyprland operations whenever possible.
 
 Hyprland 0.55 and newer use the Lua dispatcher API. The helper uses
 `hl.dsp.cursor.move`, `hl.dsp.focus`, and the JSON APIs instead of relying on

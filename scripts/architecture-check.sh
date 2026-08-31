@@ -22,6 +22,8 @@ canonical=(
     "docs/architecture/backend.md"
     "docs/architecture/lifecycle.md"
     "docs/architecture/contracts/engine.md"
+    "docs/architecture/contracts/palette-generation.md"
+    "docs/architecture/contracts/live-canvas.md"
     "docs/architecture/contracts/qml-backend.md"
     "docs/architecture/contracts/runtime.md"
     "docs/architecture/contracts/look-feel.md"

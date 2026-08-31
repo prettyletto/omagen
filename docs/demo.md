@@ -37,19 +37,24 @@ classify.
 
 ## Demo and Live Canvas controls
 
-From the palette gallery:
+From the Live Canvas wizard:
 
 - Activating a palette card with a click or **Enter** applies the direction and
-  opens Live Canvas controls without starting Demo.
-- **Start demo** opens the tracked four-window workspace for the selected
+  opens Live Canvas without starting Demo.
+- **Start Full Demo** opens the tracked four-window workspace for the selected
   direction.
-- **Stop demo** closes the tracked windows and restores the original workspace;
-  Live Canvas controls remain available.
+- **Stop Full Demo** closes the tracked windows and restores the original
+  workspace; Live Canvas remains available.
 - **Hide Studio panel** leaves the canvas and temporary theme active while
   returning all other pointer input to the desktop. The monitor-bound handle
   reopens the panel.
-- **Apply theme** can close Demo before applying, or capture it as the theme
-  preview when requested.
+- **Save & Apply** can close Full Demo before applying, or capture it as the
+  theme preview when requested.
+
+Shell Demo and Bar Demo are separate, read-only surfaces available from the
+corresponding Advanced editors. Bar Demo is rendered below the real native bar;
+it does not replace Quattro's widgets or capture their input. Only the
+session-owned Full Demo and Window Demo create tracked application windows.
 
 Demo is temporary. It does not change the user's normal workspace layout after
 it closes.
@@ -72,4 +77,4 @@ background as <code>preview.png</code> instead.
 If a preferred application is missing, check that its fallback appears rather
 than treating that as a failed theme generation. If a Demo window does not
 close, Apply is aborted so Omagen does not leave an untracked window behind;
-use **Stop demo** or the recovery flow before trying again.
+use **Stop Full Demo** or the recovery flow before trying again.

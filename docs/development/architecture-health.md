@@ -83,9 +83,9 @@ JSON/exit contract.
 | Installed-theme editing | `themeedit`, `ThemeGateway.qml`, `ThemeEditController.qml` | Keep stock/user precedence and managed-scope ownership explicit. |
 
 The installed-theme editing workflow is implemented and has a contract in
-[`theme-edit.md`](../architecture/contracts/theme-edit.md), but it is not yet a
-first-class domain in `docs/agents/context-map.yaml`. Until that routing gap is
-closed, start with the contract and inspect the direct callers listed above.
+[`theme-edit.md`](../architecture/contracts/theme-edit.md). It is routed as
+the `theme-edit` context in `docs/agents/context-map.yaml`; start with its
+recipe and inspect the direct callers listed above.
 
 ## Applied behavior-neutral cleanup
 
@@ -365,10 +365,8 @@ which intentionally reports warnings rather than failing the gate.
 
 The following documentation work is worth keeping visible:
 
-- Add `theme-edit` to `docs/agents/context-map.yaml`, add a dedicated recipe,
-  and list `ThemeEditController.qml` in the QML controller contract.
-- Add a concise CLI reference covering read-only vs mutating commands, active
-  session requirements, JSON/stderr behavior, exit codes, and safe inspection.
+- Keep the `theme-edit` recipe and CLI reference aligned with the backend
+  command and QML gateway contracts when those change.
 - Document the QML QtTest suite separately from `qmllint`, including the
   supported runner and headless prerequisites once established.
 - Add documentation-only validation to CI, or at least include `README.md`,
@@ -388,11 +386,10 @@ The following documentation work is worth keeping visible:
    changes with focused tests and package assertions.
 2. Stabilize and characterize the Preview detached-work contract.
 3. Add Demo path-ownership tests and decide the prepared-session marker policy.
-4. Add missing theme-edit routing and the developer CLI/QML testing guides.
-5. Characterize Generation/Preview outputs, then deepen candidate materialization.
-6. Extract the CLI-local shared style parser with exact wire and error contract
+4. Characterize Generation/Preview outputs, then deepen candidate materialization.
+5. Extract the CLI-local shared style parser with exact wire and error contract
    tests.
-7. Revisit QML state ownership and the `session` style-language split only when
+6. Revisit QML state ownership and the `session` style-language split only when
    a concrete seam offers measurable leverage.
 
 This order keeps deletion and documentation work separate from behavior changes,

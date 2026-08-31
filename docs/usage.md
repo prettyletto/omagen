@@ -1,6 +1,7 @@
 # Usage
 
-Omagen is designed as a short loop:
+Omagen is the complete renewed image-to-theme workflow for Omarchy Quattro. It
+is designed as a short loop:
 
 ~~~text
 image → palette directions → live preview or Demo → permanent theme
@@ -54,11 +55,10 @@ source shown in the preview cards.
 
 After choosing an image, choose a workflow:
 
-- **Fast** follows the normal path: choose a direction, enter Live Canvas, and
-  apply the theme. Start Demo is optional when you want the four-window
-  workspace.
-- **In-depth** enables Studio extras for window, shell, bar, and animation composition in
-  Live Canvas after palette generation; see [Styling and palette settings](styling.md).
+- **Fast** keeps the path focused on the six palette directions, Live Canvas
+  Preview, optional Full Demo, and Apply.
+- **In-depth** adds Look & Feel plus the Window, Shell, Bar, and Animation
+  composition controls before you decide; see [Styling and palette settings](styling.md).
 
 <p align="center">
   <img src="../assets/screenshots/onboarding.webp" alt="Omagen setup" width="420">
@@ -66,9 +66,10 @@ After choosing an image, choose a workflow:
 
 ## Configure extra desktop styling
 
-When **In-depth** is selected, the Live Canvas sidebar exposes composition
-controls after the six palette directions are generated. Open **Advanced
-settings** and move between the four engines:
+When **In-depth** is selected, the Live Canvas wizard exposes composition
+controls after the six palette directions are generated. Choose a Look & Feel
+recipe, then open **Advanced, only if you want it** and move between the four
+editors:
 
 - **Window** controls the active border, a Default/None/1–24 px border slider, five fixed
   corner-shape presets, pane spacing, shadow depth, and independent active/inactive
@@ -86,9 +87,12 @@ settings** and move between the four engines:
   capturing its widget input.
 - **Animations** controls window, workspace, and border motion plus reduced motion.
 
-Every choice is staged in the current session. Use **Test Live composition**
-to apply the selected values to the native runtime owners; these settings then
-become part of the generated preview and applied theme.
+Every choice is staged in the current session. Palette cards and Look & Feel
+recipes use Preview to apply the selected candidate to the Live Canvas. Use
+**Test Live** on the Advanced page to apply staged Window, Shell, Bar, and
+Animation values to their native runtime owners; custom palette colours preview
+as they are edited. Tested values become part of the generated preview and
+applied theme.
 
 ### Look & Feel recipes
 
@@ -170,13 +174,13 @@ used by the generated theme rather than an earlier intermediate result.
   <img src="../assets/screenshots/palette-gallery.webp" alt="Omagen palette gallery" width="960">
 </p>
 
-## Enter Live Mode
+## Enter Live Canvas
 
-Activate a palette card with a click or with **Enter** to enter Live Mode.
+Activate a palette card with a click or with **Enter** to enter Live Canvas.
 Omagen applies the selected direction temporarily through the Studio theme
 driver and opens the Live Canvas control surface while keeping the real desktop
-available. The temporary theme and the original theme/background are tracked by
-the active Omagen session.
+available. This is the palette **Preview** path: the temporary theme and the
+original theme/background are tracked by the active Omagen session.
 
 Arrow-key navigation only changes the focused direction. It does not mutate the
 desktop until the direction is activated. Reopen Omagen from the bar to choose
@@ -184,7 +188,9 @@ another direction while the canvas is active; the new candidate is applied in
 place without recreating the workspace.
 
 The **Live Canvas** action applies a direction and opens the control surface;
-it does not start the optional Demo workspace.
+it does not start the optional Full Demo workspace. **Test Live** is the
+explicit action for staged Advanced edits, while palette colour edits preview
+immediately.
 
 Live preview requests are single-flight. If another direction or style is
 chosen while one is applying, Omagen keeps the newest request and drops stale
@@ -200,10 +206,15 @@ theme and background before clearing the session.
 monitor-bound control panel available. It is the normal place to compare
 directions, apply the theme, or restore the original desktop.
 
-Use **Start demo** when you specifically want the temporary four-window
+Use **Start Full Demo** when you specifically want the temporary four-window
 workspace containing the applications Omagen can resolve on the current
-machine. Starting Demo does not replace the Live Canvas controls; the panel
-stays available while the workspace is open.
+machine. Starting Full Demo does not replace the Live Canvas controls; the
+panel stays available while the workspace is open.
+
+In-depth users can also open the read-only Shell Demo or Bar Demo surfaces.
+Bar Demo is rendered below the real native bar and does not replace Quattro's
+widgets or capture their input. Stop any active Demo surface before starting a
+different one.
 
 When the canvas is open, Studio provides a monitor-bound side panel. Hide the
 panel to keep interacting with the desktop; a small handle on the canvas
@@ -214,7 +225,7 @@ the complete temporary session. See the
 
 ## Apply a theme
 
-Choose **Apply theme** to open the save dialog. Enter a name for the permanent
+Choose **Save & Apply** to open the save dialog. Enter a name for the permanent
 Omarchy theme and choose any optional outputs:
 
 - **Generate unlock screen** creates Plymouth unlock artwork and its preview.

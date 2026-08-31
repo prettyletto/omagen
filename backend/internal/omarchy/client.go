@@ -673,6 +673,12 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	if err != nil {
 		return err
 	}
+	forceRefresh := false
+	if current, currentErr := c.CurrentBackground(); currentErr == nil {
+		if currentPath, currentPathErr := c.resolveBackground(current); currentPathErr == nil {
+			forceRefresh = filepath.Clean(currentPath) == filepath.Clean(path)
+		}
+	}
 	cmd := exec.Command("omarchy", "theme", "bg", "set", path)
 	cmd.Env = appendOmarchyEnvironment(os.Environ())
 	cmd.Stdout = c.stderr
@@ -682,15 +688,38 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	}
 	// Theme restoration can put the current/background symlink back at the
 	// same path that the preview used. Quattro's normal `set` and `refresh`
-	// paths compare the path string, so they can ignore a changed symlink that
-	// points at a different image. setInstant is the native reader's explicit
-	// force path and makes the live wallpaper reread the restored target.
-	if _, err := exec.LookPath("omarchy-shell"); err != nil {
+	// paths compare the path string, so they can ignore a changed file behind
+	// that pathname. When that happens, the detour below gives setInstant a
+	// distinct pathname before handing it the restored target.
+	shell, err := exec.LookPath("omarchy-shell")
+	if err != nil {
 		return nil
+	}
+	detour := ""
+	cleanupDetour := func() {}
+	if forceRefresh {
+		detour, cleanupDetour, err = c.backgroundRefreshDetour(path)
+		if err != nil {
+			return fmt.Errorf("prepare forced background refresh: %w", err)
+		}
+		defer cleanupDetour()
 	}
 	var lastErr error
 	for attempt := 0; attempt < 6; attempt++ {
-		force := exec.Command("omarchy-shell", "background", "setInstant", path)
+		if detour != "" {
+			force := exec.Command(shell, "background", "setInstant", detour)
+			force.Env = appendOmarchyEnvironment(os.Environ())
+			force.Stdout = c.stderr
+			force.Stderr = c.stderr
+			if err := force.Run(); err != nil {
+				lastErr = err
+				if attempt < 5 {
+					time.Sleep(500 * time.Millisecond)
+				}
+				continue
+			}
+		}
+		force := exec.Command(shell, "background", "setInstant", path)
 		force.Env = appendOmarchyEnvironment(os.Environ())
 		force.Stdout = c.stderr
 		force.Stderr = c.stderr
@@ -704,6 +733,35 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 		}
 	}
 	return fmt.Errorf("force restored background through shell IPC: %w", lastErr)
+}
+
+func (c *Client) backgroundRefreshDetour(path string) (string, func(), error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", func() {}, err
+	}
+	cacheDir := filepath.Join(home, ".cache", "omarchy", "background-transitions")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return "", func() {}, err
+	}
+	temporary, err := os.CreateTemp(cacheDir, "omagen-restore-background-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	detour := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(detour)
+		return "", func() {}, err
+	}
+	if err := os.Remove(detour); err != nil {
+		return "", func() {}, err
+	}
+	if err := os.Link(path, detour); err != nil {
+		if linkErr := os.Symlink(path, detour); linkErr != nil {
+			return "", func() {}, fmt.Errorf("link refresh detour: %w (hard link: %v)", linkErr, err)
+		}
+	}
+	return detour, func() { _ = os.Remove(detour) }, nil
 }
 
 // appendOmarchyEnvironment follows Omarchy's official OMARCHY_PATH first.

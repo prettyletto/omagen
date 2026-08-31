@@ -223,6 +223,57 @@ func TestRestoreCommands(t *testing.T) {
 	}
 }
 
+func TestRestoreBackgroundForcesSamePathRefresh(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	t.Setenv("PATH", bin)
+
+	writeCommand := func(name, contents string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(bin, name), []byte("#!/bin/sh\n"+contents+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeCommand("omarchy", "exit 0")
+	writeCommand("omarchy-shell", "printf '%s\\n' \"$@\" >> \"$HOME/refresh.log\"")
+
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	background := filepath.Join(home, "background.png")
+	if err := os.WriteFile(background, []byte("background"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(background, filepath.Join(current, "background")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := NewClient(nil).RestoreBackground(session.BackgroundRef{Kind: "external", Path: background}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(home, "refresh.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if len(lines) != 6 || lines[0] != "background" || lines[1] != "setInstant" || lines[3] != "background" || lines[4] != "setInstant" || lines[5] != background {
+		t.Fatalf("same-path refresh commands = %q", string(data))
+	}
+	if lines[2] == background || !strings.Contains(lines[2], ".cache/omarchy/background-transitions/omagen-restore-background-") {
+		t.Fatalf("same-path refresh detour = %q", lines[2])
+	}
+	entries, err := os.ReadDir(filepath.Join(home, ".cache/omarchy/background-transitions"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("refresh detour was not cleaned up: %v", entries)
+	}
+}
+
 func TestRestoreThemeReturnsAtCriticalThemeState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -866,6 +917,9 @@ func TestStudioThemeSetPreviewUsesInstantBackgroundHandoff(t *testing.T) {
 	}
 	if !strings.Contains(string(commands), "background\nsetInstant\n") {
 		t.Fatalf("preview did not use instant background handoff: %q", commands)
+	}
+	if got := strings.Count(string(commands), "background\nsetInstant\n"); got != 2 {
+		t.Fatalf("preview did not force same-path background refresh: %d commands: %q", got, commands)
 	}
 	if strings.Contains(string(commands), "background\nthemeTransition\n") {
 		t.Fatalf("preview started an unchanged-background transition: %q", commands)

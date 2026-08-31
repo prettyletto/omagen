@@ -57,10 +57,11 @@ between surfaces matters.
 
 ## Extra configuration previews
 
-Choose **In-depth** in setup to choose desktop composition before generating
-the six directions. The configuration window contains
-Window, Shell, Bar, and Animations sections. Each choice updates the Source card so the
-composition can be judged alongside the extracted palette.
+Choose **In-depth** in setup to open the optional composition workflow around
+the six directions. Look & Feel recipes provide complete starting
+compositions; the Advanced page then exposes Window, Shell, Bar, and
+Animations sections for focused edits. Each choice is staged in the session and
+can be Previewed or tested live before Apply.
 
 ### Window
 
@@ -99,12 +100,14 @@ visibly translucent. Opaque application pixels stay
 sharp: native Hyprland blur affects only the backdrop visible through a
 translucent surface.
 
-Active and inactive profiles keep separate opacity and dim intent. A focused
-surface can be translucent while inactive panes use a stronger dim, or either
-path can remain native. The shared normal-window blur kernel is resolved in
-favor of the focused frosted profile because Hyprland does not expose separate
-active/inactive blur sizes. This makes the limitation explicit instead of
-pretending that one inactive toggle can blur opaque application content.
+The all-windows opacity control and the active/inactive profiles work together:
+the slider sets the shared steady-state opacity, while the profiles set each
+window's backdrop and dim treatment. A focused surface can be frosted while
+inactive panes use a stronger dim, or either path can remain native. The shared
+normal-window blur kernel is resolved in favor of the focused frosted profile
+because Hyprland does not expose separate active/inactive blur sizes. This
+makes the limitation explicit instead of pretending that one inactive toggle
+can blur opaque application content.
 
 The Live Canvas is a Quickshell layer surface rather than a managed window.
 When a Frosted backdrop profile is selected, Omagen therefore emits a scoped Hyprland
@@ -171,10 +174,12 @@ Bar controls are:
   characters per label.
   Switching remains native Hyprland behavior; only the presentation changes.
 
-The Bar Lab stages a declarative `BarSpec v2` behind these focused controls.
+The Bar Lab stages a versioned declarative `BarSpec` behind these focused controls.
 Additional topology, attention, region, and behavior controls remain reserved
-for a later iteration. Layout, widget ordering, and bar input remain native
-Quattro responsibilities and are not changed by these focused controls.
+for later iterations. Layout, widget ordering, and bar input remain native
+Quattro responsibilities for the overlay's additive bar path; the separate
+`pretty.omagen.bar` plugin is the opt-in full-bar host for BarSpec replacement
+layouts.
 
 ## Generated assets
 
