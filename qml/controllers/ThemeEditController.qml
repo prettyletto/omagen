@@ -7,6 +7,8 @@ Item {
     property var backend: null
     property bool catalogLoading: false
     property bool opening: false
+    property int operationEpoch: 0
+    property int openingOperationEpoch: 0
     property var themes: []
 
     signal opened(var result)
@@ -22,11 +24,14 @@ Item {
     function open(themeId) {
         if (root.catalogLoading || root.opening || !themeId)
             return
+        root.operationEpoch += 1
+        root.openingOperationEpoch = root.operationEpoch
         root.opening = true
         root.backend.openThemeForEdit(String(themeId))
     }
 
     function reset() {
+        root.operationEpoch += 1
         root.catalogLoading = false
         root.opening = false
     }
@@ -43,10 +48,14 @@ Item {
             root.errorRaised(message)
         }
         function onThemeEditOpened(result) {
+            if (!root.opening || root.openingOperationEpoch !== root.operationEpoch)
+                return
             root.opening = false
             root.opened(result)
         }
         function onThemeEditOpenFailed(message) {
+            if (!root.opening || root.openingOperationEpoch !== root.operationEpoch)
+                return
             root.opening = false
             root.errorRaised(message)
         }

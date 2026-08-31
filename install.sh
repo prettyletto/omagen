@@ -51,12 +51,23 @@ else
 fi
 
 echo "Installing Omagen..."
+if [[ -L "$DEST_DIR" ]]; then
+    echo "Refusing to install through symlinked plugin directory: $DEST_DIR" >&2
+    exit 1
+fi
 mkdir -p "$DEST_DIR"
 
-if [[ -L "$DEST_DIR" ]]; then
-    rm -f "$DEST_DIR"
-    mkdir -p "$DEST_DIR"
-fi
+for destination in \
+    "$DEST_DIR/manifest.json" \
+    "$DEST_DIR/Omagen.qml" \
+    "$DEST_DIR/OmagenBarWidget.qml" \
+    "$DEST_DIR/bin" \
+    "$DEST_DIR/bar"; do
+    if [[ -L "$destination" ]]; then
+        echo "Refusing to install through symlinked package path: $destination" >&2
+        exit 1
+    fi
+done
 
 cp "$SRC_DIR/manifest.json" "$DEST_DIR/manifest.json"
 cp "$SRC_DIR/Omagen.qml" "$DEST_DIR/Omagen.qml"
@@ -100,11 +111,27 @@ chmod +x "$DEST_DIR/bin/omagen-file-select"
 # bar-widget manifest is required by Quattro's registry: a manifest selected
 # as the active bar is not also treated as a layout widget.
 echo "Installing $BAR_PLUGIN_ID..."
-mkdir -p "$BAR_DEST_DIR"
 if [[ -L "$BAR_DEST_DIR" ]]; then
-    rm -f "$BAR_DEST_DIR"
-    mkdir -p "$BAR_DEST_DIR"
+    echo "Refusing to install through symlinked plugin directory: $BAR_DEST_DIR" >&2
+    exit 1
 fi
+mkdir -p "$BAR_DEST_DIR"
+for destination in \
+    "$BAR_DEST_DIR/manifest.json" \
+    "$BAR_DEST_DIR/OmagenBar.qml" \
+    "$BAR_DEST_DIR/BarSurface.qml" \
+    "$BAR_DEST_DIR/BarMoveGhostPanel.qml" \
+    "$BAR_DEST_DIR/CyberpunkBarSignal.qml" \
+    "$BAR_DEST_DIR/NativeBarClone.qml" \
+    "$BAR_DEST_DIR/WorkspacePresentation.qml" \
+    "$BAR_DEST_DIR/BarModel.js" \
+    "$BAR_DEST_DIR/glitch.frag.qsb" \
+    "$BAR_DEST_DIR/glitch.vert.qsb"; do
+    if [[ -L "$destination" ]]; then
+        echo "Refusing to install through symlinked package path: $destination" >&2
+        exit 1
+    fi
+done
 cp "$SRC_DIR/bar-manifest.json" "$BAR_DEST_DIR/manifest.json"
 cp "$SRC_DIR/OmagenBar.qml" "$BAR_DEST_DIR/OmagenBar.qml"
 cp "$SRC_DIR/BarSurface.qml" "$BAR_DEST_DIR/BarSurface.qml"

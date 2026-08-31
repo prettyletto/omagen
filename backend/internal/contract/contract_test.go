@@ -170,7 +170,16 @@ func TestApplyContractCommitsAndClearsTheSession(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(candidate, "colors.toml"), []byte("background = \"#000000\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(candidate, "backgrounds", "wallpaper.png"), []byte("wallpaper"), 0o644); err != nil {
+	wallpaper := image.NewRGBA(image.Rect(0, 0, 16, 9))
+	wallpaperFile, err := os.Create(filepath.Join(candidate, "backgrounds", "wallpaper.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(wallpaperFile, wallpaper); err != nil {
+		_ = wallpaperFile.Close()
+		t.Fatal(err)
+	}
+	if err := wallpaperFile.Close(); err != nil {
 		t.Fatal(err)
 	}
 

@@ -3,20 +3,20 @@ package theme
 import (
 	"bufio"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 )
 
 func ReadColors(themeDir string) (Palette, error) {
-	file, err := os.Open(filepath.Join(themeDir, "colors.toml"))
+	data, err := fsutil.ReadFileLimited(filepath.Join(themeDir, "colors.toml"), fsutil.MaxStateFileBytes)
 	if err != nil {
 		return Palette{}, fmt.Errorf("open colors.toml: %w", err)
 	}
-	defer file.Close()
 	var palette Palette
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {

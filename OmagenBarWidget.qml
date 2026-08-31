@@ -66,11 +66,16 @@ BarWidget {
         if (replacement && (current === "omarchy.bar" || current === "")) {
             root.bar.shell.mutateShellConfig(function(copy) {
                 if (!copy.bar || typeof copy.bar !== "object") copy.bar = {}
-                if (!copy.bar.id || copy.bar.id === "omarchy.bar") copy.bar.id = "pretty.omagen.bar"
+                if (!copy.bar.id || copy.bar.id === "omarchy.bar") {
+                    copy.bar.id = "pretty.omagen.bar"
+                    copy.bar.omagenOwnedBy = "pretty.omagen"
+                }
             })
-        } else if (!replacement && current === "pretty.omagen.bar") {
+        } else if (!replacement && current === "pretty.omagen.bar"
+                && root.bar.barConfig && root.bar.barConfig.omagenOwnedBy === "pretty.omagen") {
             root.bar.shell.mutateShellConfig(function(copy) {
                 if (copy.bar && typeof copy.bar === "object") delete copy.bar.id
+                if (copy.bar && typeof copy.bar === "object") delete copy.bar.omagenOwnedBy
             })
         }
     }

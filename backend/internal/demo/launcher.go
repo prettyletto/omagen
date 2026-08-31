@@ -251,8 +251,17 @@ func terminalCommand(capability ApplicationCapability, appID, dir string, comman
 }
 
 func sourceViewerScript(sample string) string {
-	return fmt.Sprintf("if command -v bat >/dev/null 2>&1; then bat --style=numbers %q; elif command -v less >/dev/null 2>&1; then sed -n '1,120p' %q | less; else sed -n '1,120p' %q; fi\nprintf '\\n'\nexec \"${SHELL:-/bin/bash}\" -l", sample, sample, sample)
+	quotedSample := shellQuote(sample)
+	return fmt.Sprintf("if command -v bat >/dev/null 2>&1; then bat --style=numbers %s; elif command -v less >/dev/null 2>&1; then sed -n '1,120p' %s | less; else sed -n '1,120p' %s; fi\nprintf '\\n'\nexec \"${SHELL:-/bin/bash}\" -l", quotedSample, quotedSample, quotedSample)
 }
+
+// shellQuote returns a single-quoted POSIX shell word. Go's %q is a Go
+// string literal, not a shell literal: characters such as $ and ` retain
+// expansion semantics inside its double quotes.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
 func systemInfoScript() string {
 	return "printf 'SYSTEM\\n\\n'; uptime; printf '\\nMEMORY\\n'; free -h; printf '\\nDISK\\n'; df -h /; printf '\\nPROCESSES\\n'; ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -12; exec \"${SHELL:-/bin/bash}\" -l"
 }

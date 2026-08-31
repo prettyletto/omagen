@@ -24,9 +24,6 @@ The QML tree is organized by role:
 The style editor contract records the narrower Window and Animations
 transformation seams inside `AdvancedStyleEditor.qml`; the parent remains the
 shared tab and staged-output composition surface.
-- `qml/features/` contains feature-owned pure state helpers, including Live
-  Canvas color metadata/copy rules and style-editor document transformations.
-
 Backend calls are asynchronous gateway invocations that exchange the existing
 JSON protocol. A gateway may normalize QML naming and parse bounded output,
 but it must not implement session rollback, Apply recovery, palette generation,

@@ -176,6 +176,18 @@ activation_is_current() {
   [[ "$current" == "$THEME_NAME" ]]
 }
 
+json_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  value=${value//$'\b'/\\b}
+  value=${value//$'\f'/\\f}
+  printf '%s' "$value"
+}
+
 if [[ "$MODE" == "inspect" ]]; then
   current_theme=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
   background=$(readlink -f "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
@@ -184,7 +196,7 @@ if [[ "$MODE" == "inspect" ]]; then
   [[ -s "$CURRENT_THEME_PATH/shell.toml" ]] && shell=true
   [[ -s "$CURRENT_THEME_PATH/hyprland.conf" ]] && hyprland=true
   printf '{"mode":"inspect","theme":"%s","theme_root":"%s","background":"%s","readers":{"colors":%s,"shell":%s,"hyprland":%s}}\n' \
-    "$current_theme" "$CURRENT_THEME_PATH" "$background" "$colors" "$shell" "$hyprland"
+    "$(json_escape "$current_theme")" "$(json_escape "$CURRENT_THEME_PATH")" "$(json_escape "$background")" "$colors" "$shell" "$hyprland"
   exit 0
 fi
 
@@ -403,6 +415,9 @@ run_post_commit_async() {
       # lock. The parent releases it below, but keeping a duplicated fd open
       # can extend the lock lifetime until the adapter jobs finish.
       exec 9>&-
+      if [[ -L "$POST_COMMIT_LOCK" ]]; then
+        exit 1
+      fi
       exec 8>"$POST_COMMIT_LOCK"
       flock 8
       activation_is_current || exit 0
@@ -464,7 +479,7 @@ choose_theme_background() {
 
   CHOSEN_THEME_BACKGROUND=""
   mapfile -d '' -t backgrounds < <(
-    find -L "$HOME/.config/omarchy/backgrounds/$THEME_NAME/" "$CURRENT_THEME_PATH/backgrounds/" -maxdepth 1 -type f \
+    find -P "$HOME/.config/omarchy/backgrounds/$THEME_NAME/" "$CURRENT_THEME_PATH/backgrounds/" -maxdepth 1 -type f \
       \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
       -print0 2>/dev/null | sort -z
   )
@@ -559,6 +574,10 @@ set_theme_background() {
 }
 
 THEME_NAME=$(echo "$THEME_INPUT" | sed -E 's/<[^>]+>//g' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+if [[ ! "$THEME_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  printf 'studio-theme-set: invalid theme name: %s\n' "$THEME_INPUT" >&2
+  exit 2
+fi
 THEME_HEADLESS=0
 if [[ ${OMARCHY_THEME_HEADLESS:-} == "1" || ${OMARCHY_THEME_OFFLINE:-} == "1" ]]; then
   THEME_HEADLESS=1
@@ -568,6 +587,23 @@ if [[ ! -d "$OMARCHY_THEMES_PATH/$THEME_NAME" ]] && [[ ! -d "$USER_THEMES_PATH/$
   printf "Theme '%s' does not exist\n" "$THEME_NAME" >&2
   exit 1
 fi
+
+reject_theme_symlinks() {
+  local root="$1" link
+  [[ -d "$root" ]] || return 0
+  if [[ -L "$root" ]]; then
+    printf 'studio-theme-set: refusing symlinked theme directory: %s\n' "$root" >&2
+    return 1
+  fi
+  link=$(find -P "$root" -type l -print -quit 2>/dev/null || true)
+  if [[ -n "$link" ]]; then
+    printf 'studio-theme-set: refusing symlinked theme entry: %s\n' "$link" >&2
+    return 1
+  fi
+}
+
+reject_theme_symlinks "$OMARCHY_THEMES_PATH/$THEME_NAME" || exit 1
+reject_theme_symlinks "$USER_THEMES_PATH/$THEME_NAME" || exit 1
 
 if ! selected_retint_adapters; then
   exit 2
@@ -591,6 +627,10 @@ fi
 
 # Serialize with the native theme-set operation. The Studio driver owns the
 # command boundary, but the shared staging/current paths remain Omarchy-owned.
+if [[ -L "$THEME_SET_LOCK" ]]; then
+  printf 'studio-theme-set: refusing symlinked theme-set lock: %s\n' "$THEME_SET_LOCK" >&2
+  exit 1
+fi
 exec 9>"$THEME_SET_LOCK"
 flock 9
 

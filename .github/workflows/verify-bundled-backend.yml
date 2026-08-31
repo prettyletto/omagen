@@ -9,8 +9,23 @@ on:
       - "bin/omagen"
       - "bin/omagen-studio"
       - "install.sh"
+      - "uninstall.sh"
+      - "dev-install.sh"
+      - "manifest.json"
+      - "bar-manifest.json"
+      - "Omagen.qml"
+      - "OmagenBarWidget.qml"
+      - "OmagenBar.qml"
+      - "BarSurface.qml"
+      - "NativeBarClone.qml"
+      - "WorkspacePresentation.qml"
+      - "BarModel.js"
+      - "bar/**"
+      - "qml/**"
       - "scripts/build-backend.sh"
       - "scripts/verify-bundled-backend.sh"
+      - "scripts/v1-check.sh"
+      - "bin/studio-theme-set"
       - "backend/go.mod"
       - "backend/go.sum"
 
@@ -32,8 +47,8 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
-      - name: Verify the bundled executable
-        run: ./scripts/verify-bundled-backend.sh
+      - name: Verify the bundled package
+        run: GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
 
       - name: Record build provenance
         run: |

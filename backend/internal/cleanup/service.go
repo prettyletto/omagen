@@ -36,7 +36,7 @@ func (s *Service) Run() (Result, error) {
 		result.ActiveSession = active.SessionID
 	}
 	s.cleanupPreviewAliases(active, hasActive, &result)
-	s.cleanupPermanentTemps(&result)
+	s.cleanupPermanentTemps(active, hasActive, &result)
 	s.cleanupSessions(active, hasActive, &result)
 	return result, nil
 }
@@ -101,7 +101,7 @@ func (s *Service) sessionIDFromPath(target string) string {
 	return ""
 }
 
-func (s *Service) cleanupPermanentTemps(result *Result) {
+func (s *Service) cleanupPermanentTemps(active session.ActiveRecord, hasActive bool, result *Result) {
 	entries, err := os.ReadDir(s.themesRoot)
 	if os.IsNotExist(err) || err != nil {
 		if err != nil && !os.IsNotExist(err) {
@@ -114,6 +114,22 @@ func (s *Service) cleanupPermanentTemps(result *Result) {
 			continue
 		}
 		path := filepath.Join(s.themesRoot, entry.Name())
+		owner, err := fsutil.ReadFileLimited(filepath.Join(path, ".omagen-owner"), 4096)
+		if err != nil {
+			// A matching name is not proof of Omagen ownership. Leave
+			// unmarked/user-created directories untouched.
+			continue
+		}
+		sessionID := strings.TrimSpace(string(owner))
+		if sessionID == "" {
+			continue
+		}
+		if record, loadErr := s.sessions.Load(sessionID); loadErr != nil || record.SessionID != sessionID {
+			continue
+		}
+		if hasActive && sessionID == active.SessionID {
+			continue
+		}
 		if err := fsutil.RemoveAllAndSync(path); err != nil {
 			result.Warnings = append(result.Warnings, fmt.Sprintf("remove theme temp %s: %v", path, err))
 			continue

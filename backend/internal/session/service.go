@@ -156,7 +156,24 @@ func (s *Service) Begin(styles ...any) (BeginResult, error) {
 		}
 		if s.bar != nil && capturedBarSnapshot != nil {
 			if err := s.bar.SaveSnapshot(sessionID, *capturedBarSnapshot); err != nil {
-				_ = s.store.Delete(sessionID)
+				// Keep the active marker until every cleanup step succeeds. If
+				// cleanup itself fails, the durable record remains available for
+				// recovery instead of pointing at a deleted session.
+				cleanupErr := s.bar.DeleteSnapshot(sessionID)
+				if cleanupErr == nil {
+					cleanupErr = s.store.ClearActive(sessionID)
+				}
+				if cleanupErr == nil {
+					cleanupErr = s.store.Delete(sessionID)
+				}
+				if cleanupErr != nil {
+					// Best effort: the active marker is deliberately retained when
+					// any cleanup step failed, so recovery can still find the record.
+					_ = s.store.SaveActive(ActiveRecord{SessionID: sessionID, CreatedAt: now})
+				}
+				if cleanupErr != nil {
+					return BeginResult{}, fmt.Errorf("persist user bar snapshot: %w (preserve recovery state: %v)", err, cleanupErr)
+				}
 				return BeginResult{}, fmt.Errorf("persist user bar snapshot: %w", err)
 			}
 		}
@@ -343,17 +360,20 @@ func (s *Service) finishRestoredSession(sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("load completed session: %w", err)
 	}
-	if s.bar != nil {
-		if err := s.bar.DeleteSnapshot(sessionID); err != nil {
-			return fmt.Errorf("remove bar snapshot: %w", err)
-		}
-	}
 	if err := s.store.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)
 	}
 	if err := s.store.Delete(sessionID); err != nil {
 		_ = s.store.SaveActive(ActiveRecord{SessionID: sessionID, CreatedAt: record.CreatedAt})
 		return fmt.Errorf("remove session: %w", err)
+	}
+	// The transaction is already durably inactive. Snapshot cleanup is
+	// intentionally last so a crash cannot leave an active session without its
+	// rollback bytes. A leftover snapshot is harmless and can be cleaned later.
+	if s.bar != nil {
+		if err := s.bar.DeleteSnapshot(sessionID); err != nil {
+			return fmt.Errorf("remove bar snapshot: %w", err)
+		}
 	}
 	return nil
 }

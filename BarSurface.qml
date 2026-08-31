@@ -43,6 +43,12 @@ PanelWindow {
     readonly property int surfaceHeight: bar.vertical
         ? (fullWidth || islandsFullLength ? 0 : contentHeight)
         : bar.barSize
+    // Auto-hide must park the complete painted surface. Dock and widened
+    // vertical layouts intentionally add cross-axis padding beyond barSize;
+    // using only barSize leaves that extra strip visible at the monitor edge.
+    readonly property int hiddenSurfaceExtent: bar.vertical
+        ? Math.ceil(surfaceFrame.width)
+        : Math.ceil(surfaceFrame.height)
     // Only the original Float preset owns the detached compact-tray surface.
     // Orbit is a single centered composition; giving it the generic tray cap
     // creates a second dock-like pill beside the orbit and makes the compact
@@ -101,10 +107,10 @@ PanelWindow {
         right: !bar.vertical || rightEdge
     }
     margins {
-        top: topEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
-        bottom: bottomEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : 0
-        left: leftEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
-        right: rightEdge ? (panel.surfaceHidden ? -(bar.barSize + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
+        top: topEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : 0
+        bottom: bottomEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : 0
+        left: leftEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
+        right: rightEdge ? (panel.surfaceHidden ? -(panel.hiddenSurfaceExtent + bar.edgeOffset) : bar.edgeOffset) : bar.outerMargin
     }
     implicitWidth: bar.vertical
         ? (bar.topology === "islands" ? bar.islandThickness : bar.dock ? bar.dockThickness : compactVerticalWidth)

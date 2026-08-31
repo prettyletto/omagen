@@ -109,9 +109,7 @@ func TestApplyFinalizesMatchingLivePreviewWithoutRetinting(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "colors.toml"), []byte("from-preview\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "backgrounds", "wallpaper.png"), []byte("preview-image"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestPNG(t, filepath.Join(service.currentThemeRoot, "backgrounds", "wallpaper.png"), color.RGBA{B: 255, A: 255})
 
 	variant, _ := generation.ParseVariant("source")
 	result, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Fast Theme"})
@@ -157,6 +155,7 @@ func TestApplyFinalizesMaterializedStyledPreviewWithoutLosingCandidate(t *testin
 	if err := os.WriteFile(filepath.Join(service.currentThemeRoot, "shell.toml"), []byte("bar = \"dock\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	writeTestPNG(t, filepath.Join(service.currentThemeRoot, "backgrounds", "wallpaper.png"), color.RGBA{G: 255, A: 255})
 
 	variant, _ := generation.ParseVariant("source")
 	result, err := service.Apply(Request{SessionID: sessionID, GenerationID: "generation-1", Variant: variant, ThemeName: "Styled Dock Theme"})
@@ -239,10 +238,45 @@ func TestApplyWithOptionalAssetsPublishesMatchingMaterializedPreview(t *testing.
 			t.Fatalf("published %s=%q", name, contents)
 		}
 	}
-	for _, name := range []string{"unlock.png", "preview-unlock.png"} {
+	for _, name := range []string{"unlock.png", "preview-unlock.png", "preview.png"} {
 		if info, statErr := os.Stat(filepath.Join(result.ThemePath, name)); statErr != nil || !info.Mode().IsRegular() {
 			t.Fatalf("optional asset %s missing: info=%v err=%v", name, info, statErr)
 		}
+	}
+}
+
+func TestApplyUsesWallpaperAsPreviewWithoutLiveCapture(t *testing.T) {
+	service, store, sessionID := setupApplyTest(t, &testApplier{})
+	candidate := filepath.Join(store.SessionDir(sessionID), "generations", "generation-1", "source")
+	writeTestPNG(t, filepath.Join(candidate, "backgrounds", "wallpaper.png"), color.RGBA{R: 255, A: 255})
+	// A stale preview must not win over the selected theme background.
+	writeTestPNG(t, filepath.Join(candidate, "preview.png"), color.RGBA{B: 255, A: 255})
+
+	result, err := service.Apply(Request{
+		SessionID:    sessionID,
+		GenerationID: "generation-1",
+		Variant:      generation.Variant("source"),
+		ThemeName:    "Background Preview Theme",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	previewFile, err := os.Open(filepath.Join(result.ThemePath, "preview.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := png.Decode(previewFile)
+	_ = previewFile.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if preview.Bounds().Dx() != 1920 || preview.Bounds().Dy() != 1080 {
+		t.Fatalf("preview dimensions = %dx%d, want 1920x1080", preview.Bounds().Dx(), preview.Bounds().Dy())
+	}
+	r, g, b, _ := preview.At(960, 540).RGBA()
+	if r < 0xff00 || g > 0x0100 || b > 0x0100 {
+		t.Fatalf("preview center = (%d, %d, %d), want wallpaper red", r, g, b)
 	}
 }
 
@@ -267,14 +301,30 @@ func setupApplyTest(t *testing.T, applier ThemeApplier) (*Service, *session.Stor
 	if err := os.WriteFile(filepath.Join(candidate, "colors.toml"), []byte("background = \"#000000\"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(candidate, "backgrounds", "wallpaper.png"), []byte("image"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeTestPNG(t, filepath.Join(candidate, "backgrounds", "wallpaper.png"), color.RGBA{R: 32, G: 32, B: 32, A: 255})
 	service, err := NewService(store, applier)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return service, store, record.SessionID
+}
+
+func writeTestPNG(t *testing.T, path string, fill color.RGBA) {
+	t.Helper()
+	imageFile, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer imageFile.Close()
+	background := image.NewRGBA(image.Rect(0, 0, 16, 9))
+	for y := 0; y < background.Bounds().Dy(); y++ {
+		for x := 0; x < background.Bounds().Dx(); x++ {
+			background.SetRGBA(x, y, fill)
+		}
+	}
+	if err := png.Encode(imageFile, background); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestApplyFailureKeepsSessionActiveAndDoesNotPublish(t *testing.T) {
@@ -553,5 +603,23 @@ func TestRestoreReplacementBackupNeverRemovesUnownedDestination(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(backup, "old.txt")); err != nil {
 		t.Fatalf("replacement backup was consumed after refusal: %v", err)
+	}
+}
+
+func TestDestinationOwnedByRejectsSymlinkedOwnerMarker(t *testing.T) {
+	service, _, sessionID := setupApplyTest(t, &testApplier{})
+	destination := filepath.Join(service.themesRoot, "existing-theme")
+	if err := os.MkdirAll(destination, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(t.TempDir(), "owner.txt")
+	if err := os.WriteFile(target, []byte(sessionID+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, filepath.Join(destination, ".omagen-owner")); err != nil {
+		t.Fatal(err)
+	}
+	if destinationOwnedBy(destination, sessionID) {
+		t.Fatal("destination ownership followed a symlinked owner marker")
 	}
 }

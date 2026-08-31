@@ -109,6 +109,16 @@ func TestBuildDemoLaunchesRequiresTerminal(t *testing.T) {
 	}
 }
 
+func TestSourceViewerScriptShellQuotesSamplePath(t *testing.T) {
+	script := sourceViewerScript("/tmp/$(touch compromised)/a'b")
+	if !strings.Contains(script, "'/tmp/$(touch compromised)/a'\\''b'") {
+		t.Fatalf("source viewer path is not POSIX-shell quoted: %q", script)
+	}
+	if strings.Contains(script, "\"/tmp/$(touch compromised)") {
+		t.Fatalf("source viewer still exposes command substitution: %q", script)
+	}
+}
+
 func TestDemoAppIDIsSessionSpecific(t *testing.T) {
 	if got := demoAppID("abc123", SlotEditor); got != "org.omagen.demo.abc123.editor" {
 		t.Fatalf("app id = %q", got)

@@ -11,11 +11,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ ! -f "$BIN" ]]; then
+if [[ ! -f "$BIN" || -L "$BIN" || ! -x "$BIN" ]]; then
     printf 'FAIL: bundled backend is missing: %s\n' "$BIN" >&2
     exit 1
 fi
-if [[ ! -f "$STUDIO_BIN" ]]; then
+if [[ ! -f "$STUDIO_BIN" || -L "$STUDIO_BIN" || ! -x "$STUDIO_BIN" ]]; then
     printf 'FAIL: bundled Studio TUI is missing: %s\n' "$STUDIO_BIN" >&2
     exit 1
 fi

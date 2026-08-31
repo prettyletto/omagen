@@ -193,6 +193,10 @@ func WriteManifest(themeRoot string, manifest Manifest) error {
 }
 
 func IsOwnedHook(path string) bool {
-	data, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	data, err := fsutil.ReadFileLimited(path, 4096)
 	return err == nil && strings.HasPrefix(string(data), "#!/bin/sh\n# Omagen Advanced Runtime hook\n")
 }

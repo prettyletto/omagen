@@ -24,10 +24,6 @@ var phosphorScanShader string
 //go:embed retro_vhs.frag
 var retroVHSShader string
 
-// Keep the signal long enough to be visible while leaving the shader fully
-// disabled between compositor events.
-const cyberpunkGlitchDurationMs = 1250
-
 // removeCyberpunkGlitchShader removes the generated event shader whenever a
 // theme is regenerated without the Cyberpunk signal. This also cleans up the
 // same filename emitted by the earlier experimental implementation.
@@ -61,10 +57,6 @@ func cyberpunkGlitchProfileFor(level string) cyberpunkGlitchProfile {
 	}
 }
 
-func cyberpunkGlitchEnabled(level string) bool {
-	return level == "low" || level == "medium" || level == "strong"
-}
-
 func renderCyberpunkGlitchShader(level string) string {
 	profile := cyberpunkGlitchProfileFor(level)
 	replacer := strings.NewReplacer(
@@ -75,10 +67,6 @@ func renderCyberpunkGlitchShader(level string) string {
 		"__OMAGEN_SCANLINE__", profile.scanline,
 	)
 	return replacer.Replace(cyberpunkGlitchShader)
-}
-
-func writeCyberpunkGlitchShader(themeDir, level string) error {
-	return fsutil.AtomicWriteFile(filepath.Join(themeDir, "omagen-cyberpunk-glitch.frag"), []byte(renderCyberpunkGlitchShader(level)), 0o644)
 }
 
 func renderSpectralShiftShader(effect session.ScreenEffect) string {

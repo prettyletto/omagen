@@ -3,8 +3,8 @@ package cli
 import (
 	"encoding/json"
 	"io"
-	"os"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/lookfeel"
 )
 
@@ -57,7 +57,7 @@ func runLookFeel(args []string, stdout, stderr io.Writer) int {
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen look-feel import <manifest.json>")
 		}
-		data, err := os.ReadFile(args[1])
+		data, err := fsutil.ReadFileLimited(args[1], fsutil.MaxStateFileBytes)
 		if err != nil {
 			return fail(stderr, 2, "read recipe manifest: %v", err)
 		}

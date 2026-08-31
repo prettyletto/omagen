@@ -17,6 +17,8 @@ Item {
 
     property bool waiting: false
     property bool ignoreNextExit: false
+    property bool awaitingStopped: false
+    property var queuedCommand: null
 
     function exec(command) {
         // A reused Process cannot accept a new command while it is still
@@ -25,6 +27,14 @@ Item {
         // in an unbounded loading state.
         if (process.running)
             return
+        if (root.awaitingStopped) {
+            // A timeout can make Process report not-running before its
+            // onExited signal is delivered. Queue a replacement until that
+            // stale exit is consumed so it cannot be mistaken for the new
+            // request.
+            root.queuedCommand = command
+            return
+        }
         root.waiting = true
         process.exec(command)
         timeoutTimer.restart()
@@ -43,6 +53,7 @@ Item {
             // normal non-zero/fallback path cannot report a second error.
             root.waiting = false
             root.ignoreNextExit = true
+            root.awaitingStopped = true
             if (process.running)
                 process.running = false
             root.failed(root.timeoutFallback)
@@ -55,6 +66,7 @@ Item {
         stderr: Services.BoundedOutputParser { id: stderrBuffer }
 
         onStarted: {
+            root.awaitingStopped = false
             root.ignoreNextExit = false
             stdoutBuffer.reset()
             stderrBuffer.reset()
@@ -64,7 +76,12 @@ Item {
             timeoutTimer.stop()
             root.waiting = false
             if (root.ignoreNextExit) {
+                root.awaitingStopped = false
                 root.ignoreNextExit = false
+                const queued = root.queuedCommand
+                root.queuedCommand = null
+                if (queued)
+                    root.exec(queued)
                 return
             }
 

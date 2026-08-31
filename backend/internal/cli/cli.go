@@ -19,12 +19,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		return fail(stderr, 2, "missing command")
 	}
-
-	deps, err := newDependencies(stderr)
-	if err != nil {
-		return fail(stderr, 1, "%v", err)
-	}
-
+	// Help and ping are intentionally dependency-free health probes. They must
+	// remain useful when optional Omarchy state or integrations are unavailable.
 	switch args[0] {
 	case "--help", "-h", "help":
 		_, _ = fmt.Fprintln(stdout, "omagen: image-based Omarchy theme generator")
@@ -32,6 +28,14 @@ func Run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case "ping":
 		return writeJSON(stdout, stderr, pingResponse{OK: true, Version: BackendVersion})
+	}
+
+	deps, err := newDependencies(stderr)
+	if err != nil {
+		return fail(stderr, 1, "%v", err)
+	}
+
+	switch args[0] {
 	case "session":
 		return runSessionWithDependencies(args[1:], deps.sessionService, deps.previewService, deps.applyService, deps.cleanupService, deps.demoService, deps.generationService, stdout, stderr)
 	case "preview":

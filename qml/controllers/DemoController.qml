@@ -312,6 +312,10 @@ Item {
         function onDemoClosed(sessionId, wasClosed) {
             if (root.closeAfterCancel)
                 return
+            if (!root.session || sessionId !== root.session.sessionId) {
+                root.errorRaised("Backend closed a different live canvas session")
+                return
+            }
             root.busy = false
             root.active = false
             root.mode = "none"
