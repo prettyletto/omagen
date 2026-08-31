@@ -292,7 +292,7 @@ func runSessionWithDependencies(args []string, service *session.Service, preview
 		var cleanupErrors []error
 		if demoService != nil {
 			if _, closeErr := demoService.Close(args[1]); closeErr != nil {
-				cleanupErrors = append(cleanupErrors, fmt.Errorf("close demo: %w", closeErr))
+				return fail(stderr, 1, "close demo: %v", closeErr)
 			}
 		}
 		handled := false
@@ -337,7 +337,7 @@ func runSessionWithDependencies(args []string, service *session.Service, preview
 		var cleanupErrors []error
 		if status.Active && demoService != nil {
 			if _, closeErr := demoService.Close(status.SessionID); closeErr != nil {
-				cleanupErrors = append(cleanupErrors, fmt.Errorf("close demo: %w", closeErr))
+				return fail(stderr, 1, "close demo: %v", closeErr)
 			}
 		}
 		if applyService != nil {

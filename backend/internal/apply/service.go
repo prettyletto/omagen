@@ -549,7 +549,24 @@ func (s *Service) recoverPrepared(record session.Record) error {
 	if err != nil || !reflect.DeepEqual(background, record.OriginalBackground) {
 		return fmt.Errorf("verify prepared background restore: got %#v err=%v", background, err)
 	}
+	if err := s.restoreBarBaseline(record); err != nil {
+		return err
+	}
 	return s.finishCommitted(record.SessionID)
+}
+
+func (s *Service) restoreBarBaseline(record session.Record) error {
+	if s.bar == nil || record.BarSnapshot == nil {
+		return nil
+	}
+	snapshot, err := s.bar.LoadSnapshot(record.SessionID)
+	if err != nil {
+		return fmt.Errorf("load prepared bar snapshot: %w", err)
+	}
+	if err := s.bar.Restore(snapshot); err != nil {
+		return fmt.Errorf("restore prepared bar snapshot: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) finishCommitted(sessionID string) error {
@@ -566,6 +583,11 @@ func (s *Service) finishCommitted(sessionID string) error {
 	}
 	if record.AppliedBackup != "" {
 		_ = fsutil.RemoveAllAndSync(filepath.Join(s.sessions.SessionDir(sessionID), record.AppliedBackup))
+	}
+	if s.bar != nil && record.BarSnapshot != nil {
+		if err := s.bar.DeleteSnapshot(sessionID); err != nil {
+			return fmt.Errorf("remove bar snapshot: %w", err)
+		}
 	}
 	if err := s.sessions.ClearActive(sessionID); err != nil {
 		return fmt.Errorf("clear active session: %w", err)
@@ -605,7 +627,16 @@ func writeOwnerMarker(destination, sessionID string) error {
 }
 
 func destinationOwnedBy(destination, sessionID string) bool {
-	data, err := os.ReadFile(filepath.Join(destination, ".omagen-owner"))
+	destinationInfo, err := os.Lstat(destination)
+	if err != nil || !destinationInfo.IsDir() || destinationInfo.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	marker := filepath.Join(destination, ".omagen-owner")
+	markerInfo, err := os.Lstat(marker)
+	if err != nil || !markerInfo.Mode().IsRegular() || markerInfo.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
+	data, err := fsutil.ReadFileLimited(marker, 4096)
 	return err == nil && strings.TrimSpace(string(data)) == sessionID
 }
 func validComponent(label, value string) error {
@@ -615,62 +646,95 @@ func validComponent(label, value string) error {
 	return nil
 }
 func validateCandidate(path, base string) error {
-	info, err := os.Stat(path)
+	info, err := os.Lstat(path)
 	if err != nil {
 		return fmt.Errorf("inspect candidate: %w", err)
 	}
-	if !info.IsDir() {
+	if !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return fmt.Errorf("candidate is not a directory")
 	}
 	rel, err := filepath.Rel(base, path)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("candidate escapes session directory")
 	}
-	if _, err := os.Stat(filepath.Join(path, "colors.toml")); err != nil {
+	colorsInfo, err := os.Lstat(filepath.Join(path, "colors.toml"))
+	if err != nil {
 		return fmt.Errorf("candidate colors.toml: %w", err)
 	}
-	if _, err := os.Stat(filepath.Join(path, "backgrounds")); err != nil {
+	if !colorsInfo.Mode().IsRegular() || colorsInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("candidate colors.toml is not a regular file")
+	}
+	backgroundsInfo, err := os.Lstat(filepath.Join(path, "backgrounds"))
+	if err != nil {
 		return fmt.Errorf("candidate backgrounds: %w", err)
+	}
+	if !backgroundsInfo.IsDir() || backgroundsInfo.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("candidate backgrounds is not a directory")
 	}
 	return nil
 }
 
 func stageOptionalAssets(candidate, sessionDir string, request Request) error {
-	if request.GenerateUnlock {
-		source, err := candidateWallpaper(candidate)
+	var wallpaper string
+	if request.GenerateUnlock || !request.CapturePreview {
+		var err error
+		wallpaper, err = candidateWallpaper(candidate)
 		if err != nil {
-			return fmt.Errorf("find wallpaper for unlock image: %w", err)
+			message := "find wallpaper for theme preview"
+			if request.GenerateUnlock && request.CapturePreview {
+				message = "find wallpaper for unlock image"
+			}
+			return fmt.Errorf("%s: %w", message, err)
 		}
-		if err := theme.WriteUnlock(candidate, source); err != nil {
+	}
+	if request.GenerateUnlock {
+		if err := theme.WriteUnlock(candidate, wallpaper); err != nil {
 			return fmt.Errorf("write unlock image: %w", err)
 		}
 	}
+	previewSource := wallpaper
 	if request.CapturePreview {
 		capturePath := filepath.Join(sessionDir, "apply-preview.png")
-		if info, err := os.Stat(capturePath); err != nil {
+		if info, err := os.Lstat(capturePath); err != nil {
 			return fmt.Errorf("inspect captured preview: %w", err)
-		} else if !info.Mode().IsRegular() {
+		} else if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("captured preview is not a regular file")
 		}
-		if err := theme.WritePreview(candidate, capturePath); err != nil {
+		previewSource = capturePath
+	}
+	if err := theme.WritePreview(candidate, previewSource); err != nil {
+		if request.CapturePreview {
 			return fmt.Errorf("write live preview image: %w", err)
 		}
+		return fmt.Errorf("write background preview image: %w", err)
 	}
 	return nil
 }
 
 func candidateWallpaper(candidate string) (string, error) {
-	matches, err := filepath.Glob(filepath.Join(candidate, "backgrounds", "wallpaper.*"))
+	entries, err := os.ReadDir(filepath.Join(candidate, "backgrounds"))
 	if err != nil {
 		return "", err
 	}
-	for _, path := range matches {
-		info, statErr := os.Stat(path)
-		if statErr == nil && info.Mode().IsRegular() {
-			return path, nil
+	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 || !supportedCandidateBackground(entry.Name()) {
+			continue
+		}
+		info, statErr := entry.Info()
+		if statErr == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			return filepath.Join(candidate, "backgrounds", entry.Name()), nil
 		}
 	}
-	return "", fmt.Errorf("no generated wallpaper found")
+	return "", fmt.Errorf("no generated background found")
+}
+
+func supportedCandidateBackground(name string) bool {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".webp":
+		return true
+	default:
+		return false
+	}
 }
 
 func publish(source, destination, parent, sessionID string, prepare func(string) error) error {

@@ -58,7 +58,7 @@ recover_active_session() {
         return 0
     fi
 
-    [[ -x "$RUNTIME_BIN" ]] || die "an active Omagen session exists but its backend is unavailable; cancel or recover the session before uninstalling"
+    [[ -f "$RUNTIME_BIN" && ! -L "$RUNTIME_BIN" && -x "$RUNTIME_BIN" ]] || die "an active Omagen session exists but its backend is unavailable or untrusted; cancel or recover the session before uninstalling"
 
     printf 'Recovering the active Omagen session before removal...\n'
     "$RUNTIME_BIN" session recover || die "active session recovery failed; no plugin or state was removed"
@@ -66,7 +66,7 @@ recover_active_session() {
 }
 
 cleanup_inactive_state() {
-    [[ -x "$RUNTIME_BIN" ]] || return 0
+    [[ -f "$RUNTIME_BIN" && ! -L "$RUNTIME_BIN" && -x "$RUNTIME_BIN" ]] || return 0
 
     printf 'Cleaning inactive Omagen previews and sessions...\n'
     "$RUNTIME_BIN" cleanup || die "Omagen cleanup failed; no plugin or state was removed"

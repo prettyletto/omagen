@@ -150,6 +150,10 @@ func (s *Service) Open(name string) (Result, error) {
 
 func fingerprintTree(root string) (string, error) {
 	hash := sha256.New()
+	const maxFingerprintFiles = 4096
+	const maxFingerprintBytes int64 = 256 << 20
+	var fileCount int
+	var totalBytes int64
 	if err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -160,6 +164,10 @@ func fingerprintTree(root string) (string, error) {
 		if entry.Type()&os.ModeSymlink != 0 || !entry.Type().IsRegular() {
 			return fmt.Errorf("unsupported theme entry %s", path)
 		}
+		fileCount++
+		if fileCount > maxFingerprintFiles {
+			return fmt.Errorf("theme contains more than %d files", maxFingerprintFiles)
+		}
 		relative, err := filepath.Rel(root, path)
 		if err != nil {
 			return err
@@ -167,11 +175,16 @@ func fingerprintTree(root string) (string, error) {
 		if _, err := io.WriteString(hash, relative+"\x00"); err != nil {
 			return err
 		}
-		file, err := os.Open(path)
+		file, err := fsutil.OpenRegularFile(path, fsutil.MaxFileBytes)
 		if err != nil {
 			return err
 		}
-		_, copyErr := io.Copy(hash, file)
+		limited := io.LimitReader(file, fsutil.MaxFileBytes+1)
+		copied, copyErr := io.Copy(hash, limited)
+		totalBytes += copied
+		if copyErr == nil && (copied > fsutil.MaxFileBytes || totalBytes > maxFingerprintBytes) {
+			copyErr = fmt.Errorf("theme exceeds fingerprint size limit of %d bytes", maxFingerprintBytes)
+		}
 		closeErr := file.Close()
 		if copyErr != nil {
 			return copyErr

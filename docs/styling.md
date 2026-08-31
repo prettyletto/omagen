@@ -181,8 +181,8 @@ Quattro responsibilities and are not changed by these focused controls.
 An applied theme can contain these generated assets:
 
 - <code>colors.toml</code> — the Omarchy palette values.
-- <code>preview.png</code> — the normalized theme preview, or the captured Demo
-  preview when that option is selected.
+- <code>preview.png</code> — the normalized theme background preview by default,
+  or the captured Demo preview when that option is selected.
 - <code>unlock.png</code> — Plymouth unlock artwork when **Generate unlock screen**
   is selected.
 - <code>preview-unlock.png</code> — the unlock artwork preview used by the

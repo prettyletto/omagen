@@ -784,12 +784,3 @@ func acidMotion() session.AnimationsStyle {
 	style.Curve, style.Border, style.BorderSpeed, style.Glitch = "precision", "spin", 72, "none"
 	return style
 }
-
-func oneOf(value string, choices ...string) bool {
-	for _, choice := range choices {
-		if value == choice {
-			return true
-		}
-	}
-	return false
-}

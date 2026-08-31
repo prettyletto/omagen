@@ -85,10 +85,13 @@ func Install() (InstallResult, error) {
 	if err != nil {
 		return InstallResult{}, err
 	}
-	_, readErr := os.ReadFile(hookPath)
+	existing, readErr := fsutil.ReadFileLimited(hookPath, 4096)
 	hadOwnedHook := readErr == nil && IsOwnedHook(hookPath)
-	if existing, readErr := os.ReadFile(hookPath); readErr == nil && !strings.HasPrefix(string(existing), "#!/bin/sh\n# Omagen Advanced Runtime hook\n") {
+	if readErr == nil && !strings.HasPrefix(string(existing), "#!/bin/sh\n# Omagen Advanced Runtime hook\n") {
 		return InstallResult{}, fmt.Errorf("refusing to replace an existing non-Omagen theme-set hook: %s", hookPath)
+	}
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return InstallResult{}, fmt.Errorf("inspect existing theme-set hook: %w", readErr)
 	}
 	if err := fsutil.AtomicWriteFile(hookPath, []byte(themeSetHook), 0o700); err != nil {
 		return InstallResult{}, fmt.Errorf("install advanced runtime hook: %w", err)

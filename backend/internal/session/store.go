@@ -31,7 +31,7 @@ func (s *Store) Save(record Record) error {
 	if err := validateRecord(record, record.SessionID); err != nil {
 		return err
 	}
-	if err := fsutil.AtomicWriteJSON(filepath.Join(s.root, record.SessionID, "session.json"), record, 0o644); err != nil {
+	if err := fsutil.AtomicWriteJSON(filepath.Join(s.root, record.SessionID, "session.json"), record, 0o600); err != nil {
 		return fmt.Errorf("persist session record: %w", err)
 	}
 	return nil

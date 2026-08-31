@@ -160,10 +160,14 @@ shape Window, Shell, and Bar surfaces while keeping Quattro's native layout:
 
 After installation, click the Omagen widget in the Quattro bar:
 
-1. Choose an image.
-2. Optionally enable extra Window, Shell, and Bar configuration previews.
-3. Select a palette direction.
-4. Use **Test live**, **Demo**, **Bar Demo**, or **Apply theme**. Bar Demo
+1. On the first open, review the optional user-level Advanced Runtime setup.
+   It installs only Omagen's theme-set hook and runtime state; it does not use
+   sudo, install packages, or change the current theme. **Use native mode** is
+   always available.
+2. Choose an image.
+3. Optionally enable extra Window, Shell, and Bar configuration previews.
+4. Select a palette direction.
+5. Use **Test live**, **Demo**, **Bar Demo**, or **Apply theme**. Bar Demo
    previews the staged BarSpec motion and topology below the real native bar;
    it does not replace Quattro's widgets or input ownership.
 

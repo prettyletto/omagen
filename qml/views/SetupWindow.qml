@@ -26,11 +26,12 @@ PanelWindow {
     // an image is selected. Session Cancel remains the final action when a
     // session is already active.
     readonly property int actionCount: sourceImage === ""
-        ? (sessionActive ? 3 : 2)
-        : (sessionActive ? 4 : 3)
+        ? (sessionActive ? 3 : 3)
+        : (sessionActive ? 4 : 4)
 
     signal chooseImageRequested()
     signal editThemeRequested()
+    signal advancedRuntimeRequested()
     signal workflowModeSelected(string mode)
     signal continueRequested()
     signal cancelRequested()
@@ -60,7 +61,9 @@ PanelWindow {
             chooseImageRequested();
         else if (cursorIndex === 1)
             editThemeRequested();
-        else if (sourceImage !== "" && cursorIndex === 2)
+        else if (!sessionActive && cursorIndex === 2)
+            advancedRuntimeRequested();
+        else if (sourceImage !== "" && cursorIndex === (sessionActive ? 2 : 3))
             continueRequested();
         else if (sessionActive && cursorIndex === actionCount - 1)
             cancelRequested();
@@ -249,6 +252,19 @@ PanelWindow {
                             onClicked: root.editThemeRequested()
                         }
 
+                        Button {
+                            Layout.fillWidth: true
+                            visible: !root.sessionActive
+                            text: "Advanced runtime setup"
+                            iconText: "󰒓"
+                            leftAlign: true
+                            foreground: Color.popups.text
+                            hasCursor: root.cursorIndex === 2
+                            enabled: !root.busy
+                            tooltipText: "Review or enable the optional advanced theme bridge"
+                            onClicked: root.advancedRuntimeRequested()
+                        }
+
                         Item {
                             Layout.fillHeight: true
                             visible: root.sourceImage === ""
@@ -289,7 +305,7 @@ PanelWindow {
                             accent: Color.accent
                             background: Color.accent
                             bordered: true
-                            hasCursor: root.cursorIndex === 2
+                            hasCursor: root.cursorIndex === (root.sessionActive ? 2 : 3)
                             enabled: !root.busy && !root.cancelBusy
                             onClicked: root.continueRequested()
                         }

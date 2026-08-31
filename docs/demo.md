@@ -64,6 +64,9 @@ canonical theme preview format, and stages it with the theme before Apply.
 If Demo is not open, Omagen opens it first, applies the selected direction,
 captures the result, and then closes Demo before continuing the Apply flow.
 
+When live Demo capture is not selected, Apply uses the theme's generated
+background as <code>preview.png</code> instead.
+
 ## Troubleshooting
 
 If a preferred application is missing, check that its fallback appears rather

@@ -17,6 +17,8 @@ Item {
     property string activeSignature: ""
     property string lastAppliedSignature: ""
     property string lastAppliedThemeName: ""
+    property int operationEpoch: 0
+    property int activeOperationEpoch: 0
     // Preview is single-flight. While the native driver is changing the
     // desktop, retain only the newest intent; BackendCommand deliberately
     // refuses to start a second process on the same seam.
@@ -100,6 +102,8 @@ Item {
 
         root.pendingColorPreview = request.pendingColors
         root.activeSignature = nextSignature
+        root.operationEpoch += 1
+        root.activeOperationEpoch = root.operationEpoch
         root.busy = true
         root.backend.applyPreview(
             root.session.sessionId,
@@ -155,6 +159,7 @@ Item {
     }
 
     function reset() {
+        root.operationEpoch += 1
         root.busy = false
         root.pendingColorPreview = false
         root.activeSignature = ""
@@ -166,7 +171,7 @@ Item {
         target: root.backend
 
         function onPreviewApplied(sessionId, generationId, variant, themeName) {
-            if (root.closeAfterCancel)
+            if (root.closeAfterCancel || !root.busy || root.activeOperationEpoch !== root.operationEpoch)
                 return
 
             root.busy = false
@@ -210,7 +215,7 @@ Item {
         }
 
         function onPreviewApplyFailed(message) {
-            if (root.closeAfterCancel)
+            if (root.closeAfterCancel || !root.busy || root.activeOperationEpoch !== root.operationEpoch)
                 return
 
             root.busy = false

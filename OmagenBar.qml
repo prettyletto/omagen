@@ -1036,11 +1036,15 @@ Item {
                 || !root.shell || !root.manifest
                 || typeof root.shell.mutateShellConfig !== "function") return
         var selected = root.barConfig && root.barConfig.id ? String(root.barConfig.id) : ""
-        if (selected !== String(root.manifest.id || "pretty.omagen.bar")) return
+        if (selected !== String(root.manifest.id || "pretty.omagen.bar")
+                || String(root.barConfig.omagenOwnedBy || "") !== "pretty.omagen") return
         root.shell.mutateShellConfig(function(copy) {
             if (copy.bar && typeof copy.bar === "object"
-                    && String(copy.bar.id || "") === String(root.manifest.id || "pretty.omagen.bar"))
+                    && String(copy.bar.id || "") === String(root.manifest.id || "pretty.omagen.bar")
+                    && String(copy.bar.omagenOwnedBy || "") === "pretty.omagen") {
                 delete copy.bar.id
+                delete copy.bar.omagenOwnedBy
+            }
         })
     }
 

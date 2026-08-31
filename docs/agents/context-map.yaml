@@ -100,7 +100,6 @@ domains:
       - docs/architecture/contracts/qml-controllers.md
     source:
       - qml/views/LiveCanvasPanel.qml
-      - qml/features/live-canvas
       - qml/controllers/PreviewController.qml
       - qml/controllers/DemoController.qml
       - qml/components/AdvancedStyleEditor.qml

@@ -12,7 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"golang.org/x/sys/unix"
 )
 
 type ThemeInfo struct {
@@ -33,11 +35,6 @@ const (
 type Client struct {
 	stderr               io.Writer
 	studioPreviewCommand string
-}
-
-type studioOptionsAware interface {
-	ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) (pid int, alreadyActive bool, err error)
-	ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) error
 }
 
 func NewClient(stderr io.Writer) *Client {
@@ -68,7 +65,7 @@ func (c *Client) CurrentTheme() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(home, ".local", "state", "omarchy", "current", "theme.name"))
+	data, err := fsutil.ReadFileLimited(filepath.Join(home, ".local", "state", "omarchy", "current", "theme.name"), 4096)
 	if err != nil {
 		return "", err
 	}
@@ -173,17 +170,6 @@ func (c *Client) ThemeDir(name string) (string, error) {
 		return "", fmt.Errorf("theme directory is not a directory")
 	}
 	return path, nil
-}
-
-func themeKind(path string) string {
-	home, err := os.UserHomeDir()
-	if err == nil {
-		userRoot := filepath.Join(home, ".config", "omarchy", "themes")
-		if relative, relErr := filepath.Rel(userRoot, path); relErr == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return "user"
-		}
-	}
-	return "stock"
 }
 
 func themeSlug(name string) string {
@@ -331,7 +317,7 @@ func (c *Client) ApplyThemePreviewWithOptions(themeName, logPath, retintRun, ret
 	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
 	environment = append(environment, "OMAGEN_STUDIO_POST_COMMIT_LOG="+logPath+".post-commit")
 	environment = append(environment, reloadSync.environment()...)
-	pid, _, err := c.runStudioThemeSetUntilCriticalWithPolicy(themeName, logPath, environment, 10*time.Second, retintRun, retintSkip)
+	pid, _, err := c.runStudioThemeSetWithPolicy(themeName, logPath, environment, 10*time.Second, waitMode == "full", retintRun, retintSkip)
 	if err != nil {
 		_ = reloadSync.close()
 		return pid, false, err
@@ -375,7 +361,7 @@ func (c *Client) ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip
 	// shared theme-set lock are settled. Retint adapters are post-commit work;
 	// waiting for every application helper here can strand the UI if one hangs.
 	// The Studio driver remains alive to finish those adapters in parallel.
-	_, _, err := c.runStudioThemeSetApplyUntilCriticalWithPolicy(themeName, logPath, environment, 30*time.Second, retintRun, retintSkip)
+	_, _, err := c.runStudioThemeSetApplyWithPolicy(themeName, logPath, environment, 30*time.Second, waitMode == "full", retintRun, retintSkip)
 	return err
 }
 
@@ -452,28 +438,16 @@ func (c *Client) runThemeSetUntilCriticalWithCleanup(theme, logPath string, envi
 	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false, "", "", "")
 }
 
-func (c *Client) runStudioThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
-	return c.runStudioThemeSetUntilCriticalWithPolicy(theme, logPath, environment, timeoutDuration, "", "")
+func (c *Client) runStudioThemeSetWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, waitForCompletion bool, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, waitForCompletion, "preview", retintRun, retintSkip)
 }
 
-func (c *Client) runStudioThemeSetUntilCriticalWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false, "preview", "", "")
-}
-
-func (c *Client) runStudioThemeSetUntilCriticalWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, false, "preview", retintRun, retintSkip)
-}
-
-func (c *Client) runStudioThemeSetApplyUntilCriticalWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, false, "apply", retintRun, retintSkip)
+func (c *Client) runStudioThemeSetApplyWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, waitForCompletion bool, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, waitForCompletion, "apply", retintRun, retintSkip)
 }
 
 func (c *Client) runThemeSetToCompletionWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
 	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true, "", "", "")
-}
-
-func (c *Client) runStudioThemeSetToCompletionWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, retintRun, retintSkip string) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, true, "apply", retintRun, retintSkip)
 }
 
 func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool, studioMode, retintRun, retintSkip string) (int, bool, error) {
@@ -503,10 +477,17 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 	if runtimeDir == "" {
 		runtimeDir = "/tmp"
 	}
-	lockFile, err := os.OpenFile(filepath.Join(runtimeDir, "omarchy-theme-set.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lockPath := filepath.Join(runtimeDir, "omarchy-theme-set.lock")
+	lockFD, err := unix.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		clean()
 		return 0, false, fmt.Errorf("open theme-set lock: %w", err)
+	}
+	lockFile := os.NewFile(uintptr(lockFD), lockPath)
+	if lockFile == nil {
+		_ = unix.Close(lockFD)
+		clean()
+		return 0, false, fmt.Errorf("open theme-set lock: invalid file descriptor")
 	}
 	defer lockFile.Close()
 
@@ -566,17 +547,31 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 		return 0, false, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
 	}
 	pid := cmd.Process.Pid
+	var logCloseOnce sync.Once
+	var logCloseErr error
+	closeLogOnce := func() error {
+		logCloseOnce.Do(func() {
+			logCloseErr = logWriter.Close()
+			if err := <-logDone; logCloseErr == nil {
+				logCloseErr = err
+			}
+		})
+		return logCloseErr
+	}
 	closeLog := func() error {
-		if err := logWriter.Close(); err != nil {
-			return err
-		}
-		return <-logDone
+		return closeLogOnce()
 	}
 
 	waitCh := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
 		clean()
+		// Preview returns as soon as the critical native state is ready, while
+		// the Studio driver may continue post-commit work. Close the parent's
+		// pipe end when that process finishes so the bounded-log goroutine can
+		// flush and release its file descriptor even though the caller already
+		// returned.
+		_ = closeLog()
 		waitCh <- err
 	}()
 	ticker := time.NewTicker(25 * time.Millisecond)

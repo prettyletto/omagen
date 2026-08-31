@@ -365,6 +365,67 @@ func TestApplyThemePreviewUsesStudioDriverWithNoHookPolicy(t *testing.T) {
 	}
 }
 
+func TestApplyThemePreviewReleasesLogFileAfterDriverExits(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("checks Linux process descriptors")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+	bin := t.TempDir()
+	driver := filepath.Join(bin, "studio-theme-set")
+	contents := "#!/bin/sh\nprintf '%s\\n' \"$2\" > \"$HOME/.local/state/omarchy/current/theme.name\"\nprintf done > \"$HOME/driver-finished\"\n"
+	if err := os.WriteFile(driver, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("OMAGEN_STUDIO_THEME_SET", driver)
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(current, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logPath := filepath.Join(t.TempDir(), "preview.log")
+	if _, _, err := NewClient(nil).ApplyThemePreview("new", logPath); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if _, err := os.Stat(filepath.Join(home, "driver-finished")); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("preview driver did not exit")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if err := os.Remove(logPath); err != nil {
+		t.Fatal(err)
+	}
+	for time.Now().Before(deadline) {
+		if !hasOpenDeletedPath(logPath) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("preview log remains open after driver exit: %s", logPath)
+}
+
+func hasOpenDeletedPath(path string) bool {
+	entries, err := os.ReadDir("/proc/self/fd")
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		target, err := os.Readlink(filepath.Join("/proc/self/fd", entry.Name()))
+		if err == nil && target == path+" (deleted)" {
+			return true
+		}
+	}
+	return false
+}
+
 func TestApplyThemePreviewPassesNonUIRetintPolicy(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

@@ -485,11 +485,11 @@ func copyCandidateTree(source, destination string) error {
 }
 
 func validateCandidateContents(dir string) error {
-	info, err := os.Stat(filepath.Join(dir, "colors.toml"))
+	info, err := os.Lstat(filepath.Join(dir, "colors.toml"))
 	if err != nil {
 		return fmt.Errorf("colors.toml: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Size() == 0 {
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() == 0 {
 		return fmt.Errorf("colors.toml is not a non-empty regular file")
 	}
 	entries, err := os.ReadDir(filepath.Join(dir, "backgrounds"))

@@ -26,6 +26,17 @@ The overlay also supports outside-click dismissal, a close button, arrow-key
 navigation, and <code>h/j/k/l</code> navigation. Use <code>Enter</code> or <code>Space</code> to
 activate the focused action and <code>Escape</code> to close the current surface.
 
+On the first open, Omagen shows a short optional setup screen before the image
+chooser. **Enable & continue** installs only two user-owned files: the
+theme-set hook at <code>~/.config/omarchy/hooks/theme-set.d/omagen-theme-set</code>
+and the runtime state at <code>~/.local/state/omagen/advanced-runtime.json</code>.
+It does not require sudo, install packages, or change the current theme. Choose
+**Use native mode** to skip the bridge; image generation and reversible previews
+remain available, while advanced Window, Shell, Bar, and Animation activation
+stays disabled. You can reopen **Advanced runtime setup** from the setup screen
+at any time, or follow the prompt shown when an advanced theme is applied
+without the bridge.
+
 <p align="center">
   <img src="../assets/screenshots/settings.webp" alt="Omagen settings" width="420">
 </p>

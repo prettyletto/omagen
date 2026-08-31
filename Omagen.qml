@@ -304,11 +304,7 @@ Item {
         }
 
         if (action === "advanced-setup") {
-            runtimeSetupController.openSetup(parsed.theme || parsed.theme_name || runtimeSetupTheme)
-            root.settingsOpen = false;
-            root.route = "runtime-setup";
-            root.livePanelOpen = false;
-            root.opened = true;
+            root.openRuntimeSetup(parsed.theme || parsed.theme_name || runtimeSetupTheme)
             return;
         }
 
@@ -346,6 +342,16 @@ Item {
         }
         runtimeSetupController.probeStartup()
         route = "loading";
+    }
+
+    function openRuntimeSetup(themeName) {
+        if (root.sessionBusy || root.cancelBusy)
+            return
+        runtimeSetupController.openSetup(themeName || runtimeSetupTheme)
+        root.settingsOpen = false
+        root.route = "runtime-setup"
+        root.livePanelOpen = false
+        root.opened = true
     }
 
     function close() {
@@ -1674,6 +1680,7 @@ Item {
 
         onChooseImageRequested: root.chooseImage()
         onEditThemeRequested: root.chooseInstalledTheme()
+        onAdvancedRuntimeRequested: root.openRuntimeSetup("")
         workflowMode: root.workflowMode
         onWorkflowModeSelected: {
             if (session.active) {
@@ -1703,6 +1710,8 @@ Item {
         onCloseRequested: {
             root.themePickerOpen = false
             root.opened = true
+            root.sessionBusy = false
+            themeEditController.reset()
         }
     }
 
@@ -1712,6 +1721,7 @@ Item {
         glitchEpoch: root.shellGlitchEpoch
         busy: root.runtimeSetupBusy
         installed: root.runtimeSetupInstalled
+        firstRun: root.runtimeSetupFirstRun
         themeName: root.runtimeSetupTheme
         message: root.runtimeSetupMessage
 

@@ -85,18 +85,22 @@ binary = json.loads(subprocess.check_output([sys.argv[2], "ping"], text=True))
 if manifest.get("version") != binary.get("version"):
     raise SystemExit(f"manifest version {manifest.get('version')!r} does not match binary version {binary.get('version')!r}")
 PY
-python3 - "$BAR_MANIFEST" <<'PY'
+python3 - "$MANIFEST" "$BAR_MANIFEST" <<'PY'
 import json
 import sys
 
 with open(sys.argv[1], encoding="utf-8") as stream:
-    manifest = json.load(stream)
+    overlay = json.load(stream)
+with open(sys.argv[2], encoding="utf-8") as stream:
+    bar = json.load(stream)
 
-if manifest.get("id") != "pretty.omagen.bar":
-    raise SystemExit(f"unexpected bar plugin id: {manifest.get('id')!r}")
-if manifest.get("kinds") != ["bar"]:
-    raise SystemExit(f"bar manifest kinds must be ['bar']: {manifest.get('kinds')!r}")
-if manifest.get("entryPoints", {}).get("bar") != "OmagenBar.qml":
+if bar.get("id") != "pretty.omagen.bar":
+    raise SystemExit(f"unexpected bar plugin id: {bar.get('id')!r}")
+if bar.get("version") != overlay.get("version"):
+    raise SystemExit(f"bar manifest version {bar.get('version')!r} does not match overlay version {overlay.get('version')!r}")
+if bar.get("kinds") != ["bar"]:
+    raise SystemExit(f"bar manifest kinds must be ['bar']: {bar.get('kinds')!r}")
+if bar.get("entryPoints", {}).get("bar") != "OmagenBar.qml":
     raise SystemExit("bar manifest must point at OmagenBar.qml")
 PY
 

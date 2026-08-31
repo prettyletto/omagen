@@ -3,7 +3,6 @@ package theme
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
@@ -88,7 +87,7 @@ func WriteRecipe(themeDir string, recipe Recipe) error {
 }
 
 func ReadRecipe(themeDir string) (Recipe, error) {
-	data, err := os.ReadFile(filepath.Join(themeDir, RecipeFile))
+	data, err := fsutil.ReadFileLimited(filepath.Join(themeDir, RecipeFile), fsutil.MaxStateFileBytes)
 	if err != nil {
 		return Recipe{}, err
 	}

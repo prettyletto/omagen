@@ -297,11 +297,15 @@ Item {
     function handleThemeApplied(sessionId, generationId) {
         if (!root.active || root.cancelled)
             return false
-        root.busy = false
         if (sessionId !== root.session.sessionId || generationId !== root.session.generationId) {
+            root.clearPending()
+            root.busy = false
+            root.recoveryRequired = true
             root.errorRaised("Backend applied a different generation")
+            root.showApplication()
             return true
         }
+        root.busy = false
         root.clearPending()
         root.completed()
         return true

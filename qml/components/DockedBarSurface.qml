@@ -26,11 +26,14 @@ PanelWindow {
     property string compiledEngine: ""
 
     readonly property var anchorWindow: anchorItem ? anchorItem.QsWindow.window : null
-    // Quattro keeps the active theme under this fixed path, independently of
-    // XDG_STATE_HOME used by Omagen's own session store.
-    readonly property string metadataPath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/omagen.bar.toml"
-    readonly property string profilePath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/omagen.bar.json"
-    readonly property string specPath: Quickshell.env("HOME") + "/.local/state/omarchy/current/theme/omagen.bar.spec.json"
+    readonly property string home: Quickshell.env("HOME")
+    readonly property string stateHome: {
+        var configured = Quickshell.env("XDG_STATE_HOME")
+        return configured && configured.length > 0 ? configured : root.home + "/.local/state"
+    }
+    readonly property string metadataPath: root.stateHome + "/omarchy/current/theme/omagen.bar.toml"
+    readonly property string profilePath: root.stateHome + "/omarchy/current/theme/omagen.bar.json"
+    readonly property string specPath: root.stateHome + "/omarchy/current/theme/omagen.bar.spec.json"
     readonly property string specEngine: root.compiledEngine
     readonly property string specTopology: specDocument && specDocument.topology ? String(specDocument.topology) : ""
     readonly property var specSurface: specDocument && specDocument.surface ? specDocument.surface : ({})
