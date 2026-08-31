@@ -68,6 +68,45 @@ func TestCurrentThemeAndBackground(t *testing.T) {
 	}
 }
 
+func TestListThemesSkipsEphemeralPreviewAliases(t *testing.T) {
+	home := t.TempDir()
+	commandBin := t.TempDir()
+	stockThemes := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OMARCHY_PATH", stockThemes)
+	t.Setenv("PATH", commandBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	if err := os.MkdirAll(filepath.Join(stockThemes, "themes", "nord"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := filepath.Join(commandBin, "omarchy")
+	contents := `#!/bin/sh
+if [ "$1" = "theme" ] && [ "$2" = "list" ]; then
+    printf '%s\n' 'Nord' 'Omagen Preview Session 123 Source Colors abcdef0123456789' 'Nord'
+    exit 0
+fi
+if [ "$1" = "theme" ] && [ "$2" = "dir" ] && [ "$3" = "nord" ]; then
+    printf '%s\n' "$OMARCHY_PATH/themes/nord"
+    exit 0
+fi
+exit 1
+`
+	if err := os.WriteFile(command, []byte(contents), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	themes, err := NewClient(nil).ListThemes()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(themes) != 1 {
+		t.Fatalf("themes=%#v, want only the installed theme", themes)
+	}
+	if themes[0].ID != "nord" || themes[0].Name != "Nord" {
+		t.Fatalf("theme=%#v, want Nord", themes[0])
+	}
+}
+
 func TestResolveBackground(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

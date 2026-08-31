@@ -12,6 +12,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/apply"
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/lookfeel"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/testenv"
@@ -52,6 +53,35 @@ func TestRunLookFeelListAndResolve(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"preset":"glass-blur"`) || !strings.Contains(out.String(), `"opacity":0.82`) {
 		t.Fatalf("composition output=%q", out.String())
+	}
+}
+
+func TestRunLookFeelSaveWritesLocalPreset(t *testing.T) {
+	testenv.Isolate(t)
+	composition, err := lookfeel.Resolve(lookfeel.PresetGlassBlur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(composition)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "save", "My staged glass", string(payload)}, &out, &errOut); code != 0 {
+		t.Fatalf("save code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"id":"local-my-staged-glass"`) || !strings.Contains(out.String(), `"local":true`) {
+		t.Fatalf("save output=%q", out.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "list"}, &out, &errOut); code != 0 {
+		t.Fatalf("list code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"id":"local-my-staged-glass"`) {
+		t.Fatalf("saved preset missing from catalog=%q", out.String())
 	}
 }
 

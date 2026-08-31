@@ -21,6 +21,10 @@ Item {
     signal choiceRequested(string choice)
     signal stylesChanged(var shellStyle, var desktopStyle, var barStyle, var animationsStyle)
     signal sectionChanged(int index)
+    // Native desktop mutation remains an explicit action. Editor controls only
+    // stage documents; this signal asks the owning PreviewController to test
+    // the complete current candidate.
+    signal testLiveRequested()
 
     implicitHeight: content.implicitHeight
 
@@ -100,6 +104,36 @@ Item {
                 root.stylesChanged(nextShell, nextDesktop, nextBar, nextAnimations)
             }
             onSectionChanged: root.sectionChanged(index)
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.choice === "customize"
+            spacing: Style.space(8)
+
+            Text {
+                Layout.fillWidth: true
+                text: "Changes are staged until you test them on the real desktop."
+                color: root.foregroundColor
+                opacity: 0.62
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+                wrapMode: Text.WordWrap
+            }
+
+            Button {
+                Layout.preferredWidth: Style.space(118)
+                Layout.preferredHeight: Style.space(36)
+                text: "Test Live"
+                fontSize: Style.font.caption
+                foreground: root.backgroundColor
+                accent: root.accentColor
+                background: root.accentColor
+                bordered: true
+                enabled: root.controlsEnabled
+                tooltipText: "Apply the current staged Window, Shell, Bar, and Motion settings temporarily"
+                onClicked: root.testLiveRequested()
+            }
         }
 
         Rectangle {

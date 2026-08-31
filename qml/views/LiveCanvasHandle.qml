@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import qs.Commons
@@ -15,8 +16,11 @@ Item {
     property string monitorName: ""
     property bool glitchEnabled: false
     property int glitchEpoch: 0
+    property bool demoActive: false
+    property bool actionBusy: false
 
     signal reopenRequested()
+    signal saveApplyRequested()
 
     Variants {
         model: root.active ? Quickshell.screens : []
@@ -38,8 +42,8 @@ Item {
                     top: true
                     right: true
                 }
-                implicitWidth: Style.space(42)
-                implicitHeight: Style.space(116)
+                implicitWidth: root.demoActive ? Style.space(154) : Style.space(42)
+                implicitHeight: root.demoActive ? Style.space(138) : Style.space(116)
 
                 Rectangle {
                     anchors.fill: parent
@@ -58,8 +62,54 @@ Item {
                         secondaryColor: Color.foreground
                     }
 
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: Style.space(8)
+                        spacing: Style.space(6)
+                        visible: root.demoActive
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "DEMO LIVE"
+                            color: Color.popups.text
+                            opacity: 0.66
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            font.letterSpacing: 0.8
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(34)
+                            text: root.actionBusy ? "Working…" : "Save & Apply"
+                            foreground: Color.popups.background
+                            accent: Color.accent
+                            background: Color.accent
+                            bordered: true
+                            enabled: !root.actionBusy
+                            tooltipText: "Open final save options; Omagen will close this owned Demo before applying"
+                            onClicked: root.saveApplyRequested()
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(30)
+                            text: "Controls"
+                            foreground: Color.popups.text
+                            accent: Color.accent
+                            background: Util.alpha(Color.popups.text, 0.06)
+                            bordered: true
+                            enabled: !root.actionBusy
+                            tooltipText: "Reopen Live Canvas controls"
+                            onClicked: root.reopenRequested()
+                        }
+                    }
+
                     Text {
                         anchors.centerIn: parent
+                        visible: !root.demoActive
                         text: "‹"
                         color: Color.popups.text
                         font.family: Style.font.family
@@ -69,6 +119,7 @@ Item {
 
                     MouseArea {
                         anchors.fill: parent
+                        visible: !root.demoActive
                         onClicked: root.reopenRequested()
                     }
                 }

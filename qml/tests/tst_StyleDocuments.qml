@@ -78,5 +78,42 @@ TestCase {
         compare(BarSizing.presetDensity("float-expanded"), "native")
         compare(BarSizing.presetDensity("minimal"), "compact")
         compare(BarSizing.presetDensity("dock"), "native")
+        compare(BarSizing.presetDensity("cathedral"), "comfortable")
+        compare(BarSizing.presetDensity("pulse"), "compact")
+        compare(BarSizing.presetDensity("zen"), "compact")
+    }
+
+    function test_lookFeelCompositionSerializesBackendFields() {
+        var payload = StyleDocuments.serializeLookFeelComposition({
+            schemaVersion: 1,
+            preset: "custom-local",
+            presetRevision: 4,
+            customized: { window: true, animations: true },
+            window: {
+                borderStyle: "spin", borderSize: 3, borderSizeMode: "fixed", borderSpeed: 72,
+                shape: "soft", spacing: "airy", depth: "shadow", activeStyle: "native", inactiveStyle: "frosted_rich"
+            },
+            shell: { preset: "glass", surface: "contrast", detail: "framed", tooltip: "accent", notifications: "native", overrides: { "base.alpha": "0.8" } },
+            bar: { surface: "dark", density: "compact", attention: "reactive", form: "docked", visibility: "islands", profile: null, spec: { workspace: { mode: "glyphs", glyphs: ["A", "B"] } } },
+            animations: {
+                version: 1, preset: "custom", window: "cinematic", windowOpen: "slide", windowClose: "fade", windowMove: "native",
+                windowAmount: 91, windowOpacity: 94, windowSpeed: 7, workspace: "slidefade", workspaceAxis: "vertical", workspaceTravel: 24,
+                specialWorkspace: "slide", focus: "spring", layers: "fade", curve: "spring", border: "spin", borderSpeed: 72,
+                glitch: "none", screenEffect: { id: "spectral-shift", strength: "strong", durationMs: 500, triggers: ["panel"], coalesce: true }, reducedMotion: false
+            },
+            terminal: { schemaVersion: 1, mode: "custom", opacity: 0.78, cellMode: "painted" }
+        })
+
+        compare(payload.window.border_style, "spin")
+        compare(payload.window.border_size, 3)
+        compare(payload.window.active_style, "native")
+        compare(payload.animations.window_open, "slide")
+        compare(payload.animations.window_amount, 91)
+        compare(payload.animations.workspace_axis, "vertical")
+        compare(payload.animations.screen_effect.duration_ms, 500)
+        compare(payload.animations.reduced_motion, false)
+        compare(payload.terminal.schema_version, 1)
+        compare(payload.terminal.cell_mode, "painted")
+        compare(payload.bar.spec.workspace.glyphs.length, 2)
     }
 }

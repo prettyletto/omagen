@@ -25,7 +25,10 @@ type ThemeInfo struct {
 	UserPath    string `json:"user_path,omitempty"`
 }
 
-const maxStudioLogBytes int64 = 1 << 20
+const (
+	maxStudioLogBytes        int64 = 1 << 20
+	omagenPreviewThemePrefix       = "omagen-preview-"
+)
 
 type Client struct {
 	stderr               io.Writer
@@ -95,11 +98,18 @@ func (c *Client) ListThemes() ([]ThemeInfo, error) {
 		if name == "" {
 			continue
 		}
-		if _, ok := seen[name]; ok {
+		id := themeSlug(name)
+		// Preview aliases are short-lived session artifacts. Omarchy includes
+		// them in its human-facing theme list, but they are not installed
+		// themes and `omarchy theme dir` cannot resolve them. Never let an
+		// active or stale preview alias make the installed-theme catalog fail.
+		if strings.HasPrefix(id, omagenPreviewThemePrefix) {
 			continue
 		}
-		seen[name] = struct{}{}
-		id := themeSlug(name)
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
 		path, err := c.ThemeDir(id)
 		if err != nil {
 			return nil, fmt.Errorf("resolve Omarchy theme %q: %w", name, err)

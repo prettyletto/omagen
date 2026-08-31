@@ -152,6 +152,10 @@ func TestScreenEffectContractPreservesLegacyCyberpunkAndValidatesNewEffects(t *t
 	if !spectral.Valid() {
 		t.Fatalf("valid spectral effect rejected: %#v", spectral)
 	}
+	retro := ScreenEffect{ID: "retro-vhs", Strength: "medium", Triggers: []string{"window-open", "workspace"}, Coalesce: true}
+	if normalized := retro.Normalize(); normalized.DurationMs != 1100 || !normalized.Valid() {
+		t.Fatalf("valid retro VHS effect was not normalized: %#v", normalized)
+	}
 	spectral.Triggers = append(spectral.Triggers, "focus-every-frame")
 	if spectral.Valid() {
 		t.Fatalf("unknown trigger accepted: %#v", spectral)

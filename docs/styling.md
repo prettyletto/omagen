@@ -122,8 +122,10 @@ change Hyprland's layout while you are making the selection.
 
 Animations are a separate Hyprland engine. Window motion controls open, close,
 and resize transitions; workspace motion controls workspace switching; border
-motion controls animated focus borders. Reduced motion disables those
-transitions without changing Window, Shell, or Bar surfaces.
+motion controls animated focus borders. Retro VHS is a finite event signal with
+soft tape wobble, chroma bleed, scanlines, and restrained tracking noise. Reduced
+motion disables those transitions and screen effects without changing Window,
+Shell, or Bar surfaces.
 
 ### Shell
 
@@ -147,9 +149,11 @@ behind it without changing application-window opacity policy.
 
 Bar controls are:
 
-- **Preset:** Default, Float Compact, Float Expanded, Islands, Dock, Minimal.
+- **Preset:** Default, Float Compact, Float Expanded, Islands, Dock, Minimal,
+  Orbit, Segmented Ribbon, Cathedral, Pulse, and Zen.
 - **Size:** Default, Compact, Comfortable. This is applied after a bar preset
-  so each preset can be tuned without changing its structure.
+  so each preset can be tuned without changing its structure. Cathedral,
+  Pulse, and Zen use dedicated horizontal and vertical compositions.
 - **Pane:** Preset default, Opaque, Metal, Glass (real compositor blur), and
   Clear. Preset default keeps the selected recipe's own pane; Opaque maximizes
   contrast; Metal uses a near-opaque dark neutral pane for a restrained solid

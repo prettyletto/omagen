@@ -44,7 +44,12 @@ function isVertical(spec) {
 }
 
 function presetDensity(preset) {
-    return ["float", "minimal"].indexOf(String(preset || "")) >= 0 ? "compact" : "native"
+    var key = String(preset || "")
+    if (["float", "minimal", "pulse", "zen"].indexOf(key) >= 0)
+        return "compact"
+    if (key === "cathedral")
+        return "comfortable"
+    return "native"
 }
 
 function resolvedBaseSize(spec, nativeHorizontal, nativeVertical, scaleWithFont, fontScale) {

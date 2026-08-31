@@ -15,16 +15,16 @@ import (
 
 func TestCatalogContainsStableInitialPresets(t *testing.T) {
 	entries := Catalog()
-	if len(entries) != 12 {
-		t.Fatalf("catalog length = %d, want 12", len(entries))
+	if len(entries) != 13 {
+		t.Fatalf("catalog length = %d, want 13", len(entries))
 	}
-	want := []string{PresetNative, PresetGlassBlur, PresetFocused, PresetCyberpunk, PresetSpectral, PresetPhosphor, PresetMonolith, PresetOrbit, PresetNature, PresetOriental, PresetGothic, PresetAcid}
+	want := []string{PresetNative, PresetGlassBlur, PresetFocused, PresetCyberpunk, PresetSpectral, PresetPhosphor, PresetRetro, PresetMonolith, PresetOrbit, PresetNature, PresetOriental, PresetGothic, PresetAcid}
 	for index, id := range want {
 		if entries[index].ID != id {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 4 || entries[7].Revision != 2 || entries[8].Revision != 4 || entries[9].Revision != 5 || entries[10].Revision != 1 || entries[11].Revision != 1 {
+	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 1 || entries[7].Revision != 4 || entries[8].Revision != 2 || entries[9].Revision != 4 || entries[10].Revision != 6 || entries[11].Revision != 2 || entries[12].Revision != 2 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
@@ -209,12 +209,13 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	}{
 		{PresetSpectral, "letters", "ribbon", "lcd", "spectral-shift", 2},
 		{PresetPhosphor, "glyphs", "minimal", "matrix", "phosphor-scan", 3},
+		{PresetRetro, "glyphs", "minimal", "lcd", "retro-vhs", 1},
 		{PresetMonolith, "glyphs", "islands", "gothic", "none", 4},
 		{PresetOrbit, "glyphs", "orbit", "lcd", "none", 2},
 		{PresetNature, "glyphs", "islands", "classical", "none", 4},
-		{PresetOriental, "kanji", "float", "classical", "none", 5},
-		{PresetGothic, "glyphs", "float-expanded", "gothic", "none", 1},
-		{PresetAcid, "glyphs", "ribbon", "native", "none", 1},
+		{PresetOriental, "kanji", "zen", "classical", "none", 6},
+		{PresetGothic, "glyphs", "cathedral", "gothic", "none", 2},
+		{PresetAcid, "glyphs", "pulse", "native", "none", 2},
 	}
 	for _, test := range tests {
 		t.Run(test.id, func(t *testing.T) {
@@ -250,7 +251,7 @@ func TestResolveNewRecipesHaveDistinctPortableIdentities(t *testing.T) {
 	if oriental.Shell.Preset != session.ShellPresetGlass || oriental.Shell.Detail != "framed" || oriental.Shell.Notifications != "accent" {
 		t.Fatalf("oriental shell identity = %#v", oriental.Shell)
 	}
-	if oriental.PresetRevision != 5 || oriental.Bar.Spec.Topology != bar.TopologyFloating || oriental.Bar.Spec.Preset != "float" || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "compact" {
+	if oriental.PresetRevision != 6 || oriental.Bar.Spec.Topology != bar.TopologyIslands || oriental.Bar.Spec.Preset != "zen" || oriental.Bar.Spec.Workspace.Mode != "kanji" || oriental.Bar.Spec.Geometry.Density != "compact" {
 		t.Fatalf("oriental bar identity = %#v", oriental.Bar.Spec)
 	}
 	if oriental.Animations.WindowOpen != "slide" || oriental.Animations.WindowClose != "fade" || oriental.Animations.Workspace != "slidefade" || oriental.Animations.WorkspaceAxis != "horizontal" || oriental.Animations.Curve != "glass" {
@@ -266,13 +267,13 @@ func TestResolveGothicAndAcidHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if gothic.PresetRevision != 1 || gothic.Window.BorderStyle != "split_top" || gothic.Window.BorderSize != 3 || gothic.Window.Shape != "soft" || gothic.Window.Active != "native" || gothic.Window.Inactive != "frosted_rich" {
+	if gothic.PresetRevision != 2 || gothic.Window.BorderStyle != "split_top" || gothic.Window.BorderSize != 3 || gothic.Window.Shape != "soft" || gothic.Window.Active != "native" || gothic.Window.Inactive != "frosted_rich" {
 		t.Fatalf("gothic window identity = %#v", gothic.Window)
 	}
 	if gothic.Shell.Surface != "contrast" || gothic.Shell.Detail != "framed" || gothic.Shell.Tooltip != "accent" || gothic.Shell.Notifications != "accent" {
 		t.Fatalf("gothic shell identity = %#v", gothic.Shell)
 	}
-	if gothic.Bar.Spec == nil || gothic.Bar.Spec.Preset != "float-expanded" || gothic.Bar.Spec.Topology != bar.TopologyFloating || gothic.Bar.Spec.Clock.Style != "gothic" || gothic.Bar.Spec.Surface.Treatment != "metal" || gothic.Bar.Spec.Behavior.HoverExpand != true || gothic.Bar.Profile == nil || gothic.Bar.Profile.Behavior.Expansion != "hover" {
+	if gothic.Bar.Spec == nil || gothic.Bar.Spec.Preset != "cathedral" || gothic.Bar.Spec.Topology != bar.TopologySections || gothic.Bar.Spec.Clock.Style != "gothic" || gothic.Bar.Spec.Surface.Treatment != "metal" || gothic.Bar.Spec.Behavior.HoverExpand != true || gothic.Bar.Profile == nil || gothic.Bar.Profile.Behavior.Expansion != "hover" {
 		t.Fatalf("gothic bar identity = %#v", gothic.Bar)
 	}
 	if gothic.Animations.Preset != "custom" || gothic.Animations.Window != "cinematic" || gothic.Animations.WindowOpen != "slide" || gothic.Animations.WindowClose != "fade" || gothic.Animations.WorkspaceAxis != "vertical" || gothic.Animations.Border != "static" || gothic.Animations.EffectiveScreenEffect().ID != "none" {
@@ -286,13 +287,13 @@ func TestResolveGothicAndAcidHaveDistinctPortableIdentities(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if acid.PresetRevision != 1 || acid.Window.BorderStyle != "spin" || acid.Window.BorderSize != 2 || acid.Window.BorderSpeed != 72 || acid.Window.Active != "frosted_balanced" || acid.Window.Inactive != "shadow_only" {
+	if acid.PresetRevision != 2 || acid.Window.BorderStyle != "spin" || acid.Window.BorderSize != 2 || acid.Window.BorderSpeed != 72 || acid.Window.Active != "frosted_balanced" || acid.Window.Inactive != "shadow_only" {
 		t.Fatalf("acid window identity = %#v", acid.Window)
 	}
 	if acid.Shell.Surface != "layered" || acid.Shell.Detail != "edge" || acid.Shell.Tooltip != "accent" || acid.Shell.Notifications != "accent" {
 		t.Fatalf("acid shell identity = %#v", acid.Shell)
 	}
-	if acid.Bar.Spec == nil || acid.Bar.Spec.Preset != "ribbon" || acid.Bar.Spec.Topology != bar.TopologySections || acid.Bar.Spec.Clock.Style != "native" || acid.Bar.Spec.Surface.Treatment != "metal" || acid.Bar.Spec.Surface.BorderWidth != 2 || acid.Bar.Spec.Workspace.Mode != "glyphs" || !reflect.DeepEqual(acid.Bar.Spec.Workspace.Glyphs, []string{"⊹", "⊕", "◉", "⊗", "✦"}) {
+	if acid.Bar.Spec == nil || acid.Bar.Spec.Preset != "pulse" || acid.Bar.Spec.Topology != bar.TopologyRail || acid.Bar.Spec.Clock.Style != "native" || acid.Bar.Spec.Surface.Treatment != "metal" || acid.Bar.Spec.Surface.BorderWidth != 2 || acid.Bar.Spec.Workspace.Mode != "glyphs" || !reflect.DeepEqual(acid.Bar.Spec.Workspace.Glyphs, []string{"⊹", "⊕", "◉", "⊗", "✦"}) {
 		t.Fatalf("acid bar identity = %#v", acid.Bar)
 	}
 	if acid.Animations.Preset != "custom" || acid.Animations.WindowOpacity != 94 || acid.Animations.Border != "spin" || acid.Animations.BorderSpeed != 72 || acid.Animations.Glitch != "none" || acid.Animations.EffectiveScreenEffect().ID != "none" {
@@ -351,7 +352,7 @@ func TestPortableManifestExportsAndImportsResolvedRecipe(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 5 || orientalManifest.Recipe.Bar.Spec.Preset != "float" || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
+	if orientalManifest.ID != PresetOriental || orientalManifest.Name != "Oriental" || orientalManifest.Version != 6 || orientalManifest.Recipe.Bar.Spec.Preset != "zen" || orientalManifest.Recipe.Bar.Spec.Workspace.Mode != "kanji" {
 		t.Fatalf("oriental manifest = %#v", orientalManifest)
 	}
 }

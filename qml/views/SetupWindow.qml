@@ -38,6 +38,11 @@ PanelWindow {
 
     visible: active
     color: "transparent"
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.active
+        onActivated: root.hideRequested()
+    }
     WlrLayershell.namespace: "omagen-setup"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None

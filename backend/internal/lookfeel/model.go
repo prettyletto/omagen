@@ -24,6 +24,7 @@ const (
 	PresetCyberpunk = "cyberpunk-glitch"
 	PresetSpectral  = "spectral-shift"
 	PresetPhosphor  = "phosphor-terminal"
+	PresetRetro     = "retro"
 	PresetMonolith  = "monolith"
 	PresetOrbit     = "elastic-orbit"
 	PresetNature    = "nature"
@@ -91,12 +92,13 @@ func Catalog() []CatalogEntry {
 		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 7},
 		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, a segmented ribbon, lettered workspaces, an LCD instrument face, and cinematic refraction", Revision: 2},
 		{ID: PresetPhosphor, Name: "Phosphor Terminal", Description: "Compact CRT instrumentation, a minimal bar, terminal workspaces, and finite synchronization", Revision: 3},
+		{ID: PresetRetro, Name: "Retro", Description: "90s anime warmth, an LCD VCR-style bar, soft analog motion, and finite VHS tracking", Revision: 1},
 		{ID: PresetMonolith, Name: "Monolith", Description: "Architectural geometry, separated islands, an angular gothic clock, minimal motion, and a quiet workspace rail", Revision: 4},
 		{ID: PresetOrbit, Name: "Elastic Orbit", Description: "Rounded orbital surfaces, a dedicated orbital bar, an LCD clock, and spring motion", Revision: 2},
 		{ID: PresetNature, Name: "Nature", Description: "Organic spacing, translucent islands, classical clockmaker detail, growing workspaces, and gentle spring motion", Revision: 4},
-		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a compact floating bar, a quiet classical clock, Japanese workspaces, and ink-brush motion", Revision: 5},
-		{ID: PresetGothic, Name: "Gothic Cathedral", Description: "Ceremonial dark surfaces, stained-glass depth, a long cloister bar, and deliberate cinematic motion", Revision: 1},
-		{ID: PresetAcid, Name: "Acid Pulse", Description: "Reactive spinning borders, chemical workspace glyphs, a segmented dark bar, and sharp fluid motion", Revision: 1},
+		{ID: PresetOriental, Name: "Oriental", Description: "Kanagawa-inspired night surfaces, a quiet Zen island bar, a classical clock, Japanese workspaces, and ink-brush motion", Revision: 6},
+		{ID: PresetGothic, Name: "Gothic Cathedral", Description: "Ceremonial dark surfaces, a pointed Cathedral bar, stained-glass depth, and deliberate cinematic motion", Revision: 2},
+		{ID: PresetAcid, Name: "Acid Pulse", Description: "Reactive spinning borders, a conductive Pulse rail, chemical workspace glyphs, and sharp fluid motion", Revision: 2},
 	}
 }
 
@@ -158,6 +160,12 @@ func Resolve(preset string) (Composition, error) {
 		composition.Shell = phosphorShell()
 		composition.Bar = phosphorBar()
 		composition.Animations = phosphorMotion()
+	case PresetRetro:
+		composition.PresetRevision = 1
+		composition.Window = retroWindow()
+		composition.Shell = retroShell()
+		composition.Bar = retroBar()
+		composition.Animations = retroMotion()
 	case PresetMonolith:
 		composition.PresetRevision = 4
 		composition.Window = monolithWindow()
@@ -177,19 +185,19 @@ func Resolve(preset string) (Composition, error) {
 		composition.Bar = natureBar()
 		composition.Animations = natureMotion()
 	case PresetOriental:
-		composition.PresetRevision = 5
+		composition.PresetRevision = 6
 		composition.Window = orientalWindow()
 		composition.Shell = orientalShell()
 		composition.Bar = orientalBar()
 		composition.Animations = orientalMotion()
 	case PresetGothic:
-		composition.PresetRevision = 1
+		composition.PresetRevision = 2
 		composition.Window = gothicWindow()
 		composition.Shell = gothicShell()
 		composition.Bar = gothicBar()
 		composition.Animations = gothicMotion()
 	case PresetAcid:
-		composition.PresetRevision = 1
+		composition.PresetRevision = 2
 		composition.Window = acidWindow()
 		composition.Shell = acidShell()
 		composition.Bar = acidBar()
@@ -317,6 +325,15 @@ func phosphorWindow() session.DesktopStyle {
 	return style
 }
 
+func retroWindow() session.DesktopStyle {
+	style := session.DefaultDesktopStyle()
+	style.BorderStyle = "split_bottom"
+	style.BorderSizeMode, style.BorderSize = "fixed", 2
+	style.Shape, style.Spacing, style.Depth = "soft", "compact", "shadow"
+	style.Inactive = "shadow_only"
+	return style
+}
+
 func monolithWindow() session.DesktopStyle {
 	style := session.DefaultDesktopStyle()
 	style.BorderStyle = "split_bottom"
@@ -393,6 +410,13 @@ func spectralShell() session.ShellStyle {
 func phosphorShell() session.ShellStyle {
 	style := session.DefaultShellStyle()
 	style.Surface, style.Detail, style.Notifications = "contrast", "framed", "accent"
+	return style
+}
+
+func retroShell() session.ShellStyle {
+	style := session.DefaultShellStyle()
+	style.Surface, style.Detail = "contrast", "framed"
+	style.Tooltip, style.Notifications = "accent", "accent"
 	return style
 }
 
@@ -590,6 +614,18 @@ func phosphorBar() session.BarStyle {
 	return style
 }
 
+func retroBar() session.BarStyle {
+	style := replacementBar("minimal", "glyphs", []string{"A1", "A2", "B1", "B2", "TV"})
+	spec := style.Spec
+	spec.Clock.Style = "lcd"
+	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity = "metal", "dark", .96
+	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "accent", .34, 1, "raised"
+	spec.Geometry.Density, spec.Geometry.Radius = "compact", 6
+	spec.Motion = bar.Motion{Preset: "subtle", DurationMs: 150, Easing: "out_quart"}
+	style.Density = "compact"
+	return style
+}
+
 func monolithBar() session.BarStyle {
 	style := replacementBar("islands", "glyphs", []string{"W1", "W2", "W3", "W4", "W5"})
 	style.Spec.Clock.Style = "gothic"
@@ -623,10 +659,7 @@ func natureBar() session.BarStyle {
 }
 
 func orientalBar() session.BarStyle {
-	// Keep Oriental's Japanese workspace identity without the louder segmented
-	// ribbon treatment. The compact floating composition lets the surface
-	// hierarchy and classical clock carry the theme's quieter character.
-	style := replacementBar("float", "kanji", nil)
+	style := replacementBar("zen", "kanji", nil)
 	spec := style.Spec
 	spec.Clock.Style = "classical"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "glass", "background", .86, 6
@@ -638,12 +671,13 @@ func orientalBar() session.BarStyle {
 }
 
 func gothicBar() session.BarStyle {
-	style := replacementBar("float-expanded", "glyphs", []string{"✠", "◆", "◈", "◇", "✦"})
+	style := replacementBar("cathedral", "glyphs", []string{"✠", "◆", "◈", "◇", "✦"})
 	spec := style.Spec
 	spec.Clock.Style = "gothic"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "metal", "dark", .96, 0
 	spec.Surface.BorderRole, spec.Surface.BorderOpacity, spec.Surface.BorderWidth, spec.Surface.Shadow = "foreground", .32, 1, "raised"
-	spec.Geometry.Density, spec.Geometry.EdgeOffset, spec.Geometry.OuterMargin, spec.Geometry.Radius = "comfortable", 10, 10, 18
+	spec.Geometry.Density, spec.Geometry.EdgeOffset, spec.Geometry.OuterMargin, spec.Geometry.Radius = "comfortable", 10, 10, 8
+	spec.Behavior.HoverExpand = true
 	spec.Motion = bar.Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
 	style.Density = "comfortable"
 	if style.Profile != nil {
@@ -653,7 +687,7 @@ func gothicBar() session.BarStyle {
 }
 
 func acidBar() session.BarStyle {
-	style := replacementBar("ribbon", "glyphs", []string{"⊹", "⊕", "◉", "⊗", "✦"})
+	style := replacementBar("pulse", "glyphs", []string{"⊹", "⊕", "◉", "⊗", "✦"})
 	spec := style.Spec
 	spec.Clock.Style = "native"
 	spec.Surface.Treatment, spec.Surface.Role, spec.Surface.Opacity, spec.Surface.Blur = "metal", "dark", .96, 0
@@ -682,6 +716,21 @@ func phosphorMotion() session.AnimationsStyle {
 	style.ScreenEffect = &session.ScreenEffect{
 		ID: "phosphor-scan", Strength: "medium", DurationMs: 850,
 		Triggers: []string{"window-open", "window-close", "workspace", "panel", "notification", "urgent"}, Coalesce: true,
+	}
+	return style
+}
+
+func retroMotion() session.AnimationsStyle {
+	style := session.MotionPreset("cinematic")
+	style.Preset = "custom"
+	style.Window, style.WindowOpen, style.WindowClose = "cinematic", "slide", "fade"
+	style.WindowMove, style.WindowAmount, style.WindowOpacity, style.WindowSpeed = "smooth", 88, 96, 4
+	style.Workspace, style.WorkspaceAxis, style.WorkspaceTravel = "slidefade", "horizontal", 16
+	style.Special, style.Focus, style.Layers = "fade", "smooth", "fade"
+	style.Curve, style.Border, style.Glitch = "glass", "static", "none"
+	style.ScreenEffect = &session.ScreenEffect{
+		ID: "retro-vhs", Strength: "medium", DurationMs: 1100,
+		Triggers: []string{"window-open", "window-close", "workspace", "panel"}, Coalesce: true,
 	}
 	return style
 }

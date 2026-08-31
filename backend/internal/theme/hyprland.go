@@ -21,6 +21,9 @@ var spectralShiftShader string
 //go:embed phosphor_scan.frag
 var phosphorScanShader string
 
+//go:embed retro_vhs.frag
+var retroVHSShader string
+
 // Keep the signal long enough to be visible while leaving the shader fully
 // disabled between compositor events.
 const cyberpunkGlitchDurationMs = 1250
@@ -29,7 +32,7 @@ const cyberpunkGlitchDurationMs = 1250
 // theme is regenerated without the Cyberpunk signal. This also cleans up the
 // same filename emitted by the earlier experimental implementation.
 func removeScreenEffectShaders(themeDir string) error {
-	for _, name := range []string{"omagen-cyberpunk-glitch.frag", "omagen-spectral-shift.frag", "omagen-phosphor-scan.frag"} {
+	for _, name := range []string{"omagen-cyberpunk-glitch.frag", "omagen-spectral-shift.frag", "omagen-phosphor-scan.frag", "omagen-retro-vhs.frag"} {
 		err := fsutil.RemoveFileAndSync(filepath.Join(themeDir, name))
 		if err != nil && !os.IsNotExist(err) {
 			return err
@@ -109,6 +112,26 @@ func renderPhosphorScanShader(effect session.ScreenEffect) string {
 	).Replace(phosphorScanShader)
 }
 
+func renderRetroVHSShader(effect session.ScreenEffect) string {
+	chroma, tracking, scanline, noise, bleedDistance, bleedMix, vignette := "0.0030", "0.0022", "0.085", "0.035", "0.0030", "0.34", "0.12"
+	switch effect.Strength {
+	case "low":
+		chroma, tracking, scanline, noise, bleedDistance, bleedMix, vignette = "0.0015", "0.0010", "0.050", "0.020", "0.0018", "0.20", "0.07"
+	case "strong":
+		chroma, tracking, scanline, noise, bleedDistance, bleedMix, vignette = "0.0052", "0.0040", "0.135", "0.060", "0.0048", "0.48", "0.18"
+	}
+	return strings.NewReplacer(
+		"__OMAGEN_DURATION_SECONDS__", fmt.Sprintf("%.3f", float64(effect.DurationMs)/1000),
+		"__OMAGEN_RETRO_CHROMA__", chroma,
+		"__OMAGEN_RETRO_TRACKING__", tracking,
+		"__OMAGEN_RETRO_SCANLINE__", scanline,
+		"__OMAGEN_RETRO_NOISE__", noise,
+		"__OMAGEN_RETRO_BLEED_DISTANCE__", bleedDistance,
+		"__OMAGEN_RETRO_BLEED_MIX__", bleedMix,
+		"__OMAGEN_RETRO_VIGNETTE__", vignette,
+	).Replace(retroVHSShader)
+}
+
 func writeScreenEffectShader(themeDir string, effect session.ScreenEffect) (string, error) {
 	effect = effect.Normalize()
 	var name, source string
@@ -119,6 +142,8 @@ func writeScreenEffectShader(themeDir string, effect session.ScreenEffect) (stri
 		name, source = "omagen-spectral-shift.frag", renderSpectralShiftShader(effect)
 	case "phosphor-scan":
 		name, source = "omagen-phosphor-scan.frag", renderPhosphorScanShader(effect)
+	case "retro-vhs":
+		name, source = "omagen-retro-vhs.frag", renderRetroVHSShader(effect)
 	default:
 		return "", nil
 	}

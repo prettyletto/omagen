@@ -98,6 +98,8 @@ func (e ScreenEffect) Normalize() ScreenEffect {
 			e.DurationMs = 500
 		case "phosphor-scan":
 			e.DurationMs = 850
+		case "retro-vhs":
+			e.DurationMs = 1100
 		}
 	}
 	if e.ID != "none" && len(e.Triggers) == 0 {
@@ -108,7 +110,7 @@ func (e ScreenEffect) Normalize() ScreenEffect {
 
 func (e ScreenEffect) Valid() bool {
 	e = e.Normalize()
-	if !validChoice(e.ID, "none", "rgb-tear", "spectral-shift", "phosphor-scan") || !validChoice(e.Strength, "low", "medium", "strong") || e.DurationMs < 0 || e.DurationMs > 5000 {
+	if !validChoice(e.ID, "none", "rgb-tear", "spectral-shift", "phosphor-scan", "retro-vhs") || !validChoice(e.Strength, "low", "medium", "strong") || e.DurationMs < 0 || e.DurationMs > 5000 {
 		return false
 	}
 	for _, trigger := range e.Triggers {

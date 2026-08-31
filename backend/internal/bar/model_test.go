@@ -235,7 +235,7 @@ func TestJapaneseKanjiWorkspacePresentationUsesOmagenLabels(t *testing.T) {
 }
 
 func TestPresetNamesAreStable(t *testing.T) {
-	want := []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon"}
+	want := []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon", "cathedral", "pulse", "zen"}
 	got := Presets()
 	if len(got) != len(want) {
 		t.Fatalf("preset count = %d, want %d: %v", len(got), len(want), got)
@@ -317,6 +317,37 @@ func TestRibbonPresetUsesSectionComposition(t *testing.T) {
 	}
 	if compiled.Engine != EngineOmagen || compiled.Native {
 		t.Fatalf("ribbon compilation = %#v", compiled)
+	}
+}
+
+func TestSpecialtyPresetsUseDistinctCompositions(t *testing.T) {
+	tests := []struct {
+		name     string
+		topology Topology
+		density  string
+		motion   string
+	}{
+		{"cathedral", TopologySections, "comfortable", "none"},
+		{"pulse", TopologyRail, "compact", "expressive"},
+		{"zen", TopologyIslands, "compact", "smooth"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			spec, err := Preset(test.name)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if spec.Topology != test.topology || spec.Engine != EngineOmagen || spec.Geometry.Density != test.density || spec.Motion.Preset != test.motion {
+				t.Fatalf("%s preset = %#v", test.name, spec)
+			}
+			compiled, err := Compile(spec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if compiled.Native || compiled.Engine != EngineOmagen {
+				t.Fatalf("%s compilation = %#v", test.name, compiled)
+			}
+		})
 	}
 }
 

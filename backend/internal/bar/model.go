@@ -274,7 +274,7 @@ func (s BarSpec) Validate() error {
 	if !oneOf(string(s.Engine), string(EngineAuto), string(EngineNative), string(EngineOmagen)) {
 		return fmt.Errorf("invalid bar engine %q", s.Engine)
 	}
-	if !oneOf(s.Preset, "native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon", "custom") {
+	if !oneOf(s.Preset, "native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon", "cathedral", "pulse", "zen", "custom") {
 		return fmt.Errorf("invalid bar preset %q", s.Preset)
 	}
 	if !oneOf(string(s.Topology), "continuous", "floating", "sections", "islands", "dock", "split", "minimal", "notch", "rail") {
@@ -416,7 +416,7 @@ func Compile(spec BarSpec) (CompileResult, error) {
 }
 
 func Presets() []string {
-	return []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon"}
+	return []string{"native", "float", "float-expanded", "islands", "dock", "minimal", "orbit", "ribbon", "cathedral", "pulse", "zen"}
 }
 
 func Preset(name string) (BarSpec, error) {
@@ -458,6 +458,21 @@ func Preset(name string) (BarSpec, error) {
 		s.Surface = Surface{Treatment: "preset", Role: "dark", Opacity: 1, BorderRole: "accent", BorderOpacity: .36, BorderWidth: 1, Shadow: "flat"}
 		s.Geometry.SectionGap, s.Geometry.Radius = 2, 10
 		s.Motion = Motion{Preset: "subtle", DurationMs: 180, Easing: "out_cubic"}
+	case "cathedral":
+		s.Topology, s.Engine = TopologySections, EngineOmagen
+		s.Surface = Surface{Treatment: "metal", Role: "dark", Opacity: .96, BorderRole: "foreground", BorderOpacity: .36, BorderWidth: 1, Shadow: "raised"}
+		s.Geometry.Density, s.Geometry.EdgeOffset, s.Geometry.OuterMargin, s.Geometry.SectionGap, s.Geometry.Radius = "comfortable", 10, 10, 8, 8
+		s.Motion = Motion{Preset: "none", DurationMs: 0, Easing: "linear"}
+	case "pulse":
+		s.Topology, s.Engine = TopologyRail, EngineOmagen
+		s.Surface = Surface{Treatment: "metal", Role: "dark", Opacity: .96, BorderRole: "accent", BorderOpacity: .65, BorderWidth: 2, Shadow: "raised"}
+		s.Geometry.Density, s.Geometry.SectionGap, s.Geometry.Radius = "compact", 4, 6
+		s.Motion = Motion{Preset: "expressive", DurationMs: 160, Easing: "out_cubic"}
+	case "zen":
+		s.Topology, s.Engine = TopologyIslands, EngineOmagen
+		s.Surface = Surface{Treatment: "glass", Role: "background", Opacity: .86, Blur: 6, BorderRole: "accent", BorderOpacity: .18, BorderWidth: 1, Shadow: "flat"}
+		s.Geometry.Density, s.Geometry.SectionGap, s.Geometry.Radius = "compact", 12, 12
+		s.Motion = Motion{Preset: "smooth", DurationMs: 220, Easing: "out_cubic"}
 	default:
 		return BarSpec{}, fmt.Errorf("unknown bar preset %q", name)
 	}
