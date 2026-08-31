@@ -27,14 +27,15 @@ type Service struct {
 }
 
 type Result struct {
-	SessionID    string            `json:"session_id"`
-	Workflow     string            `json:"workflow"`
-	Theme        omarchy.ThemeInfo `json:"theme"`
-	GenerationID string            `json:"generation_id"`
-	Variant      string            `json:"variant"`
-	Path         string            `json:"path"`
-	Palette      theme.Palette     `json:"palette"`
-	Recipe       *theme.Recipe     `json:"recipe,omitempty"`
+	SessionID    string               `json:"session_id"`
+	Workflow     string               `json:"workflow"`
+	Theme        omarchy.ThemeInfo    `json:"theme"`
+	GenerationID string               `json:"generation_id"`
+	Variant      string               `json:"variant"`
+	Path         string               `json:"path"`
+	Palette      theme.Palette        `json:"palette"`
+	Recipe       *theme.Recipe        `json:"recipe,omitempty"`
+	DesktopStyle session.DesktopStyle `json:"desktop_style"`
 }
 
 func (s *Service) Resolve(name string) (omarchy.ThemeInfo, error) {
@@ -129,6 +130,15 @@ func (s *Service) Open(name string) (Result, error) {
 		_ = s.session.Cancel(begin.SessionID)
 		return Result{}, fmt.Errorf("read theme recipe: %w", recipeErr)
 	}
+	// Older Omagen themes predate window_opacity in their recipe sidecar. The
+	// rendered Hyprland file is still the compositor authority, so recover a
+	// matching active/inactive value before normalizing the editable document.
+	// A missing or asymmetric value intentionally remains unclaimed.
+	windowOpacity, opacityErr := theme.ReadSharedWindowOpacity(candidate)
+	if opacityErr != nil && !os.IsNotExist(opacityErr) {
+		_ = s.session.Cancel(begin.SessionID)
+		return Result{}, fmt.Errorf("read theme window opacity: %w", opacityErr)
+	}
 	var recipePtr *theme.Recipe
 	fingerprint, fingerprintErr := fingerprintTree(candidate)
 	if fingerprintErr != nil {
@@ -137,15 +147,24 @@ func (s *Service) Open(name string) (Result, error) {
 	}
 	edit := session.ThemeEdit{SourceID: selected.ID, SourceName: selected.Name, SourcePath: selected.Path, SourceKind: selected.Kind, SourceFingerprint: fingerprint}
 	if recipeErr == nil {
+		if recipe.Desktop.WindowOpacity == nil && windowOpacity != nil {
+			recipe.Desktop.WindowOpacity = windowOpacity
+		}
 		recipePtr = &recipe
 		edit.ManagedScopes = append([]string(nil), recipe.ManagedScopes...)
 		edit.Shell, edit.Desktop, edit.Bar, edit.Animations, edit.LookFeel, edit.Terminal = recipe.Shell, recipe.Desktop, recipe.Bar, recipe.Animations, recipe.LookFeel, recipe.Terminal
+	} else if windowOpacity != nil {
+		// Themes without a recipe can still expose one unambiguous shared
+		// compositor opacity. Keep the rest of their native configuration
+		// untouched until the user explicitly edits an owned scope.
+		edit.Desktop = session.DefaultDesktopStyle()
+		edit.Desktop.WindowOpacity = windowOpacity
 	}
 	if err := s.session.MarkThemeEdit(begin.SessionID, edit, generationID); err != nil {
 		_ = s.session.Cancel(begin.SessionID)
 		return Result{}, fmt.Errorf("persist edit source: %w", err)
 	}
-	return Result{SessionID: begin.SessionID, Workflow: "theme-edit", Theme: *selected, GenerationID: generationID, Variant: "source", Path: candidate, Palette: palette, Recipe: recipePtr}, nil
+	return Result{SessionID: begin.SessionID, Workflow: "theme-edit", Theme: *selected, GenerationID: generationID, Variant: "source", Path: candidate, Palette: palette, Recipe: recipePtr, DesktopStyle: session.NormalizeDesktopStyle(edit.Desktop)}, nil
 }
 
 func fingerprintTree(root string) (string, error) {

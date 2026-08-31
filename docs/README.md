@@ -17,6 +17,9 @@ routes in [docs/agents](agents/README.md).
 - [Recovery and safety](recovery.md) — temporary sessions, Cancel, Apply,
   Quit, and interrupted operations.
 - [Development](development.md) — local plugin development and validation.
+- [Repository health and architecture notes](development/architecture-health.md)
+  — behavior-preserving cleanup candidates, architecture opportunities, test
+  gaps, and developer follow-up priorities.
 - [Agent navigation](agents/README.md) — context map, invariants, recipes, and
   handoffs for bounded work.
 - [Plans](plans/active/) — active implementation roadmaps; not canonical

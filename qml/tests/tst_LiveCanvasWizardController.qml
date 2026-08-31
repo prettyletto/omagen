@@ -33,6 +33,7 @@ TestCase {
         workflowBackRequested = false
         restoreAndCloseRequested = false
         controller.selectedVariant = "source"
+        controller.selectedLookFeelPreset = "omarchy-native"
         controller.restoreFromFirstStep = false
     }
 
@@ -68,6 +69,18 @@ TestCase {
         verify(controller.canGoNext)
 
         controller.selectedVariant = "source"
+        verify(controller.canGoNext)
+    }
+
+    function test_existingLookFeelPresetCountsAsASelection() {
+        controller.step = 1
+        controller.lookFeelDecided = false
+        controller.selectedLookFeelPreset = "glass-blur"
+
+        verify(controller.canGoNext)
+        compare(controller.goNext(), true)
+        compare(controller.step, 2)
+        compare(controller.advancedChoice, "skip")
         verify(controller.canGoNext)
     }
 

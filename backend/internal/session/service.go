@@ -215,7 +215,7 @@ func (s *Service) MarkThemeEdit(sessionID string, edit ThemeEdit, generationID s
 		// selected source has no Omagen recipe yet. Scope ownership remains
 		// empty until the user explicitly changes an engine.
 		record.ExtraConfigs = true
-		if edit.Shell.Preset != "" || edit.Shell.Surface != "" {
+		if edit.Shell.Preset != "" || edit.Shell.Surface != "" || edit.Desktop.WindowOpacity != nil {
 			record.ShellStyle = NormalizeShellStyle(edit.Shell)
 			record.DesktopStyle = NormalizeDesktopStyle(edit.Desktop)
 			record.BarStyle = NormalizeBarStyle(edit.Bar)

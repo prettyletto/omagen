@@ -6,3 +6,7 @@ The current architecture is canonical under [`docs/architecture/`](../architectu
 Start with [`docs/development.md`](../development.md) for the existing
 contributor and packaging workflow. Use the domain recipe in
 [`docs/agents/`](../agents/README.md) to keep a change scoped.
+
+For the read-only repository health baseline, confirmed cleanup candidates,
+architecture opportunities, lifecycle risks, and coverage priorities, see
+[`architecture-health.md`](architecture-health.md).

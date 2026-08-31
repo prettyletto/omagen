@@ -254,14 +254,7 @@ Item {
     onThemeForegroundChanged: root.scheduleTransparentForegroundRefresh()
     onThemeContrastForegroundChanged: root.scheduleTransparentForegroundRefresh()
     onBarHiddenChanged: root.syncAutoHide()
-    onBarHoveredChanged: {
-        root.syncAutoHide()
-        // Indicator clicks can move an item from the inactive block into the
-        // active block while the center row is being rebuilt. Keep the
-        // center reveal held for the whole bar-hover lifetime so that active
-        // items such as coffee remain in the click path during that move.
-        root.centerSectionRevealHeld = root.barHovered
-    }
+    onBarHoveredChanged: root.syncAutoHide()
     onActivePopoutChanged: root.syncAutoHide()
     onVisibilityChanged: root.syncAutoHide()
     Component.onCompleted: {
@@ -302,7 +295,7 @@ Item {
         id: centerSectionRevealTimer
         interval: 120
         onTriggered: {
-            if (!root.centerSectionHovered && !root.barHovered)
+            if (!root.centerSectionHovered)
                 root.centerSectionRevealHeld = false
         }
     }
