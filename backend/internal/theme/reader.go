@@ -3,6 +3,7 @@ package theme
 import (
 	"bufio"
 	"fmt"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -92,4 +93,48 @@ func ReadColors(themeDir string) (Palette, error) {
 		return Palette{}, fmt.Errorf("validate colors.toml: %w", err)
 	}
 	return palette, nil
+}
+
+// ReadSharedWindowOpacity recovers Omagen's shared steady-state window
+// opacity from an existing Hyprland theme. It deliberately accepts a value
+// only when active and inactive opacity are both explicitly present and
+// equal: the Studio control owns one shared value and must not flatten a
+// user-authored asymmetric compositor configuration.
+//
+// This is a migration reader for themes written before the value was added to
+// omagen.theme-recipe.json. New themes use their recipe sidecar directly.
+func ReadSharedWindowOpacity(themeDir string) (*int, error) {
+	data, err := fsutil.ReadFileLimited(filepath.Join(themeDir, "hyprland.lua"), fsutil.MaxStateFileBytes)
+	if err != nil {
+		return nil, err
+	}
+	active, activeSet := luaOpacitySetting(string(data), "active_opacity")
+	inactive, inactiveSet := luaOpacitySetting(string(data), "inactive_opacity")
+	if !activeSet || !inactiveSet || math.Abs(active-inactive) > 0.000001 {
+		return nil, nil
+	}
+	percent := int(math.Round(active * 100))
+	if percent < 0 || percent > 100 {
+		return nil, nil
+	}
+	return &percent, nil
+}
+
+func luaOpacitySetting(source, key string) (float64, bool) {
+	var value float64
+	found := false
+	scanner := bufio.NewScanner(strings.NewReader(source))
+	for scanner.Scan() {
+		line := strings.TrimSpace(strings.SplitN(scanner.Text(), "--", 2)[0])
+		name, raw, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(name) != key {
+			continue
+		}
+		parsed, err := strconv.ParseFloat(strings.TrimSpace(strings.TrimSuffix(raw, ",")), 64)
+		if err != nil || parsed < 0 || parsed > 1 {
+			continue
+		}
+		value, found = parsed, true
+	}
+	return value, found
 }

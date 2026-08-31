@@ -46,6 +46,18 @@ QtObject {
                 edit.managed_scopes=scopes
                 themeEdit=edit
             }
+        } else if (result.desktop_style || result.desktopStyle) {
+            var desktop = result.desktop_style || result.desktopStyle
+            desktopStyle = {
+                borderStyle: desktop.border_style || desktop.borderStyle || "solid",
+                borderSize: Number(desktop.border_size !== undefined ? desktop.border_size : desktop.borderSize !== undefined ? desktop.borderSize : -1),
+                borderSizeMode: desktop.border_size_mode || desktop.borderSizeMode || "default",
+                borderSpeed: Number(desktop.border_speed || desktop.borderSpeed || 36),
+                windowOpacity: Number(desktop.window_opacity !== undefined ? desktop.window_opacity : desktop.windowOpacity !== undefined ? desktop.windowOpacity : 100),
+                shape: desktop.shape || "native", spacing: desktop.spacing || "native", depth: desktop.depth || "native",
+                activeStyle: desktop.active_style || desktop.activeStyle || "native",
+                inactiveStyle: desktop.inactive_style || desktop.inactiveStyle || "native"
+            }
         }
     }
     function setGeneration(id, variants) { var preferred=selectedVariant; var next={}, paths={}; for (var i=0;i<variants.length;++i) { var e=variants[i]; if (e && e.variant && e.palette) { next[e.variant]=e.palette; paths[e.variant]=e.path||"" } } generationId=id; palettes=next; variantPaths=paths; root.ensureSelectedVariant(preferred); previewVariant="" }

@@ -17,6 +17,7 @@ bin/omagen                Bundled runtime backend binary
 demo/                     Deterministic Demo workspace assets
 assets/                   README and documentation media
 docs/                     User and contributor guides
+docs/development/         Focused developer runbooks and health notes
 scripts/v1-check.sh       Full validation gate
 dev-install.sh            Local development installer
 uninstall.sh              Complete local/plugin-state uninstaller
@@ -185,6 +186,21 @@ Focused checks can be run from the backend module, for example:
 go test ./internal/demo
 ~~~
 
+The repository also contains QtTest files under `qml/tests/`. They are separate
+from `qmllint`: `qmllint` checks syntax and static QML issues, while
+`qmltestrunner` executes behavioral tests. When a supported Qt test environment
+is available, run the suite from the repository root with the runner's input
+directory option, for example:
+
+~~~sh
+QT_QPA_PLATFORM=offscreen qmltestrunner -input qml/tests
+~~~
+
+The exact platform setup is host-dependent. The current restricted development
+environment has `qmltestrunner` installed but cannot execute it because its GTK
+display setup is unavailable. Do not claim QML behavior coverage from `qmllint`
+or the Go gate alone.
+
 ## QML checks
 
 When <code>qmllint</code> is available, run it over the plugin QML files. The
@@ -223,6 +239,13 @@ Use the repository-local host-side helper for visual and interaction checks
 against the running Omarchy/Hyprland session. It covers shell summon/hide,
 JSON client and layer lookup, focused-monitor screenshots, keyboard/text input,
 and safe waits; see [Real desktop UI testing](development/ui-testing.md).
+
+## Repository health notes
+
+For the behavior-preserving architecture audit, confirmed dead-code candidates,
+size-warning guidance, lifecycle risks, coverage signals, and prioritized
+follow-up work, see
+[Repository health and architecture notes](development/architecture-health.md).
 
 
 ## Development boundaries

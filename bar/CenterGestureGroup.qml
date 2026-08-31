@@ -71,17 +71,11 @@ Item {
                 centerAfterGroup.implicitHeight)
             : centerRow.implicitHeight)
 
-    // Omarchy's native center host holds indicator reveals while the pointer
-    // crosses the expanding center row. Attach the handler to the containing
-    // host rather than this content-sized group: inactive indicators such as
-    // screen recording and Stay Awake can widen/reposition the group without
-    // making the pointer leave its hover target.
+    // Scope indicator reveals to the center group itself. The group grows with
+    // the revealed entries, so the handler remains over the expanding center
+    // content without turning the whole left/center/right bar row into a
+    // center hover target.
     HoverHandler {
-        // The parent Item is the stable center host in every preset. This is
-        // the same ownership boundary as native CenterModules' anchors.fill
-        // container, while the visual rows below retain their own measured
-        // geometry.
-        parent: centerGestureGroup.parent || centerGestureGroup
         onHoveredChanged: centerGestureGroup.bar.setCenterSectionHovered(hovered)
     }
 

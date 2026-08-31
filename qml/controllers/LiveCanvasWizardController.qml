@@ -15,6 +15,10 @@ Item {
     // The boolean above describes availability; this value is the selection
     // that the composition root carries into the remaining wizard steps.
     property string selectedVariant: ""
+    // A resumed or theme-edit session can already have a non-native preset
+    // selected before the user opens the wizard. Keep the navigation guard in
+    // sync with the card that the view renders as selected.
+    property string selectedLookFeelPreset: "omarchy-native"
     property bool lookFeelDecided: false
     // Theme-edit sessions do not have the image-workflow history that an
     // image-generated session uses. Their first page therefore restores and
@@ -59,7 +63,7 @@ Item {
         if (root.step === 0)
             return root.paletteSelected
         if (root.step === 1)
-            return root.lookFeelDecided
+            return root.lookFeelDecided || root.selectedLookFeelPreset !== "omarchy-native"
         if (root.step === 2)
             return root.advancedChoice === "skip" || root.advancedChoice === "customize"
         return root.step === 3
@@ -213,6 +217,11 @@ Item {
     function goNext() {
         if (!root.canGoNext)
             return false
+        // The advanced page is optional. Once Look & Feel has been chosen,
+        // retaining that complete recipe is the safe default; the user can
+        // still select Customize explicitly on the next page.
+        if (root.step === 1 && root.advancedChoice === "undecided")
+            root.advancedChoice = "skip"
         root.goNextRequested()
         root.step += 1
         return true

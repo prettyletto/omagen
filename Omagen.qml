@@ -223,21 +223,20 @@ Item {
         root.lookFeel = next
     }
     function applyLookFeelComposition(composition) {
-        var previousCustomized = root.lookFeel.customized || ({})
         var resolved = root.normalizedLookFeelRecipe(composition)
-        var currentWindow = root.desktopStyle
-        var currentShell = root.shellStyle
-        var currentBar = root.barStyle
-        var currentAnimations = root.animationsStyle
-        var currentTerminal = root.terminalTranslucency
         root.lookFeelRecipe = resolved
         root.setWindowOpacityBaseline(resolved.window)
         root.lookFeel = root.copyLookFeelDocument(composition)
-        root.desktopStyle = previousCustomized.window === true ? currentWindow : resolved.window
-        root.shellStyle = previousCustomized.shell === true ? currentShell : resolved.shell
-        root.barStyle = previousCustomized.bar === true ? currentBar : resolved.bar
-        root.animationsStyle = previousCustomized.animations === true ? currentAnimations : resolved.animations
-        root.terminalTranslucency = previousCustomized.terminal === true ? currentTerminal : resolved.terminal
+        // A preset is a complete composition. Do not carry a Window (or any
+        // other) override from the previously edited theme into the new
+        // recipe: doing so made Glass Blur display and stage the old 100%
+        // opacity instead of its own 72% starting value. Once selected, a
+        // user edit is still staged normally and Reset returns to this recipe.
+        root.desktopStyle = resolved.window
+        root.shellStyle = resolved.shell
+        root.barStyle = resolved.bar
+        root.animationsStyle = resolved.animations
+        root.terminalTranslucency = resolved.terminal
         root.refreshLookFeelCustomized()
     }
     function requestLookFeelPreset(preset) {
@@ -1020,6 +1019,7 @@ Item {
         // the first Next button stay disabled until the user clicked a card.
         paletteSelected: session.workspaceReady
         selectedVariant: session.selectedVariant
+        selectedLookFeelPreset: String(root.lookFeel.preset || "omarchy-native")
         restoreFromFirstStep: session.active && session.workflow === "theme-edit"
 
         onRestoreAndCloseRequested: root.restoreAndCloseSession()
