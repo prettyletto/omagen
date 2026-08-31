@@ -8,7 +8,10 @@ backend directly.
 The editor has focused implementation seams:
 
 - `qml/features/style-editor/WindowEditor.qml` owns the Window editing surface
-  and its local border-size interaction state.
+  and its local border-size interaction state. Its shared window opacity is a
+  0–100 percent steady-state value applied to active and inactive normal
+  windows; preset or reopened-theme documents provide the initial and Reset
+  value (72% for Glass Blur), while an editor adjustment is a staged override.
 - `qml/features/style-editor/WindowStyle.js` owns desktop-style normalization,
   border-size conversion, and Window option transformations.
 - `qml/features/style-editor/AnimationsEditor.qml` owns the Animations editing

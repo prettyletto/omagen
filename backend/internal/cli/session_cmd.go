@@ -126,6 +126,7 @@ func runSessionWithDependencies(args []string, service *session.Service, preview
 		var lookFeel session.LookFeelDocument
 		var terminalTranslucency session.TerminalTranslucency
 		lookFeelSeen := false
+		windowOpacitySeen := false
 		if len(args) >= 13 {
 			shellStyleEnd := 4
 			newShellStyle := len(args) >= 17
@@ -181,6 +182,20 @@ func runSessionWithDependencies(args []string, service *session.Service, preview
 						return fail(stderr, 2, "usage: --window-active-style requires a value")
 					}
 					desktopStyle.Active = args[index+1]
+					index++
+				case "--window-opacity":
+					if windowOpacitySeen {
+						return fail(stderr, 2, "usage: --window-opacity specified more than once")
+					}
+					if index+1 >= len(args) {
+						return fail(stderr, 2, "usage: --window-opacity requires a percentage from 0 through 100")
+					}
+					opacity, opacityErr := strconv.Atoi(args[index+1])
+					if opacityErr != nil || opacity < 0 || opacity > 100 {
+						return fail(stderr, 2, "usage: --window-opacity must be a percentage from 0 through 100")
+					}
+					desktopStyle.WindowOpacity = &opacity
+					windowOpacitySeen = true
 					index++
 				case "--shell-preset":
 					if index+1 >= len(args) {

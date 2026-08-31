@@ -44,6 +44,7 @@ Item {
         bar: compactHorizontalContent.bar
         id: compactCenterGroup
         entries: compactHorizontalContent.bar.layoutConfig.center
+        compactFlow: true
         width: implicitWidth
         height: implicitHeight
         x: compactLeftGroup.width + compactHorizontalContent.zoneGap

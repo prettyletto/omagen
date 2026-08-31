@@ -20,6 +20,12 @@ Item {
     // centered, while the before/after groups are clipped to zero without
     // changing their Repeater models.
     property bool compactAnchorOnly: false
+    // Compact horizontal float is a measured left-to-right flow rather than a
+    // full-width centered host. Keep the anchor after the preceding entries
+    // and measure only the painted before/anchor/after content; the centered
+    // host still uses side balancing to keep an asymmetric center row inside
+    // its own region.
+    property bool compactFlow: false
 
     readonly property bool hasAnchor: bar.entryIndex(centerGestureGroup.entries,
         bar.centerAnchor) >= 0
@@ -52,7 +58,8 @@ Item {
                 centerAfterColumn.implicitWidth)
             : centerColumn.implicitWidth)
         : (hasAnchor
-            ? beforeWidth + anchorWidth + afterWidth + horizontalSideBalance
+            ? beforeWidth + anchorWidth + afterWidth
+                + (compactFlow ? 0 : horizontalSideBalance)
             : centerRow.implicitWidth)
     implicitHeight: bar.vertical
         ? (hasAnchor
@@ -111,7 +118,14 @@ Item {
         region: "center"
         active: centerGestureGroup.hasAnchor
         visible: centerGestureGroup.hasAnchor
-        anchors.centerIn: parent
+        // In compact flow the preceding group owns the anchor's left edge.
+        // This removes the balancing tail without changing the anchor's
+        // position when the before-side is the wider side, which is the
+        // normal indicator layout.
+        x: !bar.vertical && centerGestureGroup.compactFlow
+            ? centerGestureGroup.beforeWidth
+            : Math.round((parent.width - width) / 2)
+        y: Math.round((parent.height - height) / 2)
     }
 
     WidgetGroup {

@@ -694,6 +694,96 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	}
 }
 
+func TestStudioThemeSetPreviewAllowsOwnedPreviewAlias(t *testing.T) {
+	home := t.TempDir()
+	omarchyPath := t.TempDir()
+	commandBin := t.TempDir()
+	runtimeDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OMARCHY_PATH", omarchyPath)
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+	t.Setenv("XDG_STATE_HOME", filepath.Join(home, ".local/state"))
+	t.Setenv("PATH", commandBin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("OMARCHY_THEME_HEADLESS", "1")
+
+	if err := os.MkdirAll(filepath.Join(omarchyPath, "shell"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(omarchyPath, "shell/shell.qml"), []byte("Item {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(omarchyPath, "themes"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(commandBin, "omarchy-theme-set-templates"), []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	previewName := "omagen-preview-edit-session-generation-1-source-colors-0123456789abcdef"
+	candidate := filepath.Join(home, ".local/state/omagen/sessions/edit-session/generations/generation-1/source")
+	if err := os.MkdirAll(filepath.Join(candidate, "backgrounds"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for path, contents := range map[string]string{
+		filepath.Join(candidate, "colors.toml"):        "[colors]\nprimary = '#ffffff'\n",
+		filepath.Join(candidate, "shell.toml"):         "[bar]\n",
+		filepath.Join(candidate, "backgrounds/bg.png"): "preview-asset\n",
+	} {
+		if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	userThemes := filepath.Join(home, ".config/omarchy/themes")
+	if err := os.MkdirAll(userThemes, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(candidate, filepath.Join(userThemes, previewName)); err != nil {
+		t.Fatal(err)
+	}
+	current := filepath.Join(home, ".local/state/omarchy/current")
+	if err := os.MkdirAll(filepath.Join(current, "theme"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("resolve test source path")
+	}
+	driver := filepath.Join(filepath.Dir(currentFile), "../../../bin/studio-theme-set")
+	output, err := exec.Command(driver, "preview", previewName, "--no-hooks", "--scope", "theme", "--wait", "none", "--run", "none").CombinedOutput()
+	if err != nil {
+		t.Fatalf("studio-theme-set rejected owned preview alias: %v: %s", err, output)
+	}
+	activeTheme, err := os.ReadFile(filepath.Join(current, "theme.name"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(activeTheme)); got != previewName {
+		t.Fatalf("active theme=%q, want %q", got, previewName)
+	}
+
+	if err := os.Remove(filepath.Join(userThemes, previewName)); err != nil {
+		t.Fatal(err)
+	}
+	external := filepath.Join(home, "outside-preview-target")
+	if err := os.MkdirAll(external, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, filepath.Join(userThemes, previewName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(current, "theme.name"), []byte("old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	output, err = exec.Command(driver, "preview", previewName, "--no-hooks", "--scope", "theme", "--wait", "none", "--run", "none").CombinedOutput()
+	if err == nil || !strings.Contains(string(output), "refusing symlinked theme directory") {
+		t.Fatalf("studio-theme-set accepted external preview alias: err=%v output=%s", err, output)
+	}
+}
+
 func TestStudioThemeSetPreviewUsesInstantBackgroundHandoff(t *testing.T) {
 	home := t.TempDir()
 	omarchyPath := t.TempDir()

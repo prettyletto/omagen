@@ -141,6 +141,22 @@ func TestParseGenerateArgsWithConfiguration(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgsCarriesWindowOpacityWithoutChangingDesktopStyleArity(t *testing.T) {
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--window-opacity", "0",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.DesktopStyle.WindowOpacity == nil || *request.Configuration.DesktopStyle.WindowOpacity != 0 {
+		t.Fatalf("window opacity was not preserved: %#v", request.Configuration)
+	}
+}
+
 func TestParseGenerateArgsWithLookFeelComposition(t *testing.T) {
 	request, err := parseGenerateArgs([]string{"session", "image", "--look-feel", "glass-blur"})
 	if err != nil {
@@ -215,6 +231,7 @@ func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 		{"session", "image", "--unknown"},
 		{"session", "image", "--shell-style", "flat", "native", "native"},
 		{"session", "image", "--desktop-style", "solid", "not-a-number", "native", "native", "native", "native"},
+		{"session", "image", "--window-opacity", "101"},
 	} {
 		if _, err := parseGenerateArgs(args); err == nil {
 			t.Fatalf("expected args %v to fail", args)
@@ -342,6 +359,39 @@ func TestSessionBeginAcceptsInactiveStyleArgumentShape(t *testing.T) {
 	}
 	if code := runSession(args, service, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
 		t.Fatalf("inactive-style argument shape was rejected before validation: code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestSessionBeginAcceptsWindowOpacityAfterBarStyle(t *testing.T) {
+	testenv.Isolate(t)
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := session.NewService(store, cliOmarchy{})
+	var out, stderr bytes.Buffer
+	args := []string{
+		"begin", "--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+		"--window-opacity", "0",
+	}
+	if code := runSession(args, service, nil, &out, &stderr); code != 0 {
+		t.Fatalf("window opacity argument was rejected: code=%d stderr=%q", code, stderr.String())
+	}
+	active, _, err := store.LoadActive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := store.Load(active.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.DesktopStyle.WindowOpacity == nil || *record.DesktopStyle.WindowOpacity != 0 {
+		t.Fatalf("window opacity was not stored: %#v", record.DesktopStyle)
+	}
+	if err := service.Cancel(active.SessionID); err != nil {
+		t.Fatal(err)
 	}
 }
 

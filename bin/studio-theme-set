@@ -592,6 +592,19 @@ reject_theme_symlinks() {
   local root="$1" link
   [[ -d "$root" ]] || return 0
   if [[ -L "$root" ]]; then
+    # Preview aliases are intentionally symlinks: the backend records the
+    # exact session-owned target and removes the alias during session cleanup.
+    # Keep the general symlink guard for installed themes, but allow only this
+    # narrow, preview-only alias shape and never allow links inside its tree.
+    if [[ "$MODE" == "preview" && "$root" == "$USER_THEMES_PATH/$THEME_NAME" && "$THEME_NAME" == omagen-preview-* ]]; then
+      local resolved state_root
+      resolved=$(readlink -f -- "$root" 2>/dev/null || true)
+      state_root=$(readlink -f -- "${XDG_STATE_HOME:-$HOME/.local/state}/omagen/sessions" 2>/dev/null || true)
+      if [[ -n "$resolved" && -n "$state_root" && -d "$resolved" && "$resolved" == "$state_root"/* ]]; then
+        link=$(find -P "$resolved" -mindepth 1 -type l -print -quit 2>/dev/null || true)
+        [[ -z "$link" ]] && return 0
+      fi
+    fi
     printf 'studio-theme-set: refusing symlinked theme directory: %s\n' "$root" >&2
     return 1
   fi

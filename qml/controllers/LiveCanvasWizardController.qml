@@ -11,7 +11,15 @@ Item {
     property bool sessionReady: false
     property bool operationBusy: false
     property bool paletteSelected: false
+    // The palette card and the Next action must share the same selected value.
+    // The boolean above describes availability; this value is the selection
+    // that the composition root carries into the remaining wizard steps.
+    property string selectedVariant: ""
     property bool lookFeelDecided: false
+    // Theme-edit sessions do not have the image-workflow history that an
+    // image-generated session uses. Their first page therefore restores and
+    // closes when Back is pressed.
+    property bool restoreFromFirstStep: false
     // Pre-session workflow selection is separate from live-page navigation.
     // It is intentionally ephemeral and does not mirror the durable backend
     // session until Omagen.qml confirms Continue.
@@ -41,7 +49,7 @@ Item {
     readonly property bool canGoBack: !root.operationBusy
         && (root.workflowStepActive
             ? root.sourceImageSelected
-            : root.step > 0 || (root.workflowHistoryAvailable
+            : root.step > 0 || root.restoreFromFirstStep || (root.workflowHistoryAvailable
                 && root.sourceImageSelected && root.workflowModeConfirmed))
     readonly property bool canGoNext: {
         if (root.workflowStepActive)
@@ -187,6 +195,10 @@ Item {
             return true
         }
         if (root.step === 0) {
+            if (root.restoreFromFirstStep) {
+                root.restoreAndCloseRequested()
+                return true
+            }
             // Back from the first generated page exits the pre-session
             // workflow. The root routes this through the normal backend
             // cancel/restore transaction and returns to the initial chooser.

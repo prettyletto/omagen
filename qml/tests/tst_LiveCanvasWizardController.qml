@@ -14,11 +14,13 @@ TestCase {
 
     property bool workflowCancelRequested: false
     property bool workflowBackRequested: false
+    property bool restoreAndCloseRequested: false
 
     Connections {
         target: controller
         function onWorkflowCancelRequested() { workflowCancelRequested = true }
         function onWorkflowBackRequested() { workflowBackRequested = true }
+        function onRestoreAndCloseRequested() { restoreAndCloseRequested = true }
     }
 
     function init() {
@@ -29,6 +31,9 @@ TestCase {
         controller.operationBusy = false
         workflowCancelRequested = false
         workflowBackRequested = false
+        restoreAndCloseRequested = false
+        controller.selectedVariant = "source"
+        controller.restoreFromFirstStep = false
     }
 
     function test_progressionAndBackPreserveAdvancedChoice() {
@@ -56,6 +61,14 @@ TestCase {
         compare(controller.goNext(), false)
         compare(controller.step, 0)
         compare(controller.requestRestoreAndClose(), false)
+    }
+
+    function test_nextCanUseTheDefaultPaletteSelection() {
+        controller.selectedVariant = ""
+        verify(controller.canGoNext)
+
+        controller.selectedVariant = "source"
+        verify(controller.canGoNext)
     }
 
     function test_preSessionWorkflowRequiresExplicitModeBeforeContinue() {
@@ -138,6 +151,15 @@ TestCase {
         verify(workflowBackRequested)
         verify(!controller.workflowStepActive)
         verify(!controller.workflowContinuePending)
+    }
+
+    function test_editFirstGeneratedPageBackRestoresAndCloses() {
+        controller.restoreFromFirstStep = true
+        controller.selectedVariant = "source"
+        verify(controller.canGoBack)
+        compare(controller.goBack(), true)
+        verify(restoreAndCloseRequested)
+        compare(controller.step, 0)
     }
 
     function test_restoreIntentIsOnlyAvailableOnFinish() {

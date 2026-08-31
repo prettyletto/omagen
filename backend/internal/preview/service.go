@@ -415,7 +415,7 @@ func writeHyprlandOverridePreservingNative(dir string, palette theme.Palette, st
 	if readErr != nil && !os.IsNotExist(readErr) {
 		return readErr
 	}
-	if err := theme.WriteHyprlandWithAnimationsAndShell(dir, palette, styles.Desktop.BorderStyle, styles.Desktop.BorderSize, styles.Desktop.Shape, styles.Desktop.Spacing, styles.Desktop.Depth, styles.Desktop.Active, styles.Desktop.Inactive, styles.Desktop.BorderSpeed, styles.Animations, styles.Shell.Preset, &spec); err != nil {
+	if err := theme.WriteHyprlandWithDesktopStyleAndAnimationsAndShell(dir, palette, styles.Desktop, styles.Animations, styles.Shell.Preset, &spec); err != nil {
 		return err
 	}
 	if !preserve {

@@ -1,5 +1,7 @@
 import QtTest
 import "../app/StyleDocuments.js" as StyleDocuments
+import "../features/style-editor/WindowStyle.js" as WindowStyle
+import "../gateways/ConfigurationArgs.js" as ConfigurationArgs
 import "../../bar/BarSizing.js" as BarSizing
 
 TestCase {
@@ -91,7 +93,7 @@ TestCase {
             customized: { window: true, animations: true },
             window: {
                 borderStyle: "spin", borderSize: 3, borderSizeMode: "fixed", borderSpeed: 72,
-                shape: "soft", spacing: "airy", depth: "shadow", activeStyle: "native", inactiveStyle: "frosted_rich"
+                windowOpacity: 48, shape: "soft", spacing: "airy", depth: "shadow", activeStyle: "native", inactiveStyle: "frosted_rich"
             },
             shell: { preset: "glass", surface: "contrast", detail: "framed", tooltip: "accent", notifications: "native", overrides: { "base.alpha": "0.8" } },
             bar: { surface: "dark", density: "compact", attention: "reactive", form: "docked", visibility: "islands", profile: null, spec: { workspace: { mode: "glyphs", glyphs: ["A", "B"] } } },
@@ -106,6 +108,7 @@ TestCase {
 
         compare(payload.window.border_style, "spin")
         compare(payload.window.border_size, 3)
+        compare(payload.window.window_opacity, 48)
         compare(payload.window.active_style, "native")
         compare(payload.animations.window_open, "slide")
         compare(payload.animations.window_amount, 91)
@@ -115,5 +118,37 @@ TestCase {
         compare(payload.terminal.schema_version, 1)
         compare(payload.terminal.cell_mode, "painted")
         compare(payload.bar.spec.workspace.glyphs.length, 2)
+    }
+
+    function test_windowOpacityIsSharedAndClampedToTheFullRange() {
+        var edited = WindowStyle.editOpacity({ window_opacity: 72, active_style: "frosted_light" }, 0)
+        compare(edited.windowOpacity, 0)
+        compare(WindowStyle.editOpacity(edited, 125).windowOpacity, 100)
+        compare(WindowStyle.copy({ window_opacity: 72 }).windowOpacity, 72)
+    }
+
+    function test_generationConfigurationCarriesDesktopWindowOpacity() {
+        var args = []
+        ConfigurationArgs.appendConfigurationArgs(
+            args,
+            { preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native" },
+            { borderStyle: "solid", borderSize: -1, borderSizeMode: "default", windowOpacity: 48, shape: "native", spacing: "native", depth: "native", inactiveStyle: "native", activeStyle: "native" },
+            { surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native" },
+            null, null, null
+        )
+
+        var index = args.indexOf("--window-opacity")
+        verify(index >= 0)
+        verify(index > args.indexOf("--bar-style"))
+        compare(args[index + 1], 48)
+    }
+
+    function test_presetDesktopOpacityRemainsAValidResetBaseline() {
+        var glass = StyleDocuments.normalizeDesktopStyle({ window_opacity: 72 })
+        var edited = WindowStyle.editOpacity(glass, 48)
+
+        compare(glass.windowOpacity, 72)
+        compare(edited.windowOpacity, 48)
+        compare(WindowStyle.editOpacity(edited, glass.windowOpacity).windowOpacity, 72)
     }
 }

@@ -14,7 +14,8 @@ Item {
     id: root
 
     property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, windowOpacity: 100, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    property int windowOpacityDefault: 100
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
     property color foregroundColor: Color.foreground
@@ -862,6 +863,7 @@ Item {
                     id: windowEditor
                     width: parent.width
                     desktopStyle: root.desktopStyle
+                    windowOpacityDefault: root.windowOpacityDefault
                     foregroundColor: root.foregroundColor
                     backgroundColor: root.backgroundColor
                     accentColor: root.accentColor

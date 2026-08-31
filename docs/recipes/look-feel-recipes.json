@@ -101,6 +101,7 @@
           "border_size": -1,
           "border_size_mode": "default",
           "border_speed": 36,
+          "window_opacity": 72,
           "shape": "rounded",
           "spacing": "airy",
           "depth": "shadow",

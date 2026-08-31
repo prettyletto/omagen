@@ -46,7 +46,8 @@ Item {
         }
         Bar.CenterGestureGroup {
             bar: dockHorizontalContent.bar
-            entries: dockHorizontalContent.bar.layoutConfig.center }
+            entries: dockHorizontalContent.bar.layoutConfig.center
+            compactFlow: true }
         Rectangle {
             width: 1
             height: Style.space(16)

@@ -62,7 +62,11 @@ Item {
     property string workflowBackImage: ""
     property string workflowBackMode: ""
     property var shellStyle: ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) })
-    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    property var desktopStyle: ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, windowOpacity: 100, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" })
+    // This remains the source preset/theme value while desktopStyle carries a
+    // staged user override. Reset in the Window editor must return here, not
+    // to a generic 100% fallback or the currently edited slider value.
+    property int windowOpacityBaseline: 100
     property var barStyle: ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null })
     property var animationsStyle: ({ version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false })
     property var lookFeel: ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) })
@@ -81,6 +85,7 @@ Item {
     property alias wizardLookFeelDecided: wizardController.lookFeelDecided
     property alias wizardOperationBusy: wizardController.operationBusy
     property alias wizardPaletteSelected: wizardController.paletteSelected
+    property alias wizardRestoreFromFirstStep: wizardController.restoreFromFirstStep
     property alias wizardWorkflowOpen: wizardController.workflowStepActive
     property alias wizardWorkflowMode: wizardController.workflowMode
     property alias wizardWorkflowConfirmed: wizardController.workflowModeConfirmed
@@ -185,9 +190,20 @@ Item {
     function normalizeEditedTerminalTranslucency(value) {
         return root.normalizeTerminalTranslucency(root.mergeStyleDocument(root.terminalTranslucency, value))
     }
+    function windowOpacityFromDesktopStyle(value, fallback) {
+        value = value || ({})
+        var raw = value.windowOpacity !== undefined ? value.windowOpacity : value.window_opacity
+        var opacity = Number(raw)
+        if (!isFinite(opacity) || opacity < 0 || opacity > 100)
+            return fallback
+        return Math.round(opacity)
+    }
+    function setWindowOpacityBaseline(value) {
+        root.windowOpacityBaseline = root.windowOpacityFromDesktopStyle(value, 100)
+    }
     function nativeLookFeelRecipe() {
         return root.normalizedLookFeelRecipe({
-            window: { borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" },
+            window: { borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, windowOpacity: 100, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" },
             shell: { preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) },
             bar: { surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null },
             animations: { version: 1, preset: "native", window: "native", windowOpen: "popin", windowClose: "popin", windowMove: "native", windowAmount: 87, windowOpacity: 100, windowSpeed: 4, workspace: "native", workspaceAxis: "horizontal", workspaceTravel: 18, specialWorkspace: "inherit", focus: "native", layers: "native", curve: "bezier", border: "native", borderSpeed: 36, glitch: "none", screenEffect: null, reducedMotion: false },
@@ -215,6 +231,7 @@ Item {
         var currentAnimations = root.animationsStyle
         var currentTerminal = root.terminalTranslucency
         root.lookFeelRecipe = resolved
+        root.setWindowOpacityBaseline(resolved.window)
         root.lookFeel = root.copyLookFeelDocument(composition)
         root.desktopStyle = previousCustomized.window === true ? currentWindow : resolved.window
         root.shellStyle = previousCustomized.shell === true ? currentShell : resolved.shell
@@ -255,6 +272,7 @@ Item {
     function loadLookFeelRecipe(preset) {
         if (!preset || preset === "omarchy-native") {
             root.lookFeelRecipe = null
+            root.windowOpacityBaseline = 100
             lookFeelController.loadRecipe(preset)
             return
         }
@@ -265,12 +283,14 @@ Item {
             return
         if (scope === "all") {
             root.desktopStyle = root.lookFeelRecipe.window
+            root.setWindowOpacityBaseline(root.lookFeelRecipe.window)
             root.shellStyle = root.lookFeelRecipe.shell
             root.barStyle = root.lookFeelRecipe.bar
             root.animationsStyle = root.lookFeelRecipe.animations
             root.terminalTranslucency = root.lookFeelRecipe.terminal
         } else if (scope === "window") {
             root.desktopStyle = root.lookFeelRecipe.window
+            root.setWindowOpacityBaseline(root.lookFeelRecipe.window)
         } else if (scope === "shell") {
             root.shellStyle = root.lookFeelRecipe.shell
         } else if (scope === "bar") {
@@ -475,6 +495,7 @@ Item {
                     animations: resumedEdit.animations,
                     terminal: resumedEdit.terminal
                 }) : null
+            root.setWindowOpacityBaseline(root.lookFeelRecipe ? root.lookFeelRecipe.window : root.desktopStyle)
         } else {
             root.loadLookFeelRecipe(lookFeel.preset)
         }
@@ -875,6 +896,14 @@ Item {
         return wizardController.requestBack()
     }
     function wizardNext() {
+        if (wizardController.step === 0) {
+            // PaletteStep renders the same selectedVariant owned by SessionState.
+            // Re-commit that concrete value at the page boundary so Next never
+            // advances with only a visual/default card selection.
+            const selectedVariant = session.ensureSelectedVariant(wizardController.selectedVariant)
+            if (selectedVariant !== "")
+                session.selectVariant(selectedVariant)
+        }
         if (wizardController.step === 2)
             root.commitAdvancedStylesForNavigation()
         return wizardController.requestNext()
@@ -947,10 +976,11 @@ Item {
         workflowMode = "fast";
         extraConfigsEnabled = false;
         lookFeelRecipe = null;
+        windowOpacityBaseline = 100;
         lookFeel = ({ schemaVersion: 1, preset: "omarchy-native", presetRevision: 1, customized: ({}) });
         terminalTranslucency = ({ schemaVersion: 1, mode: "preserve", opacity: 1, cellMode: "background" });
         shellStyle = ({ preset: "default", surface: "flat", detail: "native", tooltip: "native", notifications: "native", overrides: ({}) });
-        desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" });
+        desktopStyle = ({ borderStyle: "solid", borderSize: -1, borderSizeMode: "default", borderSpeed: 36, windowOpacity: 100, shape: "native", spacing: "native", depth: "native", activeStyle: "native", inactiveStyle: "native" });
         barStyle = ({ surface: "native", density: "native", attention: "semantic", form: "continuous", visibility: "native", profile: null, spec: null });
         animationsStyle = root.normalizeAnimationsStyle({ preset: "native" });
         errorMessage = "";
@@ -988,7 +1018,9 @@ Item {
         // The generated source palette is already a valid selection before
         // any optional live preview mutation. Using previewVariant here made
         // the first Next button stay disabled until the user clicked a card.
-        paletteSelected: session.workspaceReady && session.selectedVariant !== ""
+        paletteSelected: session.workspaceReady
+        selectedVariant: session.selectedVariant
+        restoreFromFirstStep: session.active && session.workflow === "theme-edit"
 
         onRestoreAndCloseRequested: root.restoreAndCloseSession()
         onWorkflowBackRequested: root.cancelSession()
@@ -1023,6 +1055,7 @@ Item {
                 }) : null;
             root.shellStyle = root.normalizeShellStyle(session.shellStyle);
             root.desktopStyle = root.normalizeDesktopStyle(session.desktopStyle);
+            root.setWindowOpacityBaseline(root.lookFeelRecipe ? root.lookFeelRecipe.window : root.desktopStyle);
             root.barStyle = root.normalizeBarStyle(session.barStyle);
             root.animationsStyle = root.normalizeAnimationsStyle(session.animationsStyle);
             root.lookFeel = root.copyLookFeelDocument(session.lookFeel);
@@ -1293,6 +1326,7 @@ Item {
                 root.previewResolvedLookFeel()
             } else {
                 root.lookFeelRecipe = root.normalizedLookFeelRecipe(composition)
+                root.setWindowOpacityBaseline(root.lookFeelRecipe.window)
                 root.refreshLookFeelCustomized()
             }
         }
@@ -1828,6 +1862,7 @@ Item {
         wizardLookFeelDecided: root.wizardLookFeelDecided
         wizardOperationBusy: root.wizardOperationBusy
         wizardPaletteSelected: root.wizardPaletteSelected
+        wizardRestoreFromFirstStep: root.wizardRestoreFromFirstStep
         wizardCanContinueWorkflow: root.wizardCanContinueWorkflow
         workflowStep: root.wizardWorkflowOpen
         workflowMode: root.wizardWorkflowMode
@@ -1846,6 +1881,7 @@ Item {
             ? Number(root.lookFeelRecipe.terminal.opacity || 0.82) : 0.82
         shellStyle: root.shellStyle
         desktopStyle: root.desktopStyle
+        windowOpacityBaseline: root.windowOpacityBaseline
         barStyle: root.barStyle
         animationsStyle: root.animationsStyle
         glitchEnabled: root.cyberpunkSignalActive

@@ -34,6 +34,9 @@ type DesktopStyle struct {
 	Shape          string `json:"shape"`
 	Spacing        string `json:"spacing"`
 	Depth          string `json:"depth"`
+	// WindowOpacity is the shared steady-state opacity for all normal windows.
+	// A pointer keeps an explicit 0% value distinct from an omitted legacy field.
+	WindowOpacity *int `json:"window_opacity,omitempty"`
 	// Active controls the focused-window surface. Native keeps full opacity;
 	// frosted profiles expose compositor backdrop blur through active opacity.
 	Active string `json:"active_style"`
@@ -549,7 +552,8 @@ func migrateLegacyBarSpec(s BarStyle) bar.BarSpec {
 }
 
 func DefaultDesktopStyle() DesktopStyle {
-	return DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36, Shape: "native", Spacing: "native", Depth: "native", Active: "native", Inactive: "native"}
+	opacity := 100
+	return DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36, Shape: "native", Spacing: "native", Depth: "native", WindowOpacity: &opacity, Active: "native", Inactive: "native"}
 }
 
 // NormalizeDesktopStyle keeps sessions written before border-size modes and
@@ -613,6 +617,7 @@ func (s DesktopStyle) Valid() bool {
 		validChoice(s.Shape, "native", "subtle", "soft", "rounded", "pill") &&
 		validChoice(s.Spacing, "native", "compact", "airy") &&
 		validChoice(s.Depth, "native", "flat", "shadow") &&
+		(s.WindowOpacity == nil || (*s.WindowOpacity >= 0 && *s.WindowOpacity <= 100)) &&
 		validChoice(s.Active, "native", "frosted_light", "frosted_balanced", "frosted_rich") &&
 		validChoice(s.Inactive, "native", "shadow", "shadow_only", "blur", "frosted_light", "frosted_balanced", "frosted_rich")
 }
