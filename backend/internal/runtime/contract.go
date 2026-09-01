@@ -110,8 +110,9 @@ func (r ActivationRequest) Validate() error {
 // used when switching to a Fast or stock theme and the old advanced runtime
 // must remove only Omagen-owned state.
 type DeactivationRequest struct {
-	ThemeName string `json:"theme_name"`
-	Reason    string `json:"reason"`
+	ThemeName string    `json:"theme_name"`
+	Reason    string    `json:"reason"`
+	Preserve  []Feature `json:"preserve,omitempty"`
 }
 
 func (r DeactivationRequest) Validate() error {
@@ -121,7 +122,26 @@ func (r DeactivationRequest) Validate() error {
 	if strings.TrimSpace(r.Reason) == "" {
 		return fmt.Errorf("deactivation reason is empty")
 	}
+	seen := make(map[Feature]struct{}, len(r.Preserve))
+	for _, feature := range r.Preserve {
+		if !validIdentifier(string(feature)) {
+			return fmt.Errorf("invalid preserved runtime feature %q", feature)
+		}
+		if _, exists := seen[feature]; exists {
+			return fmt.Errorf("duplicate preserved runtime feature %q", feature)
+		}
+		seen[feature] = struct{}{}
+	}
 	return nil
+}
+
+func (r DeactivationRequest) Preserves(feature Feature) bool {
+	for _, preserved := range r.Preserve {
+		if preserved == feature {
+			return true
+		}
+	}
+	return false
 }
 
 // FeatureResult is the only result an adapter may publish. OwnedPaths are

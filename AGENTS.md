@@ -4,6 +4,17 @@ Omagen is an Omarchy Quattro plugin. QML presents the overlay and bar widget;
 the bundled Go backend owns theme generation, durable sessions, filesystem
 mutation, Demo, Apply, and recovery.
 
+## Start here
+
+Read `docs/development.md`, classify the task with
+`scripts/agent-context <domain>`, then read one recipe under
+`docs/agents/recipes/` and the architecture contract it names. Inspect the
+target and direct callers before expanding context. Run focused checks first,
+then the repository gate, and record unavailable live checks in the handoff.
+The branch lifecycle is `nightly` (experimental), `dev` (integration and
+release candidates), and `main` (stable product). Do not introduce historical
+branch, old-preview, or deleted-path assumptions into new docs or code.
+
 ## Global invariants
 
 - The backend session record is the authority for baseline, rollback, and
@@ -33,6 +44,7 @@ mutation, Demo, Apply, and recovery.
 | Style editor | `docs/agents/recipes/style-editor-change.md` | `qml/components/AdvancedStyleEditor.qml`, `qml/features/style-editor`, focused style controls |
 | Bar | `docs/agents/recipes/bar-change.md` | `bar`, `OmagenBar.qml`, `NativeBarClone.qml`, `backend/internal/bar`, `barprofile` |
 | Look & Feel | `docs/agents/recipes/look-feel-change.md` | `backend/internal/lookfeel`, `qml/views/live-canvas/LookFeelStep.qml` |
+| Theme editing | `docs/agents/recipes/theme-edit-change.md` | `backend/internal/themeedit`, `qml/gateways/ThemeGateway.qml`, `qml/controllers/ThemeEditController.qml` |
 | Runtime | `docs/agents/recipes/runtime-adapter-change.md` | `backend/internal/runtime`, `bin/studio-theme-set` |
 | Packaging | `docs/agents/recipes/packaging-release.md` | `manifest.json`, `bar-manifest.json`, `install.sh`, `scripts`, `.github` |
 
@@ -46,8 +58,8 @@ Read callers and callees only when the change crosses a documented seam.
 - User and contributor guides remain under `docs/` and are indexed by
   `docs/README.md`.
 - Architectural decisions live under `docs/adr/`.
-- Roadmaps and implementation plans live under `docs/plans/active/` or
-  `docs/plans/archive/`.
+- Optional roadmaps and implementation plans live under `docs/plans/`; they
+  are never a substitute for current source or architecture contracts.
 - Do not read `docs/plans/**` unless the task is specifically about planning,
   roadmap work, or historical implementation context.
 - Do not automatically read every Markdown file, the whole QML tree, or all
@@ -63,6 +75,8 @@ Read callers and callees only when the change crosses a documented seam.
   backend directly.
 - `qml/controllers` owns feature busy/pending state and asynchronous
   Preview/Demo/Apply sequencing; `Omagen.qml` remains the composition root.
+- `qml/features/style-editor` owns pure staged-document transformations; it
+  must not write files, start backend operations, or own session state.
 - `Omagen.qml` is the application composition root. Keep domain state and
   rendering in the nearest bounded QML file when extracting code.
 - `OmagenBarWidget.qml` is launcher/status integration. Full bar composition
@@ -73,9 +87,9 @@ Read callers and callees only when the change crosses a documented seam.
 For Go changes, run from `backend/`:
 
 ```sh
-go test ./...
-go test -race ./...
-go vet ./...
+GOCACHE=/tmp/omagen-gocache go test ./...
+GOCACHE=/tmp/omagen-gocache go test -race ./...
+GOCACHE=/tmp/omagen-gocache go vet ./...
 ```
 
 For packaging or QML changes, run `GOCACHE=/tmp/omagen-gocache

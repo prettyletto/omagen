@@ -6,7 +6,8 @@ import qs.Commons
 import qs.Ui
 import "../components" as Components
 
-// A small, monitor-bound affordance for reopening the Live Canvas controls.
+// A small, monitor-bound affordance for reopening the Live Canvas controls or
+// switching the active Demo surface.
 // It intentionally has no keyboard focus and only occupies its visible handle
 // rectangle, so hiding the side panel never traps application input.
 Item {
@@ -17,10 +18,12 @@ Item {
     property bool glitchEnabled: false
     property int glitchEpoch: 0
     property bool demoActive: false
+    property string demoMode: "none"
     property bool actionBusy: false
 
     signal reopenRequested()
     signal saveApplyRequested()
+    signal demoModeRequested(string mode)
 
     Variants {
         model: root.active ? Quickshell.screens : []
@@ -43,7 +46,7 @@ Item {
                     right: true
                 }
                 implicitWidth: root.demoActive ? Style.space(154) : Style.space(42)
-                implicitHeight: root.demoActive ? Style.space(138) : Style.space(116)
+                implicitHeight: root.demoActive ? Style.space(176) : Style.space(116)
 
                 Rectangle {
                     anchors.fill: parent
@@ -78,6 +81,32 @@ Item {
                             font.bold: true
                             font.letterSpacing: 0.8
                             horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: root.demoMode === "full" ? "FULL WORKSPACE" : root.demoMode.toUpperCase()
+                            color: Color.popups.text
+                            opacity: 0.88
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            font.bold: true
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Components.DemoSwitcher {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(34)
+                            controlsEnabled: !root.actionBusy
+                            busy: root.actionBusy
+                            demoActive: root.demoActive
+                            demoMode: root.demoMode
+                            buttonLabel: "Switch"
+                            compact: true
+                            foregroundColor: Color.popups.text
+                            backgroundColor: Color.popups.background
+                            accentColor: Color.accent
+                            onModeRequested: root.demoModeRequested(mode)
                         }
 
                         Button {

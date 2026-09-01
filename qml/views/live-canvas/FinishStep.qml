@@ -84,9 +84,9 @@ Item {
             accent: root.accentColor
             background: root.accentColor
             bordered: true
-            // ApplyController owns the safe sequence for a backend Full or
-            // Window Demo: final preview, close the session-owned Demo, then
-            // commit. Keep that supported path reachable from Finish.
+            // ApplyController owns the safe sequence for every session-owned
+            // Demo surface. A capture request rebuilds Full Demo before taking
+            // the screenshot, then closes it before committing.
             enabled: !root.previewBusy && !root.applyBusy && !root.cancelBusy && !root.lookFeelBusy && !root.lookFeelPresetBusy
             tooltipText: root.demoActive
                 ? "Close the session-owned Demo, then open the final save confirmation"

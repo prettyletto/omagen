@@ -1,8 +1,8 @@
 # Current architecture
 
-This directory is the canonical description of the current `nightly` source.
-Start with [product boundaries](product-boundaries.md), then choose the
-frontend, backend, lifecycle, or contract document relevant to the task.
+This directory is the canonical description of the current `nightly`
+development source. Start with [product boundaries](product-boundaries.md), then choose
+the frontend, backend, lifecycle, or contract document relevant to the task.
 
 | Area | Current document |
 | --- | --- |
@@ -10,6 +10,8 @@ frontend, backend, lifecycle, or contract document relevant to the task.
 | QML composition and UI | [frontend](frontend.md) |
 | Go packages and CLI | [backend](backend.md) |
 | Durable lifecycle | [lifecycle](lifecycle.md) |
+| Palette and generation | [palette and generation contract](contracts/palette-generation.md) |
+| Live Canvas | [Live Canvas contract](contracts/live-canvas.md) |
 | QML ↔ Go | [qml-backend contract](contracts/qml-backend.md) |
 | QML controllers | [QML controller contract](contracts/qml-controllers.md) |
 | Engine/session/Apply | [engine contract](contracts/engine.md) |
@@ -18,6 +20,29 @@ frontend, backend, lifecycle, or contract document relevant to the task.
 | Style editor | [Style editor contract](contracts/style-editor.md) |
 | Bar | [BarSpec contract](contracts/bar-spec.md) |
 | Native Quattro clone | [Quattro clone contract](contracts/quattro-native-clone.md) |
+
+## Contributor route
+
+Before changing behavior, identify the owner and read its contract:
+
+- Palette/generation: `backend/internal/imageanalysis`, `palette`,
+  `colorspace`, `contrast`, `generation`, and `theme`; see the [palette
+  and generation contract](contracts/palette-generation.md).
+- Session lifecycle: `session.Service` is the baseline and recovery
+  authority; see [lifecycle](lifecycle.md) and the [engine
+  contract](contracts/engine.md).
+- Live Canvas: `LiveCanvasPanel.qml` emits intent, controllers correlate
+  requests, gateways cross the process seam, and backend services mutate the
+  desktop; see the [Live Canvas contract](contracts/live-canvas.md).
+- QML/Go: views call controllers or gateways, never arbitrary backend
+  processes; see the [QML ↔ Go contract](contracts/qml-backend.md).
+- Full Bar: `pretty.omagen.bar` and `pretty.omagen` remain separate
+  products; see [product boundaries](product-boundaries.md) and the [BarSpec
+  contract](contracts/bar-spec.md).
+
+When a document and the source disagree, source and `AGENTS.md` win. Repair
+the document in the same patch. Keep superseded ADRs when they explain why a
+legacy path must not be revived.
 
 Omagen is a Quickshell plugin with a QML presentation layer and a bundled Go
 backend. Quickshell owns the visible plugin lifecycle; the backend owns the

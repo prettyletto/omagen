@@ -24,9 +24,11 @@ when the helper or the live environment needs more detail.
 - Announce that the test will affect the live desktop before opening Omagen.
 - Start with `scripts/ui-test check` and
   `~/.config/omarchy/plugins/pretty.omagen/bin/omagen session status`.
-  Require a reachable Wayland/Hyprland session, working shell IPC, DBus, and
-  pointer injection. If an active session or an unexpected Omagen layer already
-  exists, stop and report it rather than adopting or deleting it.
+  Require a reachable Wayland/Hyprland session, working shell IPC, and DBus.
+  Pointer injection is optional; prefer keyboard-first paths unless the
+  scenario requires a pointer-only control. If an active session or an
+  unexpected Omagen layer already exists, stop and report it rather than
+  adopting or deleting it.
 - Use the existing helper for keyboard, pointer, focus, workspace, summon,
   layer/client inspection, and screenshots. Do not use broad process killing,
   delete `~/.local/state/omagen`, remove themes, or mutate `/usr/share/omarchy`.

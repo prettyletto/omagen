@@ -157,3 +157,11 @@ func TestMissingWindowDemoSlotsRequiresActiveAndInactiveTerminals(t *testing.T) 
 		t.Fatalf("missing complete Window Demo slots = %#v", got)
 	}
 }
+
+func TestReaderDemoModesDoNotRequireWindows(t *testing.T) {
+	for _, mode := range []string{ModeShell, ModeBar} {
+		if got := missingSlotsForMode(mode, map[Slot]string{}); len(got) != 0 {
+			t.Fatalf("missing %s Demo slots = %#v, want none", mode, got)
+		}
+	}
+}

@@ -29,6 +29,7 @@ Item {
     property bool pendingUnlock: false
     property bool pendingAfterDemo: false
     property bool pendingCapture: false
+    property bool pendingFreshFullDemo: false
     property bool pendingReplaceSource: false
     property string pendingLookFeelPresetName: ""
     property bool pendingPreview: false
@@ -83,14 +84,16 @@ Item {
         // skipped.
         if (root.pendingCapture) {
             root.pendingAfterDemo = true
+            root.pendingFreshFullDemo = true
             root.hideLiveCanvasRequested()
             root.hideApplication()
             root.demoBusyRequested(true)
             if (root.backendDemoActive()) {
-                root.requestFinalPreview(variant)
+                // A captured preview must always represent the Full Demo
+                // scene, never the surface that happened to be active when
+                // the Apply dialog was confirmed.
+                root.backend.closeDemo(root.session.sessionId)
             } else {
-                if (root.demoMode === "bar")
-                    root.stopBarDemoRequested()
                 root.backend.openDemo(root.session.sessionId)
             }
             return
@@ -105,18 +108,20 @@ Item {
         }
 
         root.pendingAfterDemo = false
+        root.pendingFreshFullDemo = false
         if (root.demoMode === "bar")
             root.stopBarDemoRequested()
         root.requestFinalPreview(variant)
     }
 
     function backendDemoActive() {
-        return root.demoActive && (root.demoMode === "full" || root.demoMode === "window")
+        return root.demoActive && root.demoMode !== "none"
     }
 
     function clearPending() {
         root.pendingAfterDemo = false
         root.pendingCapture = false
+        root.pendingFreshFullDemo = false
         root.pendingReplaceSource = false
         root.pendingLookFeelPresetName = ""
         root.pendingPreview = false
@@ -203,6 +208,7 @@ Item {
             return true
         }
         if (root.pendingCapture) {
+            root.pendingFreshFullDemo = false
             root.requestFinalPreview(root.pendingVariant)
             return true
         }
@@ -250,6 +256,12 @@ Item {
         }
 
         root.demoBusyRequested(false)
+        if (root.pendingFreshFullDemo) {
+            root.pendingFreshFullDemo = false
+            root.demoBusyRequested(true)
+            root.backend.openDemo(root.session.sessionId)
+            return true
+        }
         if (root.pendingAbortAfterDemo) {
             root.clearPending()
             root.busy = false

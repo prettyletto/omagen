@@ -2,32 +2,15 @@ name: Verify bundled backend
 
 on:
   push:
+    branches:
+      - dev
+      - main
+    tags:
+      - 'v*'
   pull_request:
-    paths:
-      - ".github/workflows/verify-bundled-backend.yml"
-      - "backend/**"
-      - "bin/omagen"
-      - "bin/omagen-studio"
-      - "install.sh"
-      - "uninstall.sh"
-      - "dev-install.sh"
-      - "manifest.json"
-      - "bar-manifest.json"
-      - "Omagen.qml"
-      - "OmagenBarWidget.qml"
-      - "OmagenBar.qml"
-      - "BarSurface.qml"
-      - "NativeBarClone.qml"
-      - "WorkspacePresentation.qml"
-      - "BarModel.js"
-      - "bar/**"
-      - "qml/**"
-      - "scripts/build-backend.sh"
-      - "scripts/verify-bundled-backend.sh"
-      - "scripts/v1-check.sh"
-      - "bin/studio-theme-set"
-      - "backend/go.mod"
-      - "backend/go.sum"
+    branches:
+      - dev
+      - main
 
 permissions:
   contents: read
@@ -47,18 +30,110 @@ jobs:
           go-version-file: backend/go.mod
           cache-dependency-path: backend/go.sum
 
+      - name: Prepare headless compatibility shims
+        run: |
+          compat_bin="$RUNNER_TEMP/omagen-ci-bin"
+          mkdir -p "$compat_bin"
+          cat > "$compat_bin/omarchy-restart-terminal" <<'EOF'
+          #!/usr/bin/env bash
+          exit 0
+          EOF
+          cat > "$compat_bin/omarchy-launch-tui" <<'EOF'
+          #!/usr/bin/env bash
+          exit 0
+          EOF
+          cat > "$compat_bin/mv" <<'EOF'
+          #!/usr/bin/env python3
+          import ctypes
+          import os
+          import sys
+
+          args = sys.argv[1:]
+          if args[:2] != ["--exchange", "-T"] or len(args) != 4:
+              os.execv("/usr/bin/mv", ["mv", *args])
+
+          libc = ctypes.CDLL(None, use_errno=True)
+          try:
+              renameat2 = libc.renameat2
+          except AttributeError:
+              print("mv compatibility shim: renameat2 is unavailable", file=sys.stderr)
+              raise SystemExit(1)
+          renameat2.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint]
+          renameat2.restype = ctypes.c_int
+          if renameat2(-100, os.fsencode(args[2]), -100, os.fsencode(args[3]), 2) != 0:
+              error = ctypes.get_errno()
+              print(f"mv compatibility shim: {os.strerror(error)}", file=sys.stderr)
+              raise SystemExit(1)
+          EOF
+          chmod +x "$compat_bin/omarchy-restart-terminal" "$compat_bin/mv"
+          echo "$compat_bin" >> "$GITHUB_PATH"
+
       - name: Verify the bundled package
-        run: GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
+        run: PATH="$RUNNER_TEMP/omagen-ci-bin:$PATH" OMAGEN_HEADLESS_CI=1 GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
+
+      - name: Enforce stable promotion source
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+        run: |
+          test "$SOURCE_BRANCH" = dev || {
+            echo "Stable main promotions must originate from dev (got $SOURCE_BRANCH)." >&2
+            exit 1
+          }
 
       - name: Record build provenance
         run: |
+          mkdir -p artifacts
           go version
           git rev-parse HEAD
           sha256sum bin/omagen
+          sha256sum bin/omagen-studio
           go version -m bin/omagen
+          python3 scripts/verify-shader-provenance.py
+          cp docs/shader-provenance.json artifacts/shader-provenance.json
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            go version
+            sha256sum bin/omagen bin/omagen-studio
+          } > artifacts/build-provenance.txt
+
+      - name: Upload build and shader provenance
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-provenance-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
 
       - name: Attest the verified package executable
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
         uses: actions/attest-build-provenance@v2
         with:
           subject-path: bin/omagen
+
+  marketplace-preflight:
+    name: Marketplace preflight
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Run deterministic static preflight
+        run: |
+          mkdir -p artifacts
+          python3 scripts/test-marketplace-preflight.py
+          python3 scripts/marketplace-preflight.py \
+            --commit "$(git rev-parse HEAD)" \
+            ${{ github.event.pull_request.base.sha && format('--compare-to {0}', github.event.pull_request.base.sha) || '' }} \
+            --report artifacts/marketplace-preflight.json
+
+      - name: Upload commit-bound security evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: marketplace-preflight-${{ github.sha }}
+          path: artifacts/marketplace-preflight.json
+          if-no-files-found: error

@@ -60,6 +60,8 @@ Item {
     signal demoOpenFailed(string message)
     signal windowDemoOpened(string sessionId, string workspace, string monitor, bool reused)
     signal windowDemoOpenFailed(string message)
+    signal demoReaderOpened(string sessionId, string workspace, string monitor, string mode, bool reused)
+    signal demoReaderOpenFailed(string message)
     signal demoReflowed(string sessionId)
     signal demoReflowFailed(string message)
     signal demoClosed(string sessionId, bool closed)
@@ -103,6 +105,7 @@ Item {
     }
     function openDemo(sessionId) { demoGateway.open(sessionId) }
     function openWindowDemo(sessionId) { demoGateway.openWindow(sessionId) }
+    function openDemoReader(sessionId, mode) { demoGateway.openReader(sessionId, mode) }
     function reflowDemo(sessionId) { demoGateway.reflow(sessionId) }
     function closeDemo(sessionId) { demoGateway.close(sessionId) }
     function captureDemoPreview(sessionId) { demoGateway.capture(sessionId) }
@@ -197,6 +200,8 @@ Item {
         onOpenFailed: function(message) { root.demoOpenFailed(message) }
         onWindowOpened: function(sessionId, workspace, monitor, reused) { root.windowDemoOpened(sessionId, workspace, monitor, reused) }
         onWindowOpenFailed: function(message) { root.windowDemoOpenFailed(message) }
+        onReaderOpened: function(sessionId, workspace, monitor, mode, reused) { root.demoReaderOpened(sessionId, workspace, monitor, mode, reused) }
+        onReaderOpenFailed: function(message) { root.demoReaderOpenFailed(message) }
         onReflowed: function(sessionId) { root.demoReflowed(sessionId) }
         onReflowFailed: function(message) { root.demoReflowFailed(message) }
         onClosed: function(sessionId, wasClosed) { root.demoClosed(sessionId, wasClosed) }

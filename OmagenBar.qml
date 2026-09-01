@@ -38,8 +38,6 @@ Item {
         return configured && configured.length > 0 ? configured : root.home + "/.local/state"
     }
     property var specDocument: ({})
-    property var profileDocument: ({})
-    property bool profileResolved: false
     property bool barHidden: false
     // Full replacement bars park their own surface for auto-hide. Quattro's
     // global bar-off marker remains reserved for the user's manual toggle.
@@ -1024,23 +1022,6 @@ Item {
         }
     }
 
-    function restoreNativeForUnmarkedTheme() {
-        if (!root.profileResolved || String(root.profileDocument && root.profileDocument.implementation || "") === "replacement"
-                || !root.shell || !root.manifest
-                || typeof root.shell.mutateShellConfig !== "function") return
-        var selected = root.barConfig && root.barConfig.id ? String(root.barConfig.id) : ""
-        if (selected !== String(root.manifest.id || "pretty.omagen.bar")
-                || String(root.barConfig.omagenOwnedBy || "") !== "pretty.omagen") return
-        root.shell.mutateShellConfig(function(copy) {
-            if (copy.bar && typeof copy.bar === "object"
-                    && String(copy.bar.id || "") === String(root.manifest.id || "pretty.omagen.bar")
-                    && String(copy.bar.omagenOwnedBy || "") === "pretty.omagen") {
-                delete copy.bar.id
-                delete copy.bar.omagenOwnedBy
-            }
-        })
-    }
-
     FileView {
         id: specFile
         path: root.stateHome + "/omarchy/current/theme/omagen.bar.spec.json"
@@ -1054,36 +1035,6 @@ Item {
             root.specDocument = ({})
         }
         Component.onCompleted: reload()
-    }
-
-    FileView {
-        id: profileFile
-        path: root.stateHome + "/omarchy/current/theme/omagen.bar.json"
-        watchChanges: true
-        printErrors: false
-        onLoaded: {
-            profileMissingTimer.stop()
-            try { root.profileDocument = JSON.parse(String(text() || "{}")) } catch (error) { root.profileDocument = ({}) }
-            root.profileResolved = true
-            root.restoreNativeForUnmarkedTheme()
-        }
-        onFileChanged: reload()
-        onLoadFailed: {
-            root.profileDocument = ({})
-            root.profileResolved = false
-            profileMissingTimer.restart()
-        }
-        Component.onCompleted: reload()
-    }
-
-    Timer {
-        id: profileMissingTimer
-        interval: 280
-        repeat: false
-        onTriggered: {
-            root.profileResolved = true
-            root.restoreNativeForUnmarkedTheme()
-        }
     }
 
     // Keep the replacement plugin's Default path native-owned. NativeBarClone
@@ -1136,7 +1087,6 @@ Item {
         repeat: false
         onTriggered: {
             specFile.reload()
-            profileFile.reload()
             root.scheduleTransparentForegroundRefresh()
         }
     }

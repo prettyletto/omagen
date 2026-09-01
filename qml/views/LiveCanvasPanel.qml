@@ -330,12 +330,19 @@ PanelWindow {
             Wizard.WizardChrome {
                 id: chrome
                 Layout.fillWidth: true
+                // Keep the anchored Demo menu above the page Flickable so
+                // its entries remain visible and receive pointer input.
+                z: 100
                 step: root.workflowStep
                     ? 0
                     : Math.max(0, Math.min(root.wizardStep, root.stepLabels.length - 1))
                 stepCount: root.workflowStep ? root.stepLabels.length : root.wizardStepCount
                 steps: root.stepLabels
                 busy: root.operationBusy
+                demoBusy: root.demoBusy
+                demoActive: root.demoActive
+                demoMode: root.demoMode
+                workspaceReady: root.workspaceReady
                 operationText: root.operationText
                 errorText: root.errorMessage
                 foregroundColor: root.foregroundColor
@@ -346,6 +353,12 @@ PanelWindow {
                     : root.workflowStep
                         ? "Choose the level of control before palette generation begins."
                         : "A reversible desktop preview, one clear decision at a time · " + (root.monitorName || "focused monitor")
+                onDemoRequested: function(mode) {
+                    if (mode === "window") root.windowDemoRequested()
+                    else if (mode === "shell") root.shellDemoRequested()
+                    else if (mode === "bar") root.barDemoRequested()
+                    else if (mode === "full") root.startDemoRequested()
+                }
                 onHideRequested: root.hideRequested()
             }
 
@@ -530,6 +543,12 @@ PanelWindow {
                             accentColor: root.accentColor
                             onStartRequested: root.startDemoRequested()
                             onStopRequested: root.closeCanvasRequested()
+                            onModeRequested: function(mode) {
+                                if (mode === "window") root.windowDemoRequested()
+                                else if (mode === "shell") root.shellDemoRequested()
+                                else if (mode === "bar") root.barDemoRequested()
+                                else if (mode === "full") root.startDemoRequested()
+                            }
                             onSkipRequested: root.demoSkippedRequested()
                         }
                     }

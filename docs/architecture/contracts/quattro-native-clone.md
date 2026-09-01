@@ -12,9 +12,9 @@ It is not part of the normal Omagen Bar host refactor surface.
 
 - Upstream source: the installed Omarchy Quattro native `Bar.qml` and its
   workspace presentation dependency.
-- Upstream commit: not recorded in the current nightly checkout; record the
+- Upstream commit: not recorded in the current dev checkout; record the
   exact Omarchy/Quattro revision before the next synchronization.
-- Import date: legacy code predating the current architecture map.
+- Import date: legacy code retained for current full-Bar compatibility.
 - Local modifications: URL-loaded workspace presentation and the minimum
   compatibility adjustments required by Omagen's full-Bar entry point.
 

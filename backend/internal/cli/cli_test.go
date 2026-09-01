@@ -13,6 +13,7 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/generation"
 	"github.com/prettyletto/omagen/backend/internal/lookfeel"
+	omagenruntime "github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/testenv"
@@ -34,6 +35,16 @@ func TestRunCommandValidation(t *testing.T) {
 				t.Fatalf("code=%d stderr=%q", code, err.String())
 			}
 		})
+	}
+}
+
+func TestRunDemoReaderRejectsUnsupportedMode(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"demo", "open-reader", "session-1", "full"}, &out, &errOut); code != 2 {
+		t.Fatalf("code=%d stderr=%q, want invalid-usage exit", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "unsupported reader Demo mode") {
+		t.Fatalf("stderr=%q", errOut.String())
 	}
 }
 
@@ -263,6 +274,32 @@ func TestRunPing(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"ok":true`) || !strings.Contains(out.String(), `"version":"1.0.0"`) {
 		t.Fatalf("output=%q", out.String())
+	}
+}
+
+func TestRuntimeThemeSetIgnoresSupersededHook(t *testing.T) {
+	root := testenv.Isolate(t)
+	currentRoot := filepath.Join(root, ".local", "state", "omarchy", "current")
+	if err := os.MkdirAll(filepath.Join(currentRoot, "theme"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(currentRoot, "theme.name"), []byte("new-theme\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"runtime", "theme-set", "old-theme"}, &out, &errOut); code != 0 {
+		t.Fatalf("stale hook code=%d stderr=%q", code, errOut.String())
+	}
+	var result omagenruntime.ThemeSetResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.Superseded || result.Theme != "old-theme" {
+		t.Fatalf("stale hook was not reported as superseded: %#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "state", "omagen", omagenruntime.StateFileName)); !os.IsNotExist(err) {
+		t.Fatalf("stale hook mutated runtime state: %v", err)
 	}
 }
 

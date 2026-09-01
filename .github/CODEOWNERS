@@ -1,0 +1,8 @@
+# Default project ownership. Update the maintainer handle when the project
+# adds a formal maintainer team.
+* @prettyletto
+/backend/ @prettyletto
+/qml/ @prettyletto
+/bar/ @prettyletto
+/scripts/ @prettyletto
+/.github/ @prettyletto

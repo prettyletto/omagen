@@ -77,21 +77,25 @@ func (s *Service) applyBarProfile(themeRoot string, record session.Record) (bool
 	if s.bar == nil {
 		return false, nil
 	}
-	if record.BarSnapshot != nil {
-		snapshot, err := s.bar.LoadSnapshot(record.SessionID)
-		if err != nil {
-			return false, fmt.Errorf("load bar baseline: %w", err)
-		}
-		if err := s.bar.Restore(snapshot); err != nil {
-			return false, fmt.Errorf("restore bar baseline: %w", err)
-		}
-	}
 	profile, err := barprofile.LoadProfile(filepath.Join(themeRoot, "omagen.bar.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	if record.BarSnapshot != nil {
+		snapshot, loadErr := s.bar.LoadSnapshot(record.SessionID)
+		if loadErr != nil {
+			return false, fmt.Errorf("load bar baseline: %w", loadErr)
+		}
+		if os.IsNotExist(err) {
+			return false, s.bar.Restore(snapshot)
+		}
+		if err := s.bar.ApplyFromSnapshot(snapshot, profile); err != nil {
+			return false, fmt.Errorf("apply bar profile from baseline: %w", err)
+		}
+		return true, nil
+	}
 	if os.IsNotExist(err) {
 		return false, nil
-	}
-	if err != nil {
-		return false, err
 	}
 	return true, s.bar.Apply(profile)
 }

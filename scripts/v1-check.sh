@@ -51,18 +51,40 @@ section "CLI smoke tests"
 "$BIN" demo capabilities | python3 -m json.tool >/dev/null
 "$BIN" look-feel list | python3 -m json.tool >/dev/null || fail "look-feel catalog failed"
 "$ROOT/bin/omagen-studio" --help >/dev/null
+"$ROOT/scripts/test-omagen-theme-set.sh" || fail "theme-set dispatch tests failed"
+"$ROOT/scripts/test-install-command.sh" || fail "installer command ownership tests failed"
+"$ROOT/scripts/test-lazy-studio-contract.sh" || fail "lazy Studio lifecycle contract failed"
+
+section "Marketplace preflight"
+marketplace_report="$(mktemp "${TMPDIR:-/tmp}/omagen-marketplace-report.XXXXXX.json")"
+trap 'rm -f -- "$marketplace_report"' EXIT
+python3 "$ROOT/scripts/marketplace-preflight.py" \
+    --commit "$(git -C "$ROOT" rev-parse HEAD)" \
+    --report "$marketplace_report" || fail "marketplace preflight failed"
+
+section "Shader source/QSB provenance"
+python3 "$ROOT/scripts/verify-shader-provenance.py" || fail "shader provenance check failed"
+
+section "Fresh package validation"
+"$ROOT/scripts/test-fresh-package.sh" || fail "fresh package validation failed"
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
-python3 - "$capabilities" <<'PY'
+OMAGEN_CAPABILITIES_JSON="$capabilities" python3 - <<'PY'
 import json
+import os
 import sys
 
-data = json.loads(sys.argv[1])
+data = json.loads(os.environ["OMAGEN_CAPABILITIES_JSON"])
 for key in ("terminal", "editor", "monitor", "file_manager"):
     if key not in data:
         raise SystemExit(f"missing capability: {key}")
-if not isinstance(data["terminal"], dict) or not data["terminal"].get("command"):
-    raise SystemExit("no terminal capability available")
+if not isinstance(data["terminal"], dict):
+    raise SystemExit("invalid terminal capability")
+if not data["terminal"].get("command"):
+    if os.environ.get("OMAGEN_HEADLESS_CI") == "1":
+        print("WARNING: no terminal capability available in headless CI; resolver contract was validated", file=sys.stderr)
+    else:
+        raise SystemExit("no terminal capability available")
 PY
 
 section "Manifest"
@@ -122,7 +144,14 @@ required=(
     "manifest.json"
     "bar-manifest.json"
     "bin/omagen"
+    "bin/omagen-theme-set"
     "bin/omagen-studio"
+    "scripts/marketplace-preflight.py"
+    "scripts/test-marketplace-preflight.py"
+    "scripts/verify-shader-provenance.py"
+    "scripts/test-fresh-package.sh"
+    "docs/shader-provenance.json"
+    "NOTICE.md"
     "qml/services/BackendService.qml"
     "qml/gateways/BackendCommand.qml"
     "qml/gateways/SessionGateway.qml"

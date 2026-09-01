@@ -34,6 +34,18 @@ func runDemo(args []string, service *demo.Service, stdout, stderr io.Writer) int
 			return fail(stderr, 1, "%v", err)
 		}
 		return writeJSON(stdout, stderr, result)
+	case "open-reader":
+		if len(args) != 3 {
+			return fail(stderr, 2, "usage: omagen demo open-reader <session_id> <shell|bar>")
+		}
+		if args[2] != demo.ModeShell && args[2] != demo.ModeBar {
+			return fail(stderr, 2, "unsupported reader Demo mode: %s", args[2])
+		}
+		result, err := service.OpenReader(args[1], args[2])
+		if err != nil {
+			return fail(stderr, 1, "%v", err)
+		}
+		return writeJSON(stdout, stderr, result)
 	case "close":
 		if len(args) != 2 {
 			return fail(stderr, 2, "usage: omagen demo close <session_id>")
