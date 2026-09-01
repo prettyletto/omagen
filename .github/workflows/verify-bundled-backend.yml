@@ -38,6 +38,7 @@ jobs:
           #!/usr/bin/env bash
           exit 0
           EOF
+          cp "$compat_bin/omarchy-restart-terminal" "$compat_bin/omarchy-launch-tui"
           cat > "$compat_bin/mv" <<'EOF'
           #!/usr/bin/env python3
           import ctypes
