@@ -248,6 +248,13 @@ Item {
         root.errorRaised("")
         root.clearPending()
         root.busy = true
+        // The visible reader surface is QML-owned. Hide it as soon as the
+        // cleanup transaction is dispatched while the backend finishes
+        // releasing its owned workspace asynchronously. The backend close
+        // signal remains authoritative for completion and recovery.
+        root.active = false
+        root.mode = "none"
+        root.monitor = ""
         root.backend.closeDemo(root.session.sessionId)
     }
 
