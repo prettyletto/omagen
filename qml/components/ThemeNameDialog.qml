@@ -107,7 +107,7 @@ Item {
                 visible: !root.presetOnly
                 width: parent.width
                 label: "Capture live Demo preview"
-                description: "Use the loaded Demo workspace as preview.png."
+                description: "Open a fresh Full Demo and use its screenshot as preview.png."
                 checked: root.capturePreview
                 foreground: Color.popups.text
                 accent: Color.accent

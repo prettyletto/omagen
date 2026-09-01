@@ -47,7 +47,7 @@ a repository or system-wide security change. The helper fails with a clear
 message instead of pretending a filesystem-only run tested the GUI.
 
 The current development machine has Hyprland 0.56.2, Quickshell 0.3.1,
-Omarchy 4.0.1-1, `grim`, `jq`, `wtype`, and the `omarchy-shell` IPC wrapper.
+Omarchy 4.0.2-1, `grim`, `jq`, `wtype`, and the `omarchy-shell` IPC wrapper.
 `wtype` supplies user-level key and text input through the Wayland
 virtual-keyboard protocol. Pointer injection is optional: `click` only runs
 when an already configured `ydotool` and `ydotoold` are present and

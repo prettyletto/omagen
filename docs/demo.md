@@ -54,23 +54,23 @@ From the Live Canvas wizard:
 - **Save & Apply** can close Full Demo before applying, or capture it as the
   theme preview when requested.
 
-Shell Demo and Bar Demo are separate, read-only surfaces. Shell Demo has its
-own close control; Bar Demo is rendered below the real native bar and does not
-replace Quattro's widgets or capture their input. Only the session-owned Full
-Demo and Window Demo create tracked application windows.
+Shell Demo and Bar Demo are separate, read-only overlays backed by their own
+session-owned temporary workspaces. Shell Demo has its own close control; Bar
+Demo is rendered below the real native bar and does not replace Quattro's
+widgets or capture their input. Only Full Demo and Window Demo create tracked
+application windows.
 
 Demo is temporary. It does not change the user's normal workspace layout after
 it closes.
 
 ## Capture a preview
 
-In the **Save theme** dialog, enable **Capture live Demo preview** to use the
-loaded Demo workspace as <code>preview.png</code>. Omagen captures the Demo monitor and
-workspace recorded by the active session, normalizes the result to the
-canonical theme preview format, and stages it with the theme before Apply.
-
-If Demo is not open, Omagen opens it first, applies the selected direction,
-captures the result, and then closes Demo before continuing the Apply flow.
+In the **Save theme** dialog, enable **Capture live Demo preview** to use a
+fresh Full Demo screenshot as <code>preview.png</code>. Omagen closes any
+currently open Demo surface, opens the Full Demo scene from scratch, applies
+the selected direction, captures the Demo monitor, and normalizes the result
+to the canonical theme preview format before closing Demo and continuing the
+Apply flow.
 
 When live Demo capture is not selected, Apply uses the theme's generated
 background as <code>preview.png</code> instead.

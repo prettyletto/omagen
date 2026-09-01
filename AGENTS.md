@@ -11,7 +11,8 @@ Read `docs/development.md`, classify the task with
 `docs/agents/recipes/` and the architecture contract it names. Inspect the
 target and direct callers before expanding context. Run focused checks first,
 then the repository gate, and record unavailable live checks in the handoff.
-The active product-development branch is `dev`; do not introduce historical
+The branch lifecycle is `nightly` (experimental), `dev` (integration and
+release candidates), and `main` (stable product). Do not introduce historical
 branch, old-preview, or deleted-path assumptions into new docs or code.
 
 ## Global invariants

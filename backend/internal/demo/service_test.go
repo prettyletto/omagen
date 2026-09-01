@@ -43,6 +43,66 @@ func TestOpenRejectsPendingApplyBeforeTouchingDemoWorkspace(t *testing.T) {
 	}
 }
 
+func TestOpenReaderOwnsWorkspaceWithoutLaunchingWindows(t *testing.T) {
+	testenv.Isolate(t)
+	bin := t.TempDir()
+	hyprctl := `#!/bin/sh
+if [ "$1" = "-j" ] && [ "$2" = "monitors" ]; then
+  printf '%s\n' '[{"name":"fake","width":1920,"height":1080,"x":0,"y":0,"scale":1,"transform":0,"focused":true,"reserved":[0,0,0,0],"activeWorkspace":{"id":1,"name":"1"}}]'
+  exit 0
+fi
+if [ "$1" = "-j" ] && [ "$2" = "clients" ]; then
+  printf '%s\n' '[]'
+  exit 0
+fi
+if [ "$1" = "dispatch" ]; then
+  exit 0
+fi
+exit 2
+`
+	if err := os.WriteFile(filepath.Join(bin, "hyprctl"), []byte(hyprctl), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record := session.Record{
+		SessionID:     "reader-session",
+		OriginalTheme: "theme",
+		OriginalBackground: session.BackgroundRef{
+			Kind: "external",
+			Path: "/tmp/bg",
+		},
+		CreatedAt: time.Now().UTC(),
+	}
+	if err := store.Save(record); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveActive(session.ActiveRecord{SessionID: record.SessionID, CreatedAt: record.CreatedAt}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := NewService(store).OpenReader(record.SessionID, ModeBar)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Mode != ModeBar || result.Workspace != "__omagen_demo_reader-session_bar" {
+		t.Fatalf("reader result = %#v", result)
+	}
+	if len(result.Windows) != 0 {
+		t.Fatalf("reader Demo launched windows: %#v", result.Windows)
+	}
+	state, err := NewService(store).loadState(record.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Mode != ModeBar || state.Workspace != result.Workspace || len(state.Windows) != 0 {
+		t.Fatalf("persisted reader state = %#v", state)
+	}
+}
+
 func TestDemoStateCommitRejectsCancellationWonRace(t *testing.T) {
 	testenv.Isolate(t)
 	store, err := session.NewStore()

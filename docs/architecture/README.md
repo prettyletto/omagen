@@ -1,7 +1,7 @@
 # Current architecture
 
-This directory is the canonical description of the current `dev` product
-source. Start with [product boundaries](product-boundaries.md), then choose
+This directory is the canonical description of the current `nightly`
+development source. Start with [product boundaries](product-boundaries.md), then choose
 the frontend, backend, lifecycle, or contract document relevant to the task.
 
 | Area | Current document |

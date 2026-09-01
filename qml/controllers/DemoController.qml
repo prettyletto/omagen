@@ -1,8 +1,8 @@
 import QtQuick
 
-// Owns Demo resource state and the distinction between backend-backed Full /
-// Window demos and QML-only Shell / Bar demonstrations. Apply listens to the
-// completion signals exposed here; the application root only composes the
+// Owns Demo resource state and the distinction between backend-backed owned
+// workspaces and their Full / Window / Shell / Bar surfaces. Apply listens to
+// the completion signals exposed here; the application root only composes the
 // resulting panel and route state.
 Item {
     id: root
@@ -52,7 +52,7 @@ Item {
     }
 
     function backendDemoActive() {
-        return root.active && (root.mode === "full" || root.mode === "window")
+        return root.active && root.mode !== "none"
     }
 
     function monitorName() {
@@ -65,7 +65,7 @@ Item {
     }
 
     function backendMode(mode) {
-        return mode === "full" || mode === "window"
+        return mode !== "none"
     }
 
     function clearPending() {
@@ -78,17 +78,17 @@ Item {
     function openReader(mode) {
         const target = root.normalizeMode(mode)
         if (target !== "shell" && target !== "bar")
-            return false
+            return "invalid"
+        if (!root.session || !root.session.sessionId || !root.backend)
+            return "invalid"
         root.errorRaised("")
         root.clearPending()
         root.activateCanvasRequested()
         root.monitor = root.monitorName()
         root.hideApplicationRequested()
-        root.active = true
-        root.mode = target
-        root.busy = false
-        root.stopped()
-        return true
+        root.busy = true
+        root.backend.openDemoReader(root.session.sessionId, target)
+        return "started"
     }
 
     function requestWindowPreview() {
@@ -134,8 +134,7 @@ Item {
         if (target === "")
             return "invalid"
         if (target === "shell" || target === "bar") {
-            root.openReader(target)
-            return "started"
+            return root.openReader(target)
         }
 
         if (!root.session || !root.session.sessionId)
@@ -211,8 +210,9 @@ Item {
             return "switching"
         }
 
-        // Reader surfaces are QML-only, so replacing one does not require a
-        // backend round trip or a synthetic cleanup operation.
+        // Reader surfaces are QML-only overlays, but their workspace remains
+        // backend-owned so replacing one uses the same cleanup boundary as
+        // Full and Window Demo.
         if (root.active) {
             if (root.mode === "shell")
                 root.stopShellDemo()
@@ -230,30 +230,18 @@ Item {
     function stopBarDemo() {
         if (root.mode !== "bar")
             return
-        root.active = false
-        root.mode = "none"
-        root.stopped()
+        root.dispatch()
     }
 
     function stopShellDemo() {
         if (root.mode !== "shell")
             return
-        root.active = false
-        root.mode = "none"
-        root.stopped()
+        root.dispatch()
     }
 
     function dispatch() {
         if (!root.active || root.busy || root.cancelBusy)
             return
-        if (root.mode === "shell") {
-            root.stopShellDemo()
-            return
-        }
-        if (root.mode === "bar") {
-            root.stopBarDemo()
-            return
-        }
         if (!root.session || root.session.sessionId === "")
             return
 
@@ -382,6 +370,39 @@ Item {
             root.mode = "none"
             root.monitor = ""
             root.windowOpenFailed(message)
+        }
+
+        function onDemoReaderOpened(sessionId, workspace, monitor, mode, reused) {
+            if (root.closeAfterCancel)
+                return
+            if (!root.session || sessionId !== root.session.sessionId
+                    || (mode !== "shell" && mode !== "bar")) {
+                root.busy = false
+                root.active = false
+                root.mode = "none"
+                root.monitor = ""
+                root.clearPending()
+                root.errorRaised("Backend opened an invalid reader Demo session")
+                root.openFailed("Backend opened an invalid reader Demo session")
+                return
+            }
+            root.clearPending()
+            root.active = true
+            root.mode = mode
+            root.monitor = monitor
+            root.busy = false
+            root.opened(sessionId, workspace, monitor, reused)
+        }
+
+        function onDemoReaderOpenFailed(message) {
+            if (root.closeAfterCancel)
+                return
+            root.busy = false
+            root.clearPending()
+            root.active = false
+            root.mode = "none"
+            root.monitor = ""
+            root.openFailed(message)
         }
 
         function onDemoReflowed(sessionId) {

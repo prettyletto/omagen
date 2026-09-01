@@ -40,7 +40,7 @@ Item {
 
         Text {
             Layout.fillWidth: true
-            text: "Choose one focused surface at a time. Window and Full Workspace use session-owned windows; Shell and Bar are read-only readers."
+            text: "Choose one focused surface at a time. Every Demo uses a session-owned workspace; Window and Full Workspace add owned windows, while Shell and Bar are read-only readers."
             color: root.foregroundColor
             opacity: 0.62
             font.family: Style.font.family

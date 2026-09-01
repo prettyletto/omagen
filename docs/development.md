@@ -4,13 +4,33 @@ The repository is itself the Omarchy plugin package. A checkout must remain
 runnable as a plugin without requiring a separate build tree or installation
 script at runtime.
 
+## Branch lifecycle
+
+Omagen moves through three explicit branches:
+
+- `nightly` is experimental development. It may contain incomplete work and
+  does not carry a required hosted CI gate on every push.
+- `dev` is the protected integration branch. Pull requests targeting it run
+  the full validation and marketplace-preflight gates and may produce release
+  candidates.
+- `main` is the stable product branch. It receives reviewed promotions from
+  `dev`, stable release tags, and the exact commit submitted to the Omarchy
+  plugin marketplace.
+
+The only supported promotion path is `nightly → dev → main`. Never promote
+nightly directly to the stable branch.
+
+See [the release process](development/release-process.md) for branch
+protection, candidate tags, exact-commit validation, and marketplace updates.
+
 ## First contribution
 
 Read the root `AGENTS.md`, run `scripts/agent-context <domain>`, and follow one
 recipe under `docs/agents/recipes/` before editing. Inspect the target and its
-direct callers, run focused checks first, then the full gate. The active
-product-development branch is `dev`; do not introduce historical branch or
-deleted-path assumptions into new documentation.
+direct callers, run focused checks first, then the full gate. Keep branch names
+and stability claims accurate: `nightly` experiments, `dev` integrates, and
+`main` releases. Do not introduce historical branch or deleted-path assumptions
+into new documentation.
 
 ## Repository layout
 
@@ -64,11 +84,10 @@ the Go <code>nodwarf5</code> experiment used by that pinned toolchain,
 read-only module resolution. The verifier rebuilds into a temporary directory
 and compares the result byte-for-byte with <code>bin/omagen</code>.
 
-The same verifier runs on every relevant pull request and push in
-<code>.github/workflows/verify-bundled-backend.yml</code>. Pushes to the active
-<code>dev</code> product branch also receive a GitHub build-provenance
-attestation for the verified executable. A binary change without a matching
-source build fails the check.
+The same verifier runs on pull requests targeting `dev` or `main`, and on
+pushes to those protected branches. A binary change without a matching source
+build fails the check. Candidate and stable commits also receive the
+marketplace-preflight report described in [the release process](development/release-process.md).
 
 The root <code>preview.png</code> is a marketplace showcase image. It is not a
 runtime entry point and is not required by the Omarchy shell loader; the
@@ -87,27 +106,31 @@ plugin directory, rescans the shell, and restarts the shell for development.
 Use it while the desktop is idle because the shell watches the installed QML
 files.
 
-To install a branch checkout for testers without requiring Go, use the
-branch bootstrap from that branch. The checked-in backend is used as-is:
+To install a tester checkout without requiring Go, first clone and inspect the
+repository, then execute the branch bootstrap at an exact commit. The checked-
+in backend is used as-is:
 
 ~~~sh
-OMAGEN_TEST_BRANCH=dev OMAGEN_TEST_REPOSITORY=https://github.com/prettyletto/omagen.git \
-zsh -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/dev/scripts/install-branch.sh | bash'
+git clone https://github.com/prettyletto/omagen.git /tmp/omagen-review
+cd /tmp/omagen-review
+git show --stat --oneline <full-40-character-commit-sha>
+OMAGEN_TEST_BRANCH=nightly OMAGEN_TEST_COMMIT=<full-40-character-commit-sha> \
+  ./scripts/install-branch.sh
 ~~~
 
-The bootstrap clones the selected branch into a temporary directory, runs
-`dev-install.sh --skip-build`, and removes the checkout after installation.
-Set `OMAGEN_TEST_BRANCH` and `OMAGEN_TEST_REPOSITORY` to test a different
-branch or fork. The bootstrap replaces both installed Omagen plugin packages
-and restarts the shell.
+The bootstrap refuses to execute a mutable branch head. It fetches the
+requested full commit, checks it out detached, and only then runs
+`dev-install.sh --skip-build`. Set `OMAGEN_TEST_BRANCH` and
+`OMAGEN_TEST_REPOSITORY` to test a different branch or fork, but always provide
+`OMAGEN_TEST_COMMIT`.
 
 The regular `install.sh` still builds the backend by default. Pass
 `--skip-build` only when the checked-in binary is the intended artifact, as in
 the tester bootstrap.
 
 The normal user installation remains the Omarchy plugin-manager command from
-the root [README](../README.md). Do not ask users to build Go or run this
-development helper.
+the stable `main` README. Do not ask users to build Go or run this development
+helper.
 
 ## Studio preview retint policy
 
@@ -254,6 +277,7 @@ The gate checks:
 - A byte-for-byte deterministic rebuild of <code>bin/omagen</code> from
   <code>backend/</code>.
 - Manifest and binary version consistency.
+- Deterministic marketplace preflight bound to the checked-out full commit.
 - Native <code>omarchy plugin validate</code> when Omarchy is available.
 - Required plugin files and deterministic Demo assets.
 - Absence of plugin symlinks.

@@ -231,16 +231,16 @@ PanelWindow {
     margins {
         // Keep the demo reader separate from the live bar so screenshots can
         // distinguish staged data from compositor proof.
-        top: Style.bar.sizeHorizontal + Style.space(24)
-        left: Style.space(28)
+        top: Style.bar.sizeHorizontal + Style.space(20)
+        left: Style.space(24)
     }
     implicitWidth: Math.max(
-        Style.space(560),
-        Math.min(Style.space(980), root.targetScreen ? root.targetScreen.width * 0.62 : Style.space(980))
+        Style.space(480),
+        Math.min(Style.space(860), root.targetScreen ? root.targetScreen.width * 0.56 : Style.space(860))
     )
     implicitHeight: Math.max(
-        Style.space(420),
-        Math.min(Style.space(620), root.targetScreen ? root.targetScreen.height - Style.bar.sizeHorizontal - Style.space(48) : Style.space(620))
+        Style.space(380),
+        Math.min(Style.space(560), root.targetScreen ? root.targetScreen.height - Style.bar.sizeHorizontal - Style.space(40) : Style.space(560))
     )
 
     BorderSurface {

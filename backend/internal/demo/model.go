@@ -7,6 +7,8 @@ const workspacePrefix = "__omagen_demo_"
 const (
 	ModeFull   = "full"
 	ModeWindow = "window"
+	ModeShell  = "shell"
+	ModeBar    = "bar"
 )
 
 type Slot string
@@ -70,8 +72,10 @@ type SessionStatus struct {
 }
 
 func normalizeMode(mode string) string {
-	if mode == ModeWindow {
-		return ModeWindow
+	switch mode {
+	case ModeWindow, ModeShell, ModeBar:
+		return mode
+	default:
+		return ModeFull
 	}
-	return ModeFull
 }

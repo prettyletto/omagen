@@ -20,6 +20,10 @@ and the bounded-context routes in [docs/agents](agents/README.md).
 - [Recovery and safety](recovery.md) — temporary sessions, Cancel, Apply,
   Quit, and interrupted operations.
 - [Development](development.md) — local plugin development and validation.
+- [Nightly → dev handoff](development/nightly-to-dev-handoff.md) — promotion
+  scope, security evidence, compatibility notes, and release gates.
+- [v2.0.0 release notes](releases/v2.0.0.md) — release scope, trust boundary,
+  upgrade/recovery guidance, and the exact-commit verification record.
 - [Backend CLI reference](development/cli.md) — command families, JSON output,
   lifecycle actions, mutation commands, and recovery-safe usage.
 - [Repository health and architecture notes](development/architecture-health.md)
