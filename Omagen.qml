@@ -47,13 +47,17 @@ Item {
     property bool livePanelOpen: false
     property bool applyCapturePanelHidden: false
     readonly property bool liveCanvasPanelSuppressed: root.applyCapturePanelHidden
-        || (root.demoActive && root.demoMode === "full")
     property bool themePickerOpen: false
     property alias liveCanvasMonitor: demoController.monitor
     property alias pendingDemo: demoController.pendingDemo
     property alias pendingWindowDemo: demoController.pendingWindowDemo
     property bool recoveryBusy: false
     property string route: "unknown"
+    // Keep the bar widget and summon lifecycle resident, but defer the
+    // heavyweight Studio canvas until a workspace is actually requested.
+    // Durable session state and controllers survive Loader teardown/reload.
+    readonly property var liveCanvasPanel: liveCanvasLoader.item
+    property var deferredCanvasAction: null
     property var resumableSession: null
     property string sourceImage: ""
     property string workflowMode: "fast"
@@ -254,6 +258,8 @@ Item {
         if (!session.workspaceReady || !root.liveCanvasActive
                 || root.cancelBusy || root.demoBusy || root.applyBusy)
             return "unavailable"
+        if (!liveCanvasPanel)
+            return "unavailable"
 
         const variant = session.selectedVariant || "source"
         if (!session.hasPalette(variant))
@@ -366,6 +372,7 @@ Item {
     function openRuntimeSetup(themeName) {
         if (root.sessionBusy || root.cancelBusy)
             return
+        deferredCanvasAction = null
         runtimeSetupController.openSetup(themeName || runtimeSetupTheme)
         root.settingsOpen = false
         root.route = "runtime-setup"
@@ -381,6 +388,7 @@ Item {
         opened = false;
         settingsOpen = false;
         runtimeSetupOpen = false;
+        deferredCanvasAction = null;
         livePanelOpen = false;
         themePickerOpen = false;
     }
@@ -395,6 +403,7 @@ Item {
     }
 
     function closeRuntimeSetup() {
+        deferredCanvasAction = null
         runtimeSetupController.closeSetup()
         if (session.active) {
             route = "workspace";
@@ -407,6 +416,7 @@ Item {
     }
 
     function dismissRuntimeSetup() {
+        deferredCanvasAction = null
         runtimeSetupController.dismiss()
         if (session.active) {
             route = "workspace";
@@ -442,6 +452,7 @@ Item {
             root.cancelPreSessionWorkflow()
             return
         }
+        deferredCanvasAction = null
         livePanelOpen = false;
         opened = false;
     }
@@ -449,6 +460,7 @@ Item {
     function closeSettings() {
         if (settingsBusy)
             return;
+        deferredCanvasAction = null
         settingsOpen = false;
         route = settingsReturnRoute;
         errorMessage = "";
@@ -529,6 +541,7 @@ Item {
         if (sessionBusy || cancelBusy)
             return;
 
+        deferredCanvasAction = null
         errorMessage = "";
         if (!settingsOpen)
             settingsReturnRoute = route === "settings" ? "setup" : route;
@@ -680,6 +693,13 @@ Item {
         if (!session.workspaceReady || !session.hasPalette(variant) || cancelBusy || demoBusy || applyBusy)
             return;
 
+        if (!liveCanvasPanel) {
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+            root.deferredCanvasAction = function() { root.enterLiveCanvas(variant) }
+            return
+        }
+
         session.selectVariant(variant);
         errorMessage = "";
 
@@ -718,6 +738,12 @@ Item {
 
     function testLive(variant) {
         if (!session.workspaceReady || cancelBusy || demoBusy || applyBusy) return;
+        if (!liveCanvasPanel) {
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+            root.deferredCanvasAction = function() { root.testLive(variant) }
+            return
+        }
         errorMessage = "";
         liveCanvasActive = true;
         livePanelOpen = true;
@@ -728,6 +754,8 @@ Item {
     }
     function previewStyles(variant) {
         if (!root.extraConfigsEnabled)
+            return null;
+        if (!liveCanvasPanel)
             return null;
         if (session.workflow === "theme-edit" && (!session.themeEdit || !(session.themeEdit.managed_scopes || []).length))
             return null;
@@ -761,6 +789,12 @@ Item {
     function testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle, nextAnimationsStyle) {
         if (!session.workspaceReady || previewBusy || cancelBusy || demoBusy || applyBusy)
             return;
+        if (!liveCanvasPanel) {
+            root.liveCanvasActive = true
+            root.livePanelOpen = true
+            root.deferredCanvasAction = function() { root.testLiveColors(variant, overrides, nextShellStyle, nextDesktopStyle, nextBarStyle, nextAnimationsStyle) }
+            return
+        }
         if (nextShellStyle)
             root.shellStyle = root.normalizeEditedShellStyle(nextShellStyle);
         if (nextDesktopStyle)
@@ -812,19 +846,27 @@ Item {
     }
 
     function startDemo(variant) {
-        demoController.startDemo(variant)
+        return demoController.requestMode("full", variant)
     }
 
     function startWindowDemo() {
-        demoController.startWindowDemo()
+        return demoController.requestMode("window")
     }
 
     function startShellDemo() {
-        demoController.startShellDemo()
+        return demoController.requestMode("shell")
     }
 
     function startBarDemo() {
-        demoController.startBarDemo()
+        return demoController.requestMode("bar")
+    }
+
+    function requestDemoMode(mode) {
+        const target = String(mode || "")
+        return demoController.requestMode(
+            target,
+            target === "full" ? session.selectedVariant : ""
+        )
     }
 
     function stopBarDemo() {
@@ -931,6 +973,7 @@ Item {
         extraConfigsEnabled = false
         demoController.monitor = ""
         errorMessage = ""
+        deferredCanvasAction = null
         livePanelOpen = false
         opened = false
         route = "setup"
@@ -962,8 +1005,11 @@ Item {
 
     function clearSession(closeWhenDone) {
         const shouldClose = closeWhenDone === true || closeAfterCancel;
-        liveCanvasPanel.resetApplyDialog();
-        liveCanvasPanel.clearColorSession();
+        deferredCanvasAction = null;
+        if (liveCanvasPanel) {
+            liveCanvasPanel.resetApplyDialog();
+            liveCanvasPanel.clearColorSession();
+        }
         session.clear();
         sessionBusy = false;
         cancelBusy = false;
@@ -1332,7 +1378,8 @@ Item {
         }
         onPresetSaved: function(entry) {
             root.errorMessage = "Saved Look & Feel preset: " + String(entry.name || entry.id || "local preset")
-            liveCanvasPanel.closeLookFeelPresetDialog()
+            if (liveCanvasPanel)
+                liveCanvasPanel.closeLookFeelPresetDialog()
             lookFeelController.list()
         }
         onErrorRaised: root.errorMessage = message
@@ -1396,7 +1443,8 @@ Item {
             // workspace. Keep the selected image and confirmed workflow mode
             // available for the next Continue without creating a new session.
             wizardController.resetNavigation()
-            liveCanvasPanel.clearColorSession()
+            if (liveCanvasPanel)
+                liveCanvasPanel.clearColorSession()
             session.clearGeneration()
             root.liveCanvasActive = true
             root.livePanelOpen = true
@@ -1490,7 +1538,7 @@ Item {
         id: previewController
         backend: backend
         session: session
-        liveCanvasPanel: liveCanvasPanel
+        liveCanvasPanel: root.liveCanvasPanel
         stylesForVariant: function(variant) { return root.previewStyles(variant) }
         closeAfterCancel: root.closeAfterCancel
 
@@ -1502,6 +1550,8 @@ Item {
             if (root.closeAfterCancel)
                 return
             if (applyController.handlePreviewApplied())
+                return
+            if (demoController.handlePreviewApplied())
                 return
             // Shell and Bar Demos are QML-only reader surfaces. They do not own
             // a backend workspace or demo-state.json, so previewing them must
@@ -1534,6 +1584,8 @@ Item {
             if (root.closeAfterCancel)
                 return
             if (applyController.handlePreviewFailed(message))
+                return
+            if (demoController.handlePreviewFailed(message))
                 return
             root.errorMessage = message
             if (root.pendingDemo) {
@@ -1637,12 +1689,6 @@ Item {
                 root.errorMessage = "Backend closed a different demo session"
                 return
             }
-            if (root.pendingWindowDemo) {
-                root.pendingWindowDemo = false
-                demoController.openWindowAfterClose()
-                root.livePanelOpen = true
-                return
-            }
             root.livePanelOpen = root.liveCanvasActive
             root.opened = root.liveCanvasActive ? false : true
         }
@@ -1654,6 +1700,9 @@ Item {
             if (root.pendingWindowDemo) {
                 root.pendingWindowDemo = false
                 root.opened = true
+            } else {
+                root.livePanelOpen = root.liveCanvasActive
+                root.opened = false
             }
         }
     }
@@ -1841,8 +1890,24 @@ Item {
         onCloseRequested: { root.recoveryBusy = false; root.opened = false }
     }
 
-    Views.LiveCanvasPanel {
-        id: liveCanvasPanel
+    Loader {
+        id: liveCanvasLoader
+        active: session.active || root.liveCanvasActive || root.livePanelOpen || root.demoActive
+                || root.applyBusy || root.wizardWorkflowOpen
+        onLoaded: {
+            var action = root.deferredCanvasAction
+            root.deferredCanvasAction = null
+            if (action)
+                action()
+        }
+        onStatusChanged: {
+            if (status === Loader.Error) {
+                root.deferredCanvasAction = null
+                root.errorMessage = "Omagen Studio could not load its workspace"
+            }
+        }
+        sourceComponent: Component {
+            Views.LiveCanvasPanel {
         active: root.route === "workspace" && root.livePanelOpen
                 && ((session.active && root.liveCanvasActive) || root.wizardWorkflowOpen)
         previewBusy: root.previewBusy
@@ -1896,12 +1961,12 @@ Item {
 
         onHideRequested: root.hideLiveCanvasPanel()
         onCloseCanvasRequested: root.dispatchDemo()
-        onStartDemoRequested: root.startDemo(session.selectedVariant)
-        onWindowDemoRequested: root.startWindowDemo()
+        onStartDemoRequested: root.requestDemoMode("full")
+        onWindowDemoRequested: root.requestDemoMode("window")
         onWindowDemoStopRequested: root.dispatchDemo()
-        onShellDemoRequested: root.startShellDemo()
+        onShellDemoRequested: root.requestDemoMode("shell")
         onShellDemoStopRequested: root.stopShellDemo()
-        onBarDemoRequested: root.startBarDemo()
+        onBarDemoRequested: root.requestDemoMode("bar")
         onBarDemoStopRequested: root.stopBarDemo()
         onCancelRequested: root.cancelSession()
         onVariantRequested: function(variant) { root.enterLiveCanvas(variant) }
@@ -1938,25 +2003,38 @@ Item {
             root.errorMessage = ""
             root.applyTheme(variant, name, generateUnlock, capturePreview, replaceSource, saveLookFeelPreset, lookFeelPresetName)
         }
+            }
+        }
     }
 
-    Views.ShellDemoPanel {
-        id: shellDemoPanel
+    Loader {
+        id: shellDemoLoader
         active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "shell"
-        monitorName: root.liveCanvasMonitor
-        shellStyle: root.shellStyle
-        glitchEnabled: root.cyberpunkSignalActive
-        glitchEpoch: root.shellGlitchEpoch
+        sourceComponent: Component {
+            Views.ShellDemoPanel {
+                active: true
+                monitorName: root.liveCanvasMonitor
+                shellStyle: root.shellStyle
+                glitchEnabled: root.cyberpunkSignalActive
+                glitchEpoch: root.shellGlitchEpoch
+                onCloseRequested: root.stopShellDemo()
+            }
+        }
     }
 
-    Views.BarDemoPanel {
-        id: barDemoPanel
+    Loader {
+        id: barDemoLoader
         active: session.active && root.liveCanvasActive && root.demoActive && root.demoMode === "bar"
-        glitchEnabled: root.cyberpunkSignalActive
-        glitchEpoch: root.shellGlitchEpoch
-        monitorName: root.liveCanvasMonitor
-        barStyle: root.barStyle
-        onCloseRequested: root.stopBarDemo()
+        sourceComponent: Component {
+            Views.BarDemoPanel {
+                active: true
+                glitchEnabled: root.cyberpunkSignalActive
+                glitchEpoch: root.shellGlitchEpoch
+                monitorName: root.liveCanvasMonitor
+                barStyle: root.barStyle
+                onCloseRequested: root.stopBarDemo()
+            }
+        }
     }
 
     Views.LiveCanvasHandle {
@@ -1966,8 +2044,12 @@ Item {
         glitchEpoch: root.shellGlitchEpoch
         monitorName: root.liveCanvasMonitor
         demoActive: root.demoActive
+        demoMode: root.demoMode
         actionBusy: root.demoBusy || root.previewBusy || root.applyBusy || root.cancelBusy
         onReopenRequested: root.reopenLiveCanvasPanel()
+        onDemoModeRequested: function(mode) {
+            root.requestDemoMode(mode)
+        }
         onSaveApplyRequested: {
             if (root.demoBusy || root.previewBusy || root.applyBusy || root.cancelBusy)
                 return
@@ -1977,7 +2059,14 @@ Item {
             wizardController.step = wizardController.stepCount - 1
             root.livePanelOpen = true
             root.opened = false
-            Qt.callLater(function() { liveCanvasPanel.openApplyDialog() })
+            if (root.liveCanvasPanel)
+                Qt.callLater(function() { root.liveCanvasPanel.openApplyDialog() })
+            else {
+                root.deferredCanvasAction = function() {
+                    if (root.liveCanvasPanel && root.livePanelOpen)
+                        root.liveCanvasPanel.openApplyDialog()
+                }
+            }
         }
     }
 

@@ -51,6 +51,9 @@ section "CLI smoke tests"
 "$BIN" demo capabilities | python3 -m json.tool >/dev/null
 "$BIN" look-feel list | python3 -m json.tool >/dev/null || fail "look-feel catalog failed"
 "$ROOT/bin/omagen-studio" --help >/dev/null
+"$ROOT/scripts/test-omagen-theme-set.sh" || fail "theme-set dispatch tests failed"
+"$ROOT/scripts/test-install-command.sh" || fail "installer command ownership tests failed"
+"$ROOT/scripts/test-lazy-studio-contract.sh" || fail "lazy Studio lifecycle contract failed"
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
 python3 - "$capabilities" <<'PY'
@@ -122,6 +125,7 @@ required=(
     "manifest.json"
     "bar-manifest.json"
     "bin/omagen"
+    "bin/omagen-theme-set"
     "bin/omagen-studio"
     "qml/services/BackendService.qml"
     "qml/gateways/BackendCommand.qml"

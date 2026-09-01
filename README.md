@@ -176,9 +176,9 @@ After installation, click the Omagen widget in the Quattro bar:
 4. Select a palette direction.
 5. Activate a palette card to **Preview** it on the Live Canvas. In-depth users
    can use **Test Live** for staged Window, Shell, Bar, Animation, or custom
-   colour changes, open **Start Full Demo** for the four-window workspace, or
-   use the read-only **Bar Demo**. Bar Demo previews the staged bar below the
-   real native bar; it does not replace Quattro's widgets or input ownership.
+   colour changes, then use **Demos** to open Window Demo, Shell Demo, Bar Demo,
+   or the Full Workspace. Bar Demo previews the staged bar below the real
+   native bar; it does not replace Quattro's widgets or input ownership.
 
 Use **Cancel** to restore the original theme and background. If Omagen is
 interrupted during a preview, its next launch offers **Restore & close** or
