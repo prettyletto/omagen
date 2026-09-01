@@ -69,7 +69,7 @@ jobs:
           echo "$compat_bin" >> "$GITHUB_PATH"
 
       - name: Verify the bundled package
-        run: PATH="$RUNNER_TEMP/omagen-ci-bin:$PATH" GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
+        run: PATH="$RUNNER_TEMP/omagen-ci-bin:$PATH" OMAGEN_HEADLESS_CI=1 GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
 
       - name: Enforce stable promotion source
         if: github.event_name == 'pull_request' && github.base_ref == 'main'

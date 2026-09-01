@@ -69,16 +69,22 @@ section "Fresh package validation"
 "$ROOT/scripts/test-fresh-package.sh" || fail "fresh package validation failed"
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
-python3 - "$capabilities" <<'PY'
+OMAGEN_CAPABILITIES_JSON="$capabilities" python3 - <<'PY'
 import json
+import os
 import sys
 
-data = json.loads(sys.argv[1])
+data = json.loads(os.environ["OMAGEN_CAPABILITIES_JSON"])
 for key in ("terminal", "editor", "monitor", "file_manager"):
     if key not in data:
         raise SystemExit(f"missing capability: {key}")
-if not isinstance(data["terminal"], dict) or not data["terminal"].get("command"):
-    raise SystemExit("no terminal capability available")
+if not isinstance(data["terminal"], dict):
+    raise SystemExit("invalid terminal capability")
+if not data["terminal"].get("command"):
+    if os.environ.get("OMAGEN_HEADLESS_CI") == "1":
+        print("WARNING: no terminal capability available in headless CI; resolver contract was validated", file=sys.stderr)
+    else:
+        raise SystemExit("no terminal capability available")
 PY
 
 section "Manifest"
