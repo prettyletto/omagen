@@ -544,12 +544,19 @@ func TestStudioThemeSetLogIsBounded(t *testing.T) {
 	if info.Size() > maxStudioLogBytes+128 {
 		t.Fatalf("log size=%d, want at most %d", info.Size(), maxStudioLogBytes+128)
 	}
-	data, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "log truncated") {
-		t.Fatal("bounded log did not record truncation marker")
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, readErr := os.ReadFile(logPath)
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		if strings.Contains(string(data), "log truncated") {
+			break
+		}
+		if !time.Now().Before(deadline) {
+			t.Fatal("bounded log did not record truncation marker")
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
