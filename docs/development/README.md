@@ -10,6 +10,8 @@ contributor and packaging workflow. Use the domain recipe in
 - [`cli.md`](cli.md) — backend command families, lifecycle sequence, and safe
   inspection/mutation guidance.
 - [`ui-testing.md`](ui-testing.md) — guarded live Omarchy/Hyprland testing.
+- [`release-process.md`](release-process.md) — nightly → dev → main promotion,
+  CI gates, marketplace preflight, and release evidence.
 
 For the read-only repository health baseline, confirmed cleanup candidates,
 architecture opportunities, lifecycle risks, and coverage priorities, see

@@ -48,7 +48,7 @@ The normal sequence is:
 
 ```text
 session begin -> generate -> preview apply (optional, repeatable)
-           -> demo open/open-window (optional)
+           -> demo open/open-window/open-reader (optional)
            -> apply OR session cancel
 ```
 
@@ -78,6 +78,7 @@ disabled by default.
 ```zsh
 bin/omagen demo open <session_id>
 bin/omagen demo open-window <session_id>
+bin/omagen demo open-reader <session_id> <shell|bar>
 bin/omagen demo reflow <session_id>
 bin/omagen demo capture <session_id>
 bin/omagen demo close <session_id>

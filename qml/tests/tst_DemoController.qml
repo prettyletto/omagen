@@ -9,6 +9,7 @@ TestCase {
         id: backend
         signal demoOpened(string sessionId, string workspace, string monitor, bool reused)
         signal windowDemoOpened(string sessionId, string workspace, string monitor, bool reused)
+        signal demoReaderOpened(string sessionId, string workspace, string monitor, string mode, bool reused)
         signal demoClosed(string sessionId, bool wasClosed)
         signal demoOpenFailed(string message)
         signal windowDemoOpenFailed(string message)
@@ -17,11 +18,13 @@ TestCase {
         signal demoReflowFailed(string message)
         property int openCalls: 0
         property int windowOpenCalls: 0
+        property int readerOpenCalls: 0
         property int closeCalls: 0
         property int reflowCalls: 0
 
         function openDemo(sessionId) { openCalls += 1 }
         function openWindowDemo(sessionId) { windowOpenCalls += 1 }
+        function openDemoReader(sessionId, mode) { readerOpenCalls += 1 }
         function closeDemo(sessionId) { closeCalls += 1 }
         function reflowDemo(sessionId) { reflowCalls += 1 }
     }
@@ -53,6 +56,7 @@ TestCase {
     function init() {
         backend.openCalls = 0
         backend.windowOpenCalls = 0
+        backend.readerOpenCalls = 0
         backend.closeCalls = 0
         backend.reflowCalls = 0
         previewController.calls = 0
@@ -63,15 +67,23 @@ TestCase {
 
     function test_readerModesSwitchAndStopWithoutBackendCalls() {
         compare(controller.requestMode("shell"), "started")
+        compare(backend.readerOpenCalls, 1)
+        verify(!controller.active)
+
+        backend.demoReaderOpened("session-1", "__omagen_demo_session-1_shell", "DP-1", "shell", false)
         compare(controller.mode, "shell")
         compare(controller.monitor, "DP-1")
 
-        compare(controller.requestMode("bar"), "started")
+        compare(controller.requestMode("bar"), "switching")
+        compare(backend.closeCalls, 1)
+        backend.demoClosed("session-1", true)
+        compare(backend.readerOpenCalls, 2)
+        backend.demoReaderOpened("session-1", "__omagen_demo_session-1_bar", "DP-1", "bar", false)
         compare(controller.mode, "bar")
         compare(controller.requestMode("bar"), "stopped")
         verify(!controller.active)
         compare(backend.openCalls, 0)
-        compare(backend.closeCalls, 0)
+        compare(backend.closeCalls, 2)
     }
 
     function test_windowModePreviewsBeforeOpeningOwnedWindows() {

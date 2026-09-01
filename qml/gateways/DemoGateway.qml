@@ -9,6 +9,8 @@ Item {
     signal openFailed(string message)
     signal windowOpened(string sessionId, string workspace, string monitor, bool reused)
     signal windowOpenFailed(string message)
+    signal readerOpened(string sessionId, string workspace, string monitor, string mode, bool reused)
+    signal readerOpenFailed(string message)
     signal reflowed(string sessionId)
     signal reflowFailed(string message)
     signal closed(string sessionId, bool wasClosed)
@@ -18,6 +20,7 @@ Item {
 
     function open(sessionId) { openCommand.exec([root.executable, "demo", "open", sessionId]) }
     function openWindow(sessionId) { windowOpenCommand.exec([root.executable, "demo", "open-window", sessionId]) }
+    function openReader(sessionId, mode) { readerOpenCommand.exec([root.executable, "demo", "open-reader", sessionId, mode]) }
     function reflow(sessionId) { reflowCommand.exec([root.executable, "demo", "reflow", sessionId]) }
     function close(sessionId) { closeCommand.exec([root.executable, "demo", "close", sessionId]) }
     function capture(sessionId) { captureCommand.exec([root.executable, "demo", "capture", sessionId]) }
@@ -48,6 +51,21 @@ Item {
             root.windowOpened(result.session_id, result.workspace, result.monitor, result.reused === true)
         }
         onFailed: root.windowOpenFailed(message)
+    }
+
+    BackendCommand {
+        id: readerOpenCommand
+        failureFallback: "Failed to open reader Demo workspace"
+        invalidJsonFallback: "Backend returned invalid reader Demo JSON"
+        onCompleted: function(result) {
+            if (result.ok !== true || !result.session_id || !result.workspace || !result.monitor
+                    || (result.mode !== "shell" && result.mode !== "bar")) {
+                root.readerOpenFailed("Backend returned incomplete reader Demo data")
+                return
+            }
+            root.readerOpened(result.session_id, result.workspace, result.monitor, result.mode, result.reused === true)
+        }
+        onFailed: root.readerOpenFailed(message)
     }
 
     BackendCommand {

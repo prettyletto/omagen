@@ -55,6 +55,19 @@ section "CLI smoke tests"
 "$ROOT/scripts/test-install-command.sh" || fail "installer command ownership tests failed"
 "$ROOT/scripts/test-lazy-studio-contract.sh" || fail "lazy Studio lifecycle contract failed"
 
+section "Marketplace preflight"
+marketplace_report="$(mktemp "${TMPDIR:-/tmp}/omagen-marketplace-report.XXXXXX.json")"
+trap 'rm -f -- "$marketplace_report"' EXIT
+python3 "$ROOT/scripts/marketplace-preflight.py" \
+    --commit "$(git -C "$ROOT" rev-parse HEAD)" \
+    --report "$marketplace_report" || fail "marketplace preflight failed"
+
+section "Shader source/QSB provenance"
+python3 "$ROOT/scripts/verify-shader-provenance.py" || fail "shader provenance check failed"
+
+section "Fresh package validation"
+"$ROOT/scripts/test-fresh-package.sh" || fail "fresh package validation failed"
+
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
 python3 - "$capabilities" <<'PY'
 import json
@@ -127,6 +140,12 @@ required=(
     "bin/omagen"
     "bin/omagen-theme-set"
     "bin/omagen-studio"
+    "scripts/marketplace-preflight.py"
+    "scripts/test-marketplace-preflight.py"
+    "scripts/verify-shader-provenance.py"
+    "scripts/test-fresh-package.sh"
+    "docs/shader-provenance.json"
+    "NOTICE.md"
     "qml/services/BackendService.qml"
     "qml/gateways/BackendCommand.qml"
     "qml/gateways/SessionGateway.qml"

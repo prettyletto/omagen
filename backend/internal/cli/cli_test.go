@@ -38,6 +38,16 @@ func TestRunCommandValidation(t *testing.T) {
 	}
 }
 
+func TestRunDemoReaderRejectsUnsupportedMode(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"demo", "open-reader", "session-1", "full"}, &out, &errOut); code != 2 {
+		t.Fatalf("code=%d stderr=%q, want invalid-usage exit", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "unsupported reader Demo mode") {
+		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
+
 func TestRunLookFeelListAndResolve(t *testing.T) {
 	testenv.Isolate(t)
 	var out, errOut bytes.Buffer

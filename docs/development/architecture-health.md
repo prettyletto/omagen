@@ -378,7 +378,7 @@ The following documentation work is worth keeping visible:
   critical, post-commit, or independently recoverable.
 - Add a release checklist for source changes, deterministic rebuild, both
   bundled executables, manifest/version consistency, package validation, and
-  promotion between branches.
+  promotion between `nightly`, `dev`, and `main`.
 
 ## Suggested order of work
 

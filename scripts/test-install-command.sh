@@ -32,6 +32,18 @@ run_install() {
 run_install
 USER_THEME_SET="$XDG_BIN_HOME/omagen-theme-set"
 [[ -x "$USER_THEME_SET" ]] || { printf 'user dispatcher was not installed\n' >&2; exit 1; }
+[[ ! -e "$XDG_CONFIG_HOME/omarchy/plugins/pretty.omagen/qml/tests" ]] || {
+  printf 'QML tests were copied into the production overlay package\n' >&2
+  exit 1
+}
+[[ -f "$XDG_CONFIG_HOME/omarchy/plugins/pretty.omagen/manifest.json" ]] || {
+  printf 'overlay manifest was not installed\n' >&2
+  exit 1
+}
+[[ -f "$XDG_CONFIG_HOME/omarchy/plugins/pretty.omagen.bar/manifest.json" ]] || {
+  printf 'full-bar manifest was not installed\n' >&2
+  exit 1
+}
 [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]] || {
   printf 'user dispatcher ownership marker missing\n' >&2
   exit 1
