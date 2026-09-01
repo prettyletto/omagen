@@ -18,6 +18,8 @@ PanelWindow {
     property bool glitchEnabled: false
     property int glitchEpoch: 0
 
+    signal closeRequested()
+
     readonly property var targetScreen: root.resolveScreen()
     readonly property string presetChoice: String(root.shellStyle.preset || "default")
     readonly property string surfaceChoice: String(root.shellStyle.surface || "flat")
@@ -151,16 +153,31 @@ PanelWindow {
                     }
                 }
 
-                Text {
+                RowLayout {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "OMAGEN\nSTUDIO\n" + root.overrideCount + " TOKENS"
-                    horizontalAlignment: Text.AlignRight
-                    color: Color.foreground
-                    opacity: 0.72
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    font.bold: true
+                    spacing: Style.space(8)
+
+                    Text {
+                        text: "OMAGEN\nSTUDIO\n" + root.overrideCount + " TOKENS"
+                        horizontalAlignment: Text.AlignRight
+                        color: Color.foreground
+                        opacity: 0.72
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                    }
+
+                    Button {
+                        Layout.preferredWidth: Style.space(34)
+                        Layout.preferredHeight: Style.space(34)
+                        text: "×"
+                        foreground: Color.foreground
+                        accent: Color.accent
+                        bordered: true
+                        tooltipText: "Close Shell Demo"
+                        onClicked: root.closeRequested()
+                    }
                 }
             }
 

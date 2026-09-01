@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+# Omagen user-facing theme activation adapter
+set -Eeuo pipefail
+
+# Omagen's user-facing theme activation adapter.
+#
+# Native Omarchy remains the owner for ordinary themes.  A generated Omagen
+# theme carries omagen.runtime.json, which is the durable marker that its
+# advanced shell/bar/window composition needs the atomic Studio transaction.
+# Keeping this decision in one command prevents callers from having to know
+# whether a theme was generated, while preserving native fallback semantics.
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: omagen-theme-set <theme-name> [studio-theme-set options]
+
+Generated Omagen themes are applied through the bundled Studio transaction
+driver. Ordinary themes delegate to the native `omarchy theme set` command.
+Studio options are accepted only when the selected theme has an Omagen runtime
+manifest (for example: --scope, --wait, --run, --skip, --no-hooks).
+EOF
+}
+
+if (($# < 1)) || [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  usage
+  (($# < 1)) && exit 2 || exit 0
+fi
+
+THEME_INPUT="$1"
+shift
+
+# Match the native theme-set normalization so a chooser label and a direct
+# command resolve to the same theme directory.
+THEME_NAME=$(printf '%s' "$THEME_INPUT" | sed -E 's/<[^>]+>//g' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+if [[ -z "$THEME_NAME" || "$THEME_NAME" == .* || "$THEME_NAME" == */* ]]; then
+  printf 'omagen-theme-set: invalid theme name: %s\n' "$THEME_INPUT" >&2
+  exit 2
+fi
+
+CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
+# Native omarchy-theme-set and the Studio driver currently resolve user themes
+# from this canonical path regardless of XDG_CONFIG_HOME. Keep classification
+# aligned with those readers so a custom config root cannot select a different
+# source tree than the driver will stage.
+USER_THEMES_PATH="$HOME/.config/omarchy/themes"
+
+OMARCHY_ROOT=""
+for candidate in "${OMARCHY_PATH:-}" "$HOME/.local/share/omarchy" "/usr/share/omarchy"; do
+  if [[ -n "$candidate" && -f "$candidate/shell/shell.qml" ]]; then
+    OMARCHY_ROOT="$candidate"
+    break
+  fi
+done
+
+if [[ -z "$OMARCHY_ROOT" ]]; then
+  printf 'omagen-theme-set: cannot resolve OMARCHY_PATH\n' >&2
+  exit 1
+fi
+
+is_advanced_theme=0
+for theme_root in "$USER_THEMES_PATH" "$OMARCHY_ROOT/themes"; do
+  manifest="$theme_root/$THEME_NAME/omagen.runtime.json"
+  if [[ -f "$manifest" ]] && python3 - "$manifest" >/dev/null 2>&1 <<'PY'
+import json
+import re
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    manifest = json.load(stream)
+
+features = manifest.get("features")
+if (
+    manifest.get("schema_version") != 1
+    or manifest.get("mode") != "advanced"
+    or manifest.get("runtime") != "pretty.omagen"
+    or manifest.get("requires_runtime") is not True
+    or not isinstance(features, list)
+    or not features
+    or any(not isinstance(feature, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", feature) for feature in features)
+    or len(set(features)) != len(features)
+):
+    raise SystemExit(1)
+PY
+  then
+    is_advanced_theme=1
+    break
+  fi
+done
+
+if ((is_advanced_theme)); then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  driver="${OMAGEN_STUDIO_THEME_SET:-}"
+  if [[ -z "$driver" || ! -x "$driver" ]]; then
+    if [[ -x "$SCRIPT_DIR/studio-theme-set" ]]; then
+      driver="$SCRIPT_DIR/studio-theme-set"
+    else
+      plugin_bin="$CONFIG_HOME/omarchy/plugins/pretty.omagen/bin"
+      driver="$plugin_bin/studio-theme-set"
+    fi
+  fi
+  if [[ ! -x "$driver" ]]; then
+    printf 'omagen-theme-set: generated theme requires studio-theme-set, but no driver was found\n' >&2
+    printf 'Install Omagen again or set OMAGEN_STUDIO_THEME_SET to its path.\n' >&2
+    exit 1
+  fi
+
+  # Preview and Apply both use the same critical transaction.  Keep arbitrary
+  # user hooks disabled at this seam; callers can explicitly opt in using the
+  # driver's documented --allow-trusted-hooks flag.
+  exec "$driver" apply "$THEME_NAME" --no-hooks "$@"
+fi
+
+if (($# > 0)); then
+  printf 'omagen-theme-set: options are only valid for generated Omagen themes: %s\n' "$*" >&2
+  usage
+  exit 2
+fi
+
+# Do not shadow or mutate Omarchy's dispatcher.  This explicit adapter simply
+# delegates to the native command for themes that have no Omagen runtime.
+native_status=0
+omarchy theme set "$THEME_INPUT" || native_status=$?
+if ((native_status != 0)); then
+  exit "$native_status"
+fi
+
+# If the optional hook is unavailable, ask the Go runtime authority to cleanly
+# deactivate any previously-owned advanced bar after native promotion. This is
+# deliberately best-effort and never makes a successful native theme switch
+# fail; the runtime command, not QML, remains the only shell.json writer.
+canonical_hook="$HOME/.config/omarchy/hooks/theme-set.d/omagen-theme-set"
+hook_owned=0
+if [[ -f "$canonical_hook" && ! -L "$canonical_hook" ]] &&
+   [[ "$(sed -n '1,2p' "$canonical_hook")" == $'#!/bin/sh\n# Omagen Advanced Runtime hook' ]]; then
+  hook_owned=1
+fi
+runtime_bin=""
+for candidate in \
+  "$HOME/.config/omarchy/plugins/pretty.omagen/bin/omagen" \
+  "$CONFIG_HOME/omarchy/plugins/pretty.omagen/bin/omagen"; do
+  if [[ -x "$candidate" ]]; then
+    runtime_bin="$candidate"
+    break
+  fi
+done
+if ((hook_owned == 0)) && [[ -n "$runtime_bin" ]]; then
+  if ! "$runtime_bin" runtime theme-set "$THEME_NAME" >/dev/null; then
+    printf 'omagen-theme-set: native theme applied, but advanced runtime cleanup was unavailable\n' >&2
+  fi
+fi

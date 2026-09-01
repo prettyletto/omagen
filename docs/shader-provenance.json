@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "compiler": {
+    "name": "Qt Shader Baker (qsb)",
+    "version_policy": "record the qsb/Qt version in the release provenance artifact"
+  },
+  "artifacts": [
+    {
+      "source": "qml/components/glitch.frag",
+      "source_sha256": "5fc58c81ff2625fef2b56e69e4733c87ecd58dece988ff3e4307a8e5ea5b8623",
+      "qsb": "qml/components/glitch.frag.qsb",
+      "qsb_sha256": "088684c56ee74e9b18426c1877605458a2891da5710bffb4be7c46b82b85e339"
+    },
+    {
+      "source": "qml/components/glitch.vert",
+      "source_sha256": "0bdaccfa4096a521f7ad722749e9c28014d72626944a0ac55dcb40bc616408f3",
+      "qsb": "qml/components/glitch.vert.qsb",
+      "qsb_sha256": "0ffbd089603bbe5fa4cbd54bdd34555bbd47d80b85cd1c9ad5c94c2e95c29fa9"
+    }
+  ]
+}

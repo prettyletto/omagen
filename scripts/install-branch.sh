@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# This script is intended to be fetched from a branch and piped to a shell.
-# It clones that branch first, so install.sh still resolves all package files
-# relative to a real checkout.
+# This script installs a tester-selected, exact commit. It deliberately refuses
+# to execute a mutable branch head, so the caller can inspect the commit before
+# running the installer.
 REPOSITORY="${OMAGEN_TEST_REPOSITORY:-https://github.com/prettyletto/omagen.git}"
 BRANCH="${OMAGEN_TEST_BRANCH:-nightly}"
+COMMIT="${OMAGEN_TEST_COMMIT:-}"
 
 usage() {
     cat <<EOF
-Usage: bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
+Usage: OMAGEN_TEST_COMMIT=<full-sha> $0
 
-The default installs the nightly branch. Override the source when needed:
-  OMAGEN_TEST_BRANCH=<branch> OMAGEN_TEST_REPOSITORY=<url> bash
+The exact commit is required before any checked-out code is executed:
+  OMAGEN_TEST_COMMIT=<40-character-sha>
+  OMAGEN_TEST_BRANCH=<branch> OMAGEN_TEST_REPOSITORY=<url> $0
 EOF
 }
 
@@ -28,6 +30,12 @@ command -v git >/dev/null 2>&1 || {
     exit 1
 }
 
+if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    echo "OMAGEN_TEST_COMMIT must be a full 40-character commit SHA." >&2
+    echo "Refusing to execute mutable branch '$BRANCH'." >&2
+    exit 2
+fi
+
 checkout_root="$(mktemp -d "${TMPDIR:-/tmp}/omagen-branch.XXXXXX")"
 cleanup() {
     rm -rf -- "$checkout_root"
@@ -35,10 +43,16 @@ cleanup() {
 trap cleanup EXIT
 
 checkout="$checkout_root/source"
-echo "Cloning Omagen branch '$BRANCH'..."
-git clone --depth 1 --single-branch --branch "$BRANCH" "$REPOSITORY" "$checkout"
-commit="$(git -C "$checkout" rev-parse --short=12 HEAD)"
-echo "Testing commit $commit."
+echo "Fetching Omagen branch '$BRANCH' for commit $COMMIT..."
+git clone --no-checkout --filter=blob:none --single-branch --branch "$BRANCH" "$REPOSITORY" "$checkout"
+git -C "$checkout" fetch --depth 1 origin "$COMMIT"
+git -C "$checkout" checkout --detach "$COMMIT"
+actual_commit="$(git -C "$checkout" rev-parse HEAD)"
+[[ "$actual_commit" == "$COMMIT" ]] || {
+    echo "Fetched commit does not match requested commit." >&2
+    exit 1
+}
+echo "Testing exact commit $actual_commit."
 
 echo "Installing Omagen branch '$BRANCH'..."
 "$checkout/dev-install.sh" --skip-build

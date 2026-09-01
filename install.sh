@@ -6,6 +6,8 @@ BAR_PLUGIN_ID="pretty.omagen.bar"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID"
 BAR_DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$BAR_PLUGIN_ID"
+USER_BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+USER_THEME_SET="$USER_BIN_DIR/omagen-theme-set"
 
 # Omarchy's shell may be installed in the user's checkout rather than the
 # system path. Prefer a valid existing OMARCHY_PATH, then resolve the paths
@@ -110,6 +112,30 @@ chmod +x "$DEST_DIR/bin/studio-theme-set"
 cp "$SRC_DIR/bin/omagen-file-select" "$DEST_DIR/bin/.omagen-file-select.new"
 mv -f "$DEST_DIR/bin/.omagen-file-select.new" "$DEST_DIR/bin/omagen-file-select"
 chmod +x "$DEST_DIR/bin/omagen-file-select"
+cp "$SRC_DIR/bin/omagen-theme-set" "$DEST_DIR/bin/.omagen-theme-set.new"
+mv -f "$DEST_DIR/bin/.omagen-theme-set.new" "$DEST_DIR/bin/omagen-theme-set"
+chmod +x "$DEST_DIR/bin/omagen-theme-set"
+
+# Make the routing seam directly callable without replacing a command the user
+# may already own.  The marker is intentionally short and stable so uninstall
+# can remove only a file written by this installer.
+mkdir -p "$USER_BIN_DIR"
+if [[ -e "$USER_THEME_SET" || -L "$USER_THEME_SET" ]]; then
+    if [[ -f "$USER_THEME_SET" && ! -L "$USER_THEME_SET" ]] &&
+       [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]]; then
+        cp "$SRC_DIR/bin/omagen-theme-set" "$USER_THEME_SET.new"
+        mv -f "$USER_THEME_SET.new" "$USER_THEME_SET"
+        chmod +x "$USER_THEME_SET"
+        echo "Updated user command: $USER_THEME_SET"
+    else
+        echo "Preserved existing user command (not Omagen-owned): $USER_THEME_SET" >&2
+        echo "Use the installed adapter directly: $DEST_DIR/bin/omagen-theme-set" >&2
+    fi
+else
+    cp "$SRC_DIR/bin/omagen-theme-set" "$USER_THEME_SET"
+    chmod +x "$USER_THEME_SET"
+    echo "Installed user command: $USER_THEME_SET"
+fi
 
 # The full bar is a separate plugin kind. Keeping it separate from the
 # bar-widget manifest is required by Quattro's registry: a manifest selected

@@ -1,0 +1,26 @@
+name: Bug report
+description: Report a reproducible Omagen problem
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: List the exact steps and expected versus actual behavior.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Environment versions
+      description: Include Omagen, Omarchy, Quickshell, Hyprland, and relevant terminal versions.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: Remove usernames, credentials, private paths, and personal images.
+    validations:
+      required: false

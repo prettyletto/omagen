@@ -48,36 +48,18 @@ BarWidget {
         && dockedSurface.metadataResolved
         && dockedSurface.omagenBarForm === "docked"
 
-    // Theme switching only reloads shell.toml; it does not interpret Omagen's
-    // bar profile. Keep the persisted bar selection synchronized with the
-    // theme marker while respecting any other custom bar the user chose.
-    function syncThemeBarSelection(raw) {
-        if (!root.bar || !root.bar.shell || typeof root.bar.shell.mutateShellConfig !== "function") return
-        var replacement = false
+    // The Go runtime adapter is the sole shell.json writer for theme-owned bar
+    // activation. This widget only reads the promoted profile to decide which
+    // additive surface to render; it never races the critical transaction.
+    function readThemeBarProfile(raw) {
+        var document = ({})
         try {
-            var document = JSON.parse(String(raw || "{}"))
-            replacement = !!(document && String(document.implementation || "") === "replacement")
+            document = JSON.parse(String(raw || "{}"))
         } catch (error) {
-            replacement = false
+            document = ({})
         }
         root.barImplementation = String(document && document.implementation || "")
-        root.replacementTheme = replacement
-        var current = root.bar.barConfig && root.bar.barConfig.id ? String(root.bar.barConfig.id) : "omarchy.bar"
-        if (replacement && (current === "omarchy.bar" || current === "")) {
-            root.bar.shell.mutateShellConfig(function(copy) {
-                if (!copy.bar || typeof copy.bar !== "object") copy.bar = {}
-                if (!copy.bar.id || copy.bar.id === "omarchy.bar") {
-                    copy.bar.id = "pretty.omagen.bar"
-                    copy.bar.omagenOwnedBy = "pretty.omagen"
-                }
-            })
-        } else if (!replacement && current === "pretty.omagen.bar"
-                && root.bar.barConfig && root.bar.barConfig.omagenOwnedBy === "pretty.omagen") {
-            root.bar.shell.mutateShellConfig(function(copy) {
-                if (copy.bar && typeof copy.bar === "object") delete copy.bar.id
-                if (copy.bar && typeof copy.bar === "object") delete copy.bar.omagenOwnedBy
-            })
-        }
+        root.replacementTheme = !!(document && String(document.implementation || "") === "replacement")
     }
 
     FileView {
@@ -87,7 +69,7 @@ BarWidget {
         printErrors: false
         onLoaded: {
             missingBarProfileTimer.stop()
-            root.syncThemeBarSelection(text())
+            root.readThemeBarProfile(text())
         }
         onFileChanged: reload()
         onLoadFailed: missingBarProfileTimer.restart()
@@ -105,7 +87,7 @@ BarWidget {
         id: missingBarProfileTimer
         interval: 280
         repeat: false
-        onTriggered: root.syncThemeBarSelection("")
+        onTriggered: root.readThemeBarProfile("")
     }
 
     FileView {

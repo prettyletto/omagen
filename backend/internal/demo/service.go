@@ -43,6 +43,16 @@ func (s *Service) OpenWindow(sessionID string) (OpenResult, error) {
 	return s.openMode(sessionID, ModeWindow)
 }
 
+// OpenReader reserves a session-owned workspace for a QML reader surface.
+// The reader itself is an overlay, but its workspace is still tracked by the
+// backend so switching, cancel, and recovery restore the user's desktop.
+func (s *Service) OpenReader(sessionID, mode string) (OpenResult, error) {
+	if mode != ModeShell && mode != ModeBar {
+		return OpenResult{}, fmt.Errorf("unsupported reader Demo mode %q", mode)
+	}
+	return s.openMode(sessionID, mode)
+}
+
 func (s *Service) openMode(sessionID, mode string) (OpenResult, error) {
 	if _, err := s.requireActiveIdle(sessionID); err != nil {
 		return OpenResult{}, fmt.Errorf("inspect session: %w", err)
@@ -179,6 +189,9 @@ func (s *Service) createDemo(sessionID, mode string) (OpenResult, error) {
 	if mode == ModeWindow {
 		return s.createWindowDemo(sessionID)
 	}
+	if mode == ModeShell || mode == ModeBar {
+		return s.createReaderDemo(sessionID, mode)
+	}
 	m, err := focusedMonitor()
 	if err != nil {
 		return OpenResult{}, err
@@ -275,6 +288,59 @@ func (s *Service) createDemo(sessionID, mode string) (OpenResult, error) {
 	}
 	if err = s.saveStateIfActive(state); err != nil {
 		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	return s.openResult(state, false), nil
+}
+
+func (s *Service) createReaderDemo(sessionID, mode string) (OpenResult, error) {
+	m, err := focusedMonitor()
+	if err != nil {
+		return OpenResult{}, err
+	}
+	dir, err := s.prepareDemoDir(sessionID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	cleanupDir := func() { _ = os.RemoveAll(dir) }
+	if err = focusMonitor(m.Name); err != nil {
+		cleanupDir()
+		return OpenResult{}, err
+	}
+	if _, err = s.requireActiveIdle(sessionID); err != nil {
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("recheck session before opening %s Demo: %w", mode, err)
+	}
+
+	origin := State{
+		SessionID:           sessionID,
+		Mode:                mode,
+		DemoMonitor:         m.Name,
+		OriginMonitor:       m.Name,
+		OriginWorkspaceID:   m.ActiveWorkspace.ID,
+		OriginWorkspaceName: m.ActiveWorkspace.Name,
+	}
+	state := State{
+		SessionID:           sessionID,
+		Mode:                mode,
+		Workspace:           workspacePrefix + shortID(sessionID) + "_" + mode,
+		DemoMonitor:         m.Name,
+		OriginMonitor:       origin.OriginMonitor,
+		OriginWorkspaceID:   origin.OriginWorkspaceID,
+		OriginWorkspaceName: origin.OriginWorkspaceName,
+		DemoDir:             dir,
+		OwnerToken:          makeOwnerToken(sessionID),
+		Windows:             map[Slot]string{},
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err = s.saveStateIfActive(state); err != nil {
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("persist %s Demo state: %w", mode, err)
+	}
+	if err = switchWorkspace(state.Workspace); err != nil {
+		_ = restoreWorkspace(origin)
+		_ = os.Remove(s.statePath(sessionID))
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("open %s Demo workspace: %w", mode, err)
 	}
 	return s.openResult(state, false), nil
 }
@@ -502,7 +568,10 @@ func (s *Service) openResult(state State, reused bool) OpenResult {
 }
 
 func missingSlotsForMode(mode string, windows map[Slot]string) []Slot {
-	if normalizeMode(mode) == ModeWindow {
+	switch normalizeMode(mode) {
+	case ModeShell, ModeBar:
+		return nil
+	case ModeWindow:
 		var result []Slot
 		if windows[SlotEditor] == "" {
 			result = append(result, SlotEditor)
@@ -511,8 +580,9 @@ func missingSlotsForMode(mode string, windows map[Slot]string) []Slot {
 			result = append(result, SlotBtop)
 		}
 		return result
+	default:
+		return missingSlots(windows)
 	}
-	return missingSlots(windows)
 }
 func (s *Service) prepareDemoDir(sessionID string) (string, error) {
 	dst := filepath.Join(s.sessions.SessionDir(sessionID), "demo-scene")

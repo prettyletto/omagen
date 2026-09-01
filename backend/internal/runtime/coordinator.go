@@ -22,6 +22,38 @@ func NewRuntimeCoordinator(registry *AdapterRegistry) (*RuntimeCoordinator, erro
 	return &RuntimeCoordinator{registry: registry}, nil
 }
 
+// Preflight validates every supported adapter in an activation plan before a
+// compatible runtime handoff mutates the currently mounted desktop. Activate
+// repeats these checks so this method remains a preparation fence, not state.
+func (c *RuntimeCoordinator) Preflight(ctx context.Context, request ActivationRequest) error {
+	if ctx == nil {
+		return fmt.Errorf("runtime activation context is nil")
+	}
+	if c == nil || c.registry == nil {
+		return fmt.Errorf("runtime coordinator is nil")
+	}
+	plan, err := c.registry.Plan(request)
+	if err != nil {
+		return err
+	}
+	for _, planned := range plan.Features {
+		if planned.State == FeatureUnsupported {
+			continue
+		}
+		adapter, exists := c.registry.adapters[planned.Feature]
+		if !exists {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := adapter.Preflight(ctx, request); err != nil {
+			return fmt.Errorf("preflight runtime feature %q: %w", planned.Feature, err)
+		}
+	}
+	return nil
+}
+
 func (c *RuntimeCoordinator) Activate(ctx context.Context, request ActivationRequest) (RuntimeActivationResult, error) {
 	if ctx == nil {
 		return RuntimeActivationResult{}, fmt.Errorf("runtime activation context is nil")

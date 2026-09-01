@@ -12,6 +12,7 @@ CACHE_ROOT="$CACHE_HOME/omagen"
 SETTINGS_ROOT="$CONFIG_HOME/omagen"
 DEFAULT_HOOK="$CONFIG_HOME/omarchy/hooks/theme-set.d/omagen-theme-set"
 RUNTIME_BIN="$PLUGIN_ROOT/$PLUGIN_ID/bin/omagen"
+USER_THEME_SET="${XDG_BIN_HOME:-$HOME/.local/bin}/omagen-theme-set"
 
 usage() {
     cat <<EOF
@@ -114,6 +115,16 @@ remove_plugin() {
     printf 'Removed plugin: %s\n' "$plugin_id"
 }
 
+remove_owned_theme_set_command() {
+    [[ -f "$USER_THEME_SET" && ! -L "$USER_THEME_SET" ]] || return 0
+    if [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]]; then
+        rm -f -- "$USER_THEME_SET"
+        printf 'Removed Omagen user command: %s\n' "$USER_THEME_SET"
+    else
+        printf 'Preserved non-Omagen user command: %s\n' "$USER_THEME_SET" >&2
+    fi
+}
+
 printf 'Removing Omagen while preserving user themes and unrelated hooks...\n'
 recover_active_session
 cleanup_inactive_state
@@ -125,6 +136,7 @@ remove_owned_hook "$DEFAULT_HOOK"
 
 remove_plugin "$PLUGIN_ID"
 remove_plugin "$BAR_PLUGIN_ID"
+remove_owned_theme_set_command
 
 if path_exists "$SETTINGS_ROOT/settings.json"; then
     rm -f -- "$SETTINGS_ROOT/settings.json"

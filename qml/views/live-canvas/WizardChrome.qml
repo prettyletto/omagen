@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "../../components/Contrast.js" as Contrast
+import "../../components" as Components
 
 Item {
     id: root
@@ -15,11 +16,16 @@ Item {
     property int stepCount: 5
     property var steps: ["Palette", "Look & Feel", "Advanced", "Demo", "Finish"]
     property bool busy: false
+    property bool demoBusy: false
+    property bool demoActive: false
+    property string demoMode: "none"
+    property bool workspaceReady: false
     property color foregroundColor: Color.foreground
     property color backgroundColor: Color.background
     property color accentColor: Color.accent
 
     signal hideRequested()
+    signal demoRequested(string mode)
 
     implicitHeight: chrome.implicitHeight
 
@@ -57,6 +63,20 @@ Item {
                     wrapMode: Text.WordWrap
                     maximumLineCount: 2
                 }
+            }
+
+            Components.DemoSwitcher {
+                Layout.preferredWidth: Style.space(92)
+                Layout.preferredHeight: Style.space(34)
+                triggerEnabled: !root.busy
+                controlsEnabled: root.workspaceReady && !root.busy
+                busy: root.demoBusy
+                demoActive: root.demoActive
+                demoMode: root.demoMode
+                foregroundColor: root.foregroundColor
+                backgroundColor: root.backgroundColor
+                accentColor: root.accentColor
+                onModeRequested: root.demoRequested(mode)
             }
 
             Button {

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 )
 
@@ -31,6 +32,7 @@ type InstallResult struct {
 
 type ThemeSetResult struct {
 	Theme             string                   `json:"theme"`
+	Superseded        bool                     `json:"superseded,omitempty"`
 	Advanced          bool                     `json:"advanced"`
 	RuntimeReady      bool                     `json:"runtime_ready"`
 	NativeOnly        bool                     `json:"native_only"`
@@ -153,6 +155,11 @@ func ThemeSet(themeRoot, themeName string) (ThemeSetResult, error) {
 	if err != nil {
 		return ThemeSetResult{}, err
 	}
+	activationRequest := ActivationRequest{
+		ThemeRoot: themeRoot,
+		ThemeName: themeName,
+		Manifest:  manifest,
+	}
 	if err := withRuntimeLock(func() error {
 		currentState, err := LoadState()
 		if err != nil {
@@ -165,10 +172,32 @@ func ThemeSet(themeRoot, themeName string) (ThemeSetResult, error) {
 		// contract recorded a degraded activation and the theme was later
 		// regenerated without its advanced manifest.
 		if currentState.LastActivation != nil && (currentState.LastActivation.Theme != themeName || !advanced) {
-			deactivation, deactivationErr := coordinator.Deactivate(context.Background(), DeactivationRequest{
+			deactivationRequest := DeactivationRequest{
 				ThemeName: currentState.LastActivation.Theme,
 				Reason:    "theme-set switched away from the advanced theme",
-			})
+			}
+			if advanced {
+				if err := coordinator.Preflight(context.Background(), activationRequest); err != nil {
+					result.RuntimeError = err.Error()
+					result.RuntimeState = FeatureFailed
+					return nil
+				}
+			}
+			if advanced && activationHasReadyFeature(currentState.LastActivation, FeatureBar) && targetHasReplacementBar(activationRequest) {
+				barAdapter, ok := registry.adapters[FeatureBar].(*BarAdapter)
+				if !ok {
+					result.RuntimeError = "replacement bar handoff adapter is unavailable"
+					result.RuntimeState = FeatureFailed
+					return nil
+				}
+				if err := barAdapter.PrepareTransition(currentState.LastActivation.Theme, activationRequest); err != nil {
+					result.RuntimeError = err.Error()
+					result.RuntimeState = FeatureFailed
+					return nil
+				}
+				deactivationRequest.Preserve = []Feature{FeatureBar}
+			}
+			deactivation, deactivationErr := coordinator.Deactivate(context.Background(), deactivationRequest)
 			result.Deactivation = &deactivation
 			if deactivationErr != nil {
 				result.RuntimeError = deactivationErr.Error()
@@ -187,11 +216,7 @@ func ThemeSet(themeRoot, themeName string) (ThemeSetResult, error) {
 			return nil
 		}
 
-		activation, activationErr := coordinator.Activate(context.Background(), ActivationRequest{
-			ThemeRoot: themeRoot,
-			ThemeName: themeName,
-			Manifest:  manifest,
-		})
+		activation, activationErr := coordinator.Activate(context.Background(), activationRequest)
 		result.Activation = &activation
 		if activationErr != nil {
 			result.RuntimeError = activationErr.Error()
@@ -207,6 +232,33 @@ func ThemeSet(themeRoot, themeName string) (ThemeSetResult, error) {
 		return ThemeSetResult{}, err
 	}
 	return result, nil
+}
+
+func activationHasReadyFeature(result *RuntimeActivationResult, feature Feature) bool {
+	if result == nil {
+		return false
+	}
+	for _, item := range result.Features {
+		if item.Feature == feature && item.State == FeatureReady {
+			return true
+		}
+	}
+	return false
+}
+
+func targetHasReplacementBar(request ActivationRequest) bool {
+	declared := false
+	for _, feature := range request.Manifest.Features {
+		if Feature(feature) == FeatureBar {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		return false
+	}
+	profile, exists, err := readBarProfile(request.ThemeRoot)
+	return err == nil && exists && profile.Implementation == barprofile.ImplementationReplacement && profile.Ownership != barprofile.OwnershipInherit && len(profile.Bar) > 0
 }
 
 func activationState(result *RuntimeActivationResult) FeatureState {

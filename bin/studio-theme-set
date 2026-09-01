@@ -167,8 +167,80 @@ CURRENT_BACKGROUND_LINK="$HOME/.local/state/omarchy/current/background"
 BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
 THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
 POST_COMMIT_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-post-commit.lock"
+CACHE_WARM_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-cache-warm.lock"
 USER_THEMES_PATH="$HOME/.config/omarchy/themes"
 OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
+
+# Keep the native installed-theme safety policy in the shared Studio staging
+# seam. A generated marker must never bypass Omarchy's protection for a cloned
+# repository theme's executable files or symlinked entries.
+INSTALLED_THEME_DENIED=(alacritty.toml foot.ini ghostty.conf kitty.conf vscode.json)
+IGNORED_THEME_FILES=()
+
+is_denied_installed_file() {
+  local name="$1" denied
+  [[ "$name" == *.lua ]] && return 0
+  for denied in "${INSTALLED_THEME_DENIED[@]}"; do
+    [[ "$name" == "$denied" ]] && return 0
+  done
+  return 1
+}
+
+stage_installed_dir() {
+  local source="$1" dest="$2" entry name
+  mkdir -p "$dest"
+  for entry in "$source"/*; do
+    [[ -e "$entry" && ! -L "$entry" ]] || continue
+    name=${entry##*/}
+    if [[ -d "$entry" ]]; then
+      stage_installed_dir "$entry" "$dest/$name"
+    else
+      cp "$entry" "$dest/$name"
+    fi
+  done
+}
+
+stage_installed_colors_from_alacritty() {
+  local source="$1" scratch
+  [[ -f "$NEXT_THEME_PATH/colors.toml" ]] && return 0
+  [[ -f "$source/alacritty.toml" && ! -L "$source/alacritty.toml" ]] || return 0
+  scratch=$(mktemp -d)
+  cp "$source/alacritty.toml" "$scratch/alacritty.toml"
+  omarchy-theme-colors-from-alacritty "$scratch"
+  [[ -f "$scratch/colors.toml" ]] && cp "$scratch/colors.toml" "$NEXT_THEME_PATH/colors.toml"
+  rm -rf "$scratch"
+}
+
+theme_came_from_a_repo() {
+  local source="$1"
+  [[ ! -L "$source" && -d "$source/.git" ]]
+}
+
+stage_installed_theme() {
+  local source="$1" entry name
+  [[ -d "$source" ]] || return 0
+  for entry in "$source"/*; do
+    [[ -e "$entry" ]] || continue
+    name=${entry##*/}
+    if [[ -L "$entry" ]] || is_denied_installed_file "$name"; then
+      case "${name,,}" in
+        readme*|license*|changelog*|*.md|*.txt) ;;
+        *) IGNORED_THEME_FILES+=("$name") ;;
+      esac
+    elif [[ -d "$entry" ]]; then
+      stage_installed_dir "$entry" "$NEXT_THEME_PATH/$name"
+    else
+      cp "$entry" "$NEXT_THEME_PATH/$name"
+    fi
+  done
+  stage_installed_colors_from_alacritty "$source"
+}
+
+report_ignored_theme_files() {
+  (( ${#IGNORED_THEME_FILES[@]} > 0 )) || return 0
+  printf 'Ignored in %s: %s\n' "$USER_THEMES_PATH/$THEME_NAME" "${IGNORED_THEME_FILES[*]}" >&2
+  printf 'A theme installed from a git repo cannot supply Lua, a terminal config, or vscode.json.\n' >&2
+}
 
 activation_is_current() {
   local current
@@ -214,6 +286,20 @@ run_parallel() {
   for pid in "${pids[@]}"; do
     wait "$pid"
   done
+}
+
+run_low_priority() {
+  # Post-commit retints and cache warmers are correctness-independent. Keep
+  # them from competing with Quickshell's scene rebuild and Hyprland's first
+  # frames after the critical theme handoff. nice/ionice priority is inherited
+  # by helpers and their children; fall back cleanly on minimal installations.
+  if command -v ionice >/dev/null 2>&1 && command -v nice >/dev/null 2>&1; then
+    ionice -c 3 nice -n 10 "$@"
+  elif command -v nice >/dev/null 2>&1; then
+    nice -n 10 "$@"
+  else
+    "$@"
+  fi
 }
 
 # Keep this declaration in the same order as Omarchy's post_theme_commands
@@ -313,6 +399,7 @@ selected_retint_adapters() {
 run_retint_adapter() {
   local adapter="$1"
   local command
+  local -a adapter_runner
   # A newer Apply may have superseded this post-commit job while it was
   # waiting for an adapter. Never let stale work repaint the newer theme.
   activation_is_current || {
@@ -325,7 +412,15 @@ run_retint_adapter() {
     return 0
   fi
   printf 'preview retint adapter=%s status=started command=%s\n' "$adapter" "$command"
-  if bash -lc "$command"; then
+  # Terminal signalling and the compositor reload are short, visible parts of
+  # the handoff. Deprioritize the filesystem/editor/browser adapters that can
+  # otherwise saturate CPU or storage immediately after Preview returns.
+  if [[ "$adapter" == "terminal" || "$adapter" == "hyprland" ]]; then
+    adapter_runner=(bash -lc "$command")
+  else
+    adapter_runner=(run_low_priority bash -lc "$command")
+  fi
+  if "${adapter_runner[@]}"; then
     printf 'preview retint adapter=%s status=success\n' "$adapter"
   else
     printf 'preview retint adapter=%s status=failed command=%s\n' "$adapter" "$command" >&2
@@ -438,18 +533,55 @@ warm_apply_caches() {
   # Applying a new user theme changes the theme directory signature used by
   # the native image-based theme picker. Warm it after the permanent theme is
   # live so the next Super+Ctrl+Shift+Space does not pay that scan/thumbnail
-  # cost. These are cache-only helpers and must never delay Apply or affect
-  # its success.
-  if command -v omarchy-theme-switcher >/dev/null 2>&1; then
-    omarchy-theme-switcher --preload >/dev/null 2>&1 &
-  fi
-  if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
-    omarchy-theme-bg-cache >/dev/null 2>&1 &
-  fi
+  # cost. Keep only one cache worker alive: rapid Apply/re-Apply used to stack
+  # selector scans and image thumbnailers, which could still contend with the
+  # compositor despite their reduced priority. A newer Apply may make this
+  # worker stale between stages, so re-check ownership before warming the
+  # theme-specific background cache.
+  (
+    exec 9>&-
+    exec 7>"$CACHE_WARM_LOCK"
+    flock -n 7 || exit 0
+    activation_is_current || exit 0
+    if command -v omarchy-theme-switcher >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-switcher --preload
+    fi
+    activation_is_current || exit 0
+    if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-bg-cache
+    fi
+  ) >/dev/null 2>&1 </dev/null &
 }
 
 shell_ipc() {
   timeout 2 omarchy-shell "$@" >/dev/null 2>&1
+}
+
+instant_background_handoff() {
+  local new_background="$1"
+  local detour="${2:-}"
+  local temporary_detour=0
+
+  # Quickshell's `setInstant` still compares the requested pathname before it
+  # reaches the instant branch. Theme swaps can replace the file behind an
+  # unchanged `current/theme/backgrounds/wallpaper.png` pathname, so briefly
+  # use a distinct hard-link pathname to invalidate that comparison. The
+  # detour has the old image for Preview (or the new image as a fallback), so
+  # it is visually harmless.
+  if [[ -z "$detour" || ! -f "$detour" || "$detour" == "$new_background" ]]; then
+    if detour=$(snapshot_background_path "$new_background" "instant"); then
+      temporary_detour=1
+    else
+      detour=""
+    fi
+  fi
+  if [[ -n "$detour" && "$detour" != "$new_background" && -f "$detour" ]]; then
+    shell_ipc background setInstant "$detour" || true
+  fi
+  shell_ipc background setInstant "$new_background" || true
+  if (( temporary_detour )); then
+    rm -f "$detour"
+  fi
 }
 
 snapshot_background_path() {
@@ -529,7 +661,7 @@ set_theme_background() {
     fi
     ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
     if [[ "$THEME_HEADLESS" != "1" ]]; then
-      shell_ipc background setInstant "$new_background" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
     fi
     rm -f "$OLD_BACKGROUND_SNAPSHOT"
     return 0
@@ -555,16 +687,22 @@ set_theme_background() {
   fi
 
   if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
-    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
     (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
   elif [[ -f "$new_background_snapshot" ]]; then
-    shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$new_background_snapshot"
+    fi
     (exec 9>&-; sleep 3; rm -f "$new_background_snapshot") &
   else
-    shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload" || \
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload"; then
       shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
     if [[ -f "$OLD_BACKGROUND_SNAPSHOT" ]]; then
       (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
     fi
@@ -650,9 +788,15 @@ flock 9
 rm -rf "$NEXT_THEME_PATH"
 mkdir -p "$NEXT_THEME_PATH"
 
-# Copy official theme first, then overlay user customizations on top.
+# Copy official theme first, then overlay user customizations on top. Match the
+# native repo-theme filter so the advanced marker does not widen trust.
 cp -r "$OMARCHY_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
-cp -r "$USER_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+if theme_came_from_a_repo "$USER_THEMES_PATH/$THEME_NAME"; then
+  stage_installed_theme "$USER_THEMES_PATH/$THEME_NAME"
+  report_ignored_theme_files
+else
+  cp -r "$USER_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+fi
 
 if [[ ! -f "$NEXT_THEME_PATH/colors.toml" && -f "$NEXT_THEME_PATH/alacritty.toml" ]]; then
   omarchy-theme-colors-from-alacritty "$NEXT_THEME_PATH"

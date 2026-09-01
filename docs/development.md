@@ -4,13 +4,43 @@ The repository is itself the Omarchy plugin package. A checkout must remain
 runnable as a plugin without requiring a separate build tree or installation
 script at runtime.
 
+## Branch lifecycle
+
+Omagen moves through three explicit branches:
+
+- `nightly` is experimental development. It may contain incomplete work and
+  does not carry a required hosted CI gate on every push.
+- `dev` is the protected integration branch. Pull requests targeting it run
+  the full validation and marketplace-preflight gates and may produce release
+  candidates.
+- `main` is the stable product branch. It receives reviewed promotions from
+  `dev`, stable release tags, and the exact commit submitted to the Omarchy
+  plugin marketplace.
+
+The only supported promotion path is `nightly → dev → main`. Never promote
+nightly directly to the stable branch.
+
+See [the release process](development/release-process.md) for branch
+protection, candidate tags, exact-commit validation, and marketplace updates.
+
+## First contribution
+
+Read the root `AGENTS.md`, run `scripts/agent-context <domain>`, and follow one
+recipe under `docs/agents/recipes/` before editing. Inspect the target and its
+direct callers, run focused checks first, then the full gate. Keep branch names
+and stability claims accurate: `nightly` experiments, `dev` integrates, and
+`main` releases. Do not introduce historical branch or deleted-path assumptions
+into new documentation.
+
 ## Repository layout
 
 ~~~text
 manifest.json             Omarchy plugin contract
+bar-manifest.json          Separate full-bar plugin contract
 preview.png               Optional marketplace listing preview
 Omagen.qml                Overlay entry point
 OmagenBarWidget.qml       Bar-widget entry point
+OmagenBar.qml              Full replacement bar entry point
 qml/                      QML views, components, services, and state
 backend/                  Go backend and internal services
 bin/omagen                Bundled runtime backend binary
@@ -27,6 +57,13 @@ The plugin manifest declares the ID <code>pretty.omagen</code>, the
 <code>overlay</code> and <code>bar-widget</code> kinds, the two QML entry points,
 and the default right-side bar section. See the root
 [manifest.json](../manifest.json).
+
+The separate <code>pretty.omagen.bar</code> manifest owns the full bar; keep
+the two plugin payloads and their ownership boundaries separate.
+
+Before deleting code, search production callers, dynamic QML loads, manifests,
+install payloads, tests, and documentation. Compatibility and ownership code
+can look obsolete while still protecting user state.
 
 ## Bundled backend provenance
 
@@ -47,11 +84,10 @@ the Go <code>nodwarf5</code> experiment used by that pinned toolchain,
 read-only module resolution. The verifier rebuilds into a temporary directory
 and compares the result byte-for-byte with <code>bin/omagen</code>.
 
-The same verifier runs on every relevant pull request and push in
-<code>.github/workflows/verify-bundled-backend.yml</code>. Pushes to
-<code>main</code> also receive a GitHub build-provenance attestation for the
-verified executable. A binary change without a matching source build fails
-the check.
+The same verifier runs on pull requests targeting `dev` or `main`, and on
+pushes to those protected branches. A binary change without a matching source
+build fails the check. Candidate and stable commits also receive the
+marketplace-preflight report described in [the release process](development/release-process.md).
 
 The root <code>preview.png</code> is a marketplace showcase image. It is not a
 runtime entry point and is not required by the Omarchy shell loader; the
@@ -70,26 +106,31 @@ plugin directory, rescans the shell, and restarts the shell for development.
 Use it while the desktop is idle because the shell watches the installed QML
 files.
 
-To install a branch checkout for testers without requiring Go, use the
-branch bootstrap from that branch. The checked-in backend is used as-is:
+To install a tester checkout without requiring Go, first clone and inspect the
+repository, then execute the branch bootstrap at an exact commit. The checked-
+in backend is used as-is:
 
 ~~~sh
-bash -c 'set -o pipefail; curl -fsSL https://raw.githubusercontent.com/prettyletto/omagen/nightly/scripts/install-branch.sh | bash'
+git clone https://github.com/prettyletto/omagen.git /tmp/omagen-review
+cd /tmp/omagen-review
+git show --stat --oneline <full-40-character-commit-sha>
+OMAGEN_TEST_BRANCH=nightly OMAGEN_TEST_COMMIT=<full-40-character-commit-sha> \
+  ./scripts/install-branch.sh
 ~~~
 
-The bootstrap clones `nightly` into a temporary directory, runs
-`dev-install.sh --skip-build`, and removes the checkout after installation.
-Set `OMAGEN_TEST_BRANCH` and `OMAGEN_TEST_REPOSITORY` to test a different
-branch or fork. The bootstrap replaces both installed Omagen plugin packages
-and restarts the shell.
+The bootstrap refuses to execute a mutable branch head. It fetches the
+requested full commit, checks it out detached, and only then runs
+`dev-install.sh --skip-build`. Set `OMAGEN_TEST_BRANCH` and
+`OMAGEN_TEST_REPOSITORY` to test a different branch or fork, but always provide
+`OMAGEN_TEST_COMMIT`.
 
 The regular `install.sh` still builds the backend by default. Pass
 `--skip-build` only when the checked-in binary is the intended artifact, as in
 the tester bootstrap.
 
 The normal user installation remains the Omarchy plugin-manager command from
-the root [README](../README.md). Do not ask users to build Go or run this
-development helper.
+the stable `main` README. Do not ask users to build Go or run this development
+helper.
 
 ## Studio preview retint policy
 
@@ -147,6 +188,14 @@ and retint failures are non-fatal after the core theme transaction commits.
 An adapter cannot strand Apply in the prepared state. Arbitrary user theme
 hooks remain excluded from Studio-controlled Preview and Apply.
 
+Filesystem-heavy application retints and permanent-Apply cache warmers run at
+background CPU/I/O priority so they do not compete with Quickshell's scene
+update or Hyprland's first frames after the handoff. The short terminal signal
+and required Hyprland reload retain normal priority. Cache warming is
+single-flight: rapid Apply/re-Apply requests do not stack selector scans or
+thumbnail generation, and a stale worker does not start the next theme-specific
+cache stage.
+
 Apply returns after the critical theme promotion and shell/background update;
 the selected post-commit retint adapters continue in parallel. This keeps the
 UI responsive even when an application-specific helper is slow or unavailable.
@@ -156,11 +205,14 @@ only the newest pending appearance, and an already-live request is completed as
 a no-op so it cannot leave Apply waiting for a process that was intentionally
 deduplicated. Deferred retint/runtime work is fenced to the activation that
 created it; if a newer theme is current, the older job exits without repainting
-the desktop.
+the desktop. The installed post-theme runtime hook performs the same active-name
+check because native Omarchy releases its theme lock before invoking user hooks;
+a superseded hook reports a no-op instead of interpreting the newer theme tree
+under its stale argument.
 Permanent Apply also starts the native theme-selector and background cache
-warmers in the background, after the new user theme is visible. Test Live does
-not warm these caches because its temporary preview alias is removed or
-renamed immediately afterward.
+warmers in a single low-priority background worker after the new user theme is
+visible. Test Live does not warm these caches because its temporary preview
+alias is removed or renamed immediately afterward.
 
 When Apply follows a matching successful Test Live for the same session,
 generation, and variant, Omagen promotes the already-materialized live preview
@@ -185,6 +237,9 @@ Focused checks can be run from the backend module, for example:
 ~~~sh
 go test ./internal/demo
 ~~~
+
+See [Backend CLI reference](development/cli.md) for command families,
+session lifecycle, and safe inspection/mutation guidance.
 
 The repository also contains QtTest files under `qml/tests/`. They are separate
 from `qmllint`: `qmllint` checks syntax and static QML issues, while
@@ -222,6 +277,7 @@ The gate checks:
 - A byte-for-byte deterministic rebuild of <code>bin/omagen</code> from
   <code>backend/</code>.
 - Manifest and binary version consistency.
+- Deterministic marketplace preflight bound to the checked-out full commit.
 - Native <code>omarchy plugin validate</code> when Omarchy is available.
 - Required plugin files and deterministic Demo assets.
 - Absence of plugin symlinks.

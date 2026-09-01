@@ -28,6 +28,7 @@ domains:
   palette:
     docs:
       - docs/architecture/backend.md
+      - docs/architecture/contracts/palette-generation.md
       - docs/agents/recipes/palette-engine-change.md
     source:
       - backend/internal/imageanalysis
@@ -96,6 +97,7 @@ domains:
     docs:
       - docs/agents/recipes/live-canvas-change.md
       - docs/architecture/frontend.md
+      - docs/architecture/contracts/live-canvas.md
       - docs/architecture/contracts/qml-backend.md
       - docs/architecture/contracts/qml-controllers.md
     source:
@@ -259,6 +261,25 @@ domains:
     avoid:
       - backend/internal/palette
       - NativeBarClone.qml
+      - docs/plans
+  theme-edit:
+    docs:
+      - docs/architecture/contracts/theme-edit.md
+      - docs/architecture/frontend.md
+    source:
+      - backend/internal/themeedit
+      - qml/gateways/ThemeGateway.qml
+      - qml/controllers/ThemeEditController.qml
+    tests:
+      - backend/internal/themeedit/*_test.go
+      - qml/tests/tst_StyleDocuments.qml
+    dependencies:
+      - backend/internal/session
+      - qml/services/BackendService.qml
+    avoid:
+      - backend/internal/palette
+      - backend/internal/apply
+      - bar
       - docs/plans
   runtime:
     docs:

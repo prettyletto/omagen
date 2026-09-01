@@ -172,6 +172,13 @@ func (s *Store) Restore(snapshot Snapshot) error {
 		if mode == 0 {
 			mode = 0o600
 		}
+		if current, readErr := fsutil.ReadFileLimited(s.configPath, maxShellConfigBytes); readErr == nil {
+			if info, statErr := os.Stat(s.configPath); statErr == nil && info.Mode().Perm() == mode && bytes.Equal(current, snapshot.Config) {
+				return s.restoreHiddenToggle(snapshot)
+			}
+		} else if !os.IsNotExist(readErr) {
+			return fmt.Errorf("read current bar config: %w", readErr)
+		}
 		if err := fsutil.AtomicWriteFile(s.configPath, snapshot.Config, mode); err != nil {
 			return err
 		}
@@ -224,21 +231,85 @@ func (s *Store) Apply(profile Profile) error {
 	if os.IsNotExist(err) {
 		data = []byte("{}")
 	}
+	updated, err := applyProfile(data, profile)
+	if err != nil {
+		return err
+	}
+	mode := fs.FileMode(0o600)
+	if info, statErr := os.Stat(s.configPath); statErr == nil {
+		mode = info.Mode().Perm()
+	}
+	if bytes.Equal(bytes.TrimSpace(data), bytes.TrimSpace(updated)) {
+		return nil
+	}
+	return fsutil.AtomicWriteFile(s.configPath, updated, mode)
+}
+
+// ApplyFromSnapshot derives a theme profile from the session's exact bar
+// baseline and commits the result in one shell.json replacement. Preview used
+// to Restore(snapshot) and then Apply(profile), which exposed Quickshell to two
+// successive configurations and could tear down/recreate a replacement bar
+// twice for one Test Live operation.
+func (s *Store) ApplyFromSnapshot(snapshot Snapshot, profile Profile) error {
+	if snapshot.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("unsupported bar snapshot schema version %d", snapshot.SchemaVersion)
+	}
+	if snapshot.ConfigPath != "" && snapshot.ConfigPath != s.configPath {
+		return fmt.Errorf("bar snapshot targets %q, store targets %q", snapshot.ConfigPath, s.configPath)
+	}
+	profile = profile.Normalize()
+	if err := profile.Validate(); err != nil {
+		return err
+	}
+	if profile.Ownership == OwnershipInherit || len(profile.Bar) == 0 {
+		return s.Restore(snapshot)
+	}
+
+	data := []byte("{}")
+	mode := fs.FileMode(0o600)
+	if snapshot.ConfigExists {
+		if len(snapshot.Config) == 0 || hash(snapshot.Config) != snapshot.ConfigSHA256 {
+			return fmt.Errorf("bar snapshot checksum mismatch")
+		}
+		data = snapshot.Config
+		mode = fs.FileMode(snapshot.ConfigMode)
+		if mode == 0 {
+			mode = 0o600
+		}
+	}
+	updated, err := applyProfile(data, profile)
+	if err != nil {
+		return err
+	}
+	current, readErr := fsutil.ReadFileLimited(s.configPath, maxShellConfigBytes)
+	if readErr == nil && bytes.Equal(bytes.TrimSpace(current), bytes.TrimSpace(updated)) {
+		return s.restoreHiddenToggle(snapshot)
+	}
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return fmt.Errorf("read current bar config: %w", readErr)
+	}
+	if err := fsutil.AtomicWriteFile(s.configPath, updated, mode); err != nil {
+		return err
+	}
+	return s.restoreHiddenToggle(snapshot)
+}
+
+func applyProfile(data []byte, profile Profile) ([]byte, error) {
 	var root map[string]json.RawMessage
 	if err := json.Unmarshal(data, &root); err != nil {
-		return fmt.Errorf("decode shell config: %w", err)
+		return nil, fmt.Errorf("decode shell config: %w", err)
 	}
 	var existing map[string]json.RawMessage
 	if raw := root["bar"]; len(raw) > 0 {
 		if err := json.Unmarshal(raw, &existing); err != nil {
-			return fmt.Errorf("decode shell bar config: %w", err)
+			return nil, fmt.Errorf("decode shell bar config: %w", err)
 		}
 	} else {
 		existing = make(map[string]json.RawMessage)
 	}
 	var incoming map[string]json.RawMessage
 	if err := json.Unmarshal(profile.Bar, &incoming); err != nil {
-		return fmt.Errorf("decode profile bar: %w", err)
+		return nil, fmt.Errorf("decode profile bar: %w", err)
 	}
 	if profile.Ownership == OwnershipThemeOwned {
 		existing = incoming
@@ -249,22 +320,15 @@ func (s *Store) Apply(profile Profile) error {
 	}
 	bar, err := json.Marshal(existing)
 	if err != nil {
-		return fmt.Errorf("encode effective bar: %w", err)
+		return nil, fmt.Errorf("encode effective bar: %w", err)
 	}
 	root["bar"] = bar
 	updated, err := json.MarshalIndent(root, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode shell config: %w", err)
+		return nil, fmt.Errorf("encode shell config: %w", err)
 	}
 	updated = append(updated, '\n')
-	mode := fs.FileMode(0o600)
-	if info, statErr := os.Stat(s.configPath); statErr == nil {
-		mode = info.Mode().Perm()
-	}
-	if bytes.Equal(bytes.TrimSpace(data), bytes.TrimSpace(updated)) {
-		return nil
-	}
-	return fsutil.AtomicWriteFile(s.configPath, updated, mode)
+	return updated, nil
 }
 
 func hash(data []byte) string {

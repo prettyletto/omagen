@@ -1,0 +1,25 @@
+name: Crash or recovery issue
+description: Report Apply, Cancel, Quit, Demo cleanup, or restoration trouble
+title: "[Recovery]: "
+labels: ["recovery", "bug"]
+body:
+  - type: textarea
+    id: operation
+    attributes:
+      label: Interrupted operation
+      description: State whether this happened during Preview, Demo, Apply, Cancel, Quit, or Recovery.
+    validations:
+      required: true
+  - type: textarea
+    id: state
+    attributes:
+      label: What was restored or left behind?
+      description: Do not paste private session files or personal paths.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Omagen version and commit
+    validations:
+      required: true
