@@ -25,6 +25,19 @@ bin/omagen bar inspect
 bin/omagen generation describe <session_id> <generation_id>
 ```
 
+For a user-facing theme switch that automatically selects the safe path, use
+the installed dispatcher:
+
+```zsh
+omagen-theme-set <theme-name>
+```
+
+The dispatcher accepts Studio options only for a valid Omagen runtime manifest;
+ordinary themes delegate unchanged to native `omarchy theme set`. A valid
+advanced marker is the generated `omagen.runtime.json` contract (schema 1,
+`mode=advanced`, `runtime=pretty.omagen`, `requires_runtime=true`, and at least
+one unique feature). Invalid or missing markers always take the native path.
+
 `session resume` can recover a pending Apply as part of normal lifecycle
 behavior, and `bar inspect` captures a current snapshot. Treat both as
 inspection with possible state work, not as pure text-only queries.
@@ -91,4 +104,3 @@ commands. Use `demo close`, `preview cleanup`, `session cancel`, or
 For a failed operation, capture stdout, stderr, exit status, `session status`,
 and remaining Omagen layers before attempting recovery. The backend session
 record is the authority; QML state is only a view of it.
-

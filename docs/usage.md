@@ -38,6 +38,16 @@ stays disabled. You can reopen **Advanced runtime setup** from the setup screen
 at any time, or follow the prompt shown when an advanced theme is applied
 without the bridge.
 
+## Unified theme activation
+
+Installation also provides <code>~/.local/bin/omagen-theme-set</code> (or the
+configured <code>$XDG_BIN_HOME</code>) as the single user-facing activation
+command. It validates Omagen's runtime manifest before routing a generated
+advanced theme through the atomic Studio driver; all ordinary or malformed
+markers use native <code>omarchy theme set</code> instead. Repository-installed
+themes keep Omarchy's native executable-file and symlink staging protections.
+The installer never replaces an existing non-Omagen command with that name.
+
 <p align="center">
   <img src="../assets/screenshots/settings.webp" alt="Omagen settings" width="420">
 </p>
@@ -206,15 +216,16 @@ theme and background before clearing the session.
 monitor-bound control panel available. It is the normal place to compare
 directions, apply the theme, or restore the original desktop.
 
-Use **Start Full Demo** when you specifically want the temporary four-window
-workspace containing the applications Omagen can resolve on the current
-machine. Starting Full Demo does not replace the Live Canvas controls; the
-panel stays available while the workspace is open.
+Use **Demos** in the Live Canvas header, or open the **Demo Studio** step, to
+choose the focused Window Demo, the read-only Shell or Bar reader, or the
+temporary four-window Full Workspace containing the applications Omagen can
+resolve on the current machine. Starting a Demo does not end the preview
+session.
 
-In-depth users can also open the read-only Shell Demo or Bar Demo surfaces.
-Bar Demo is rendered below the real native bar and does not replace Quattro's
-widgets or capture their input. Stop any active Demo surface before starting a
-different one.
+Only one Demo surface is active at a time. Omagen closes the current owned
+surface before switching to another one. Window Demo previews the current
+staged composition before opening its windows. Bar Demo is rendered below the
+real native bar and does not replace Quattro's widgets or capture their input.
 
 When the canvas is open, Studio provides a monitor-bound side panel. Hide the
 panel to keep interacting with the desktop; a small handle on the canvas
