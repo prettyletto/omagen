@@ -1,16 +1,11 @@
 import QtTest
-import QtQuick
-import "../gateways"
+import "../gateways/PreviewPayload.js" as PreviewPayload
 
 TestCase {
     name: "PreviewGateway"
 
-    PreviewGateway {
-        id: gateway
-    }
-
     function test_stylePayloadCarriesDesktopWindowOpacityFromPresetsAndEdits() {
-        var payload = gateway.styleOverridesPayload({
+        var payload = PreviewPayload.styleOverridesPayload({
             desktop: {
                 borderStyle: "blend", borderSize: 2, borderSizeMode: "fixed", borderSpeed: 36,
                 windowOpacity: 72, shape: "rounded", spacing: "airy", depth: "shadow",
@@ -22,7 +17,7 @@ TestCase {
     }
 
     function test_stylePayloadPreservesExplicitZeroOpacity() {
-        var payload = gateway.styleOverridesPayload({ desktop: { window_opacity: 0 } })
+        var payload = PreviewPayload.styleOverridesPayload({ desktop: { window_opacity: 0 } })
 
         compare(payload.desktop.window_opacity, 0)
     }

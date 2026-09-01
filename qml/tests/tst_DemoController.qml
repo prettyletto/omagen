@@ -12,6 +12,7 @@ TestCase {
         signal demoReaderOpened(string sessionId, string workspace, string monitor, string mode, bool reused)
         signal demoClosed(string sessionId, bool wasClosed)
         signal demoOpenFailed(string message)
+        signal demoReaderOpenFailed(string message)
         signal windowDemoOpenFailed(string message)
         signal demoCloseFailed(string message)
         signal demoReflowed(string sessionId)
