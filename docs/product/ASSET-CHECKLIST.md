@@ -17,7 +17,7 @@ assets have been selected and all links have been updated.
 | Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Demo Studio and focused Window Demo captured; Full Demo still needed |
 | Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Needs v2 capture |
 | Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Seven v2 bar examples captured; release evidence still needed |
-| Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Existing baseline; curate v2 set |
+| Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Six v2 pairs added; v1 gallery retained and labeled; rights review remains |
 | Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; confirm redistribution rights and export variants |
 | Marketplace preview | `docs/product/assets/social/omagen-social-preview-v2.png` → root `preview.png` on `main` | Final listing image within marketplace limits | V2 candidate created; approve and promote unchanged for the stable commit |
 

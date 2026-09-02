@@ -177,11 +177,23 @@ native bar.
 See the [full bar example gallery](assets/screenshots/bar-examples/README.md)
 for the complete set and capture notes.
 
-## Examples
+## New v2 examples
 
-The [v2 example gallery](examples/README.md) pairs source wallpapers with
-generated desktop results. It is being curated around the complete v2
-workflow, including palette directions, Demo, and optional composition.
+The v2 gallery pairs each generated theme's source background with its clean
+desktop preview. These examples show the range of compositions Omagen can
+produce from very different images.
+
+| Theme | Source background | Generated preview |
+| --- | --- | --- |
+| Elastic Example | <img src="../../assets/examples/v2/elastic-example-background.webp" alt="Elastic Example source background" width="300"> | <img src="../../assets/examples/v2/elastic-example-preview.webp" alt="Elastic Example generated preview" width="300"> |
+| Gothic Example | <img src="../../assets/examples/v2/gothic-example-background.webp" alt="Gothic Example source background" width="300"> | <img src="../../assets/examples/v2/gothic-example-preview.webp" alt="Gothic Example generated preview" width="300"> |
+| Japan Example | <img src="../../assets/examples/v2/japan-example-background.webp" alt="Japan Example source background" width="300"> | <img src="../../assets/examples/v2/japan-example-preview.webp" alt="Japan Example generated preview" width="300"> |
+| Nature Example | <img src="../../assets/examples/v2/nature-example-background.webp" alt="Nature Example source background" width="300"> | <img src="../../assets/examples/v2/nature-example-preview.webp" alt="Nature Example generated preview" width="300"> |
+| Retro Example | <img src="../../assets/examples/v2/retro-example-background.webp" alt="Retro Example source background" width="300"> | <img src="../../assets/examples/v2/retro-example-preview.webp" alt="Retro Example generated preview" width="300"> |
+| Spectral Example | <img src="../../assets/examples/v2/spectral-example-background.webp" alt="Spectral Example source background" width="300"> | <img src="../../assets/examples/v2/spectral-example-preview.webp" alt="Spectral Example generated preview" width="300"> |
+
+See the [complete v2 example gallery](examples/README.md), including the
+historical examples explicitly labeled **made with Omagen v1**.
 
 ## Product documentation
 
