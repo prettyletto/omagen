@@ -7,7 +7,7 @@ use locally.
 
 ## Release rule
 
-Before the `dev → main` promotion, a maintainer must confirm that every asset
+Before marketplace submission, a maintainer must confirm that every asset
 copied into the stable repository may be redistributed under the repository's
 license or under the asset's documented license. Record the source, creator,
 license, and permission evidence in this file or in an adjacent notice. Do not
@@ -45,13 +45,21 @@ The historical gallery remains labeled “made with Omagen v1”. It should be
 reviewed by the same process before being treated as a redistributable release
 asset.
 
-## Maintainer completion record
+## Marketplace handoff completion record
 
-Fill this section before stable release; do not replace these fields with
-guesses.
+Complete this section before marketplace submission; do not replace these
+fields with guesses.
 
 - Reviewer: `TBD`
 - Review date: `TBD`
 - Asset sources and licenses recorded: `TBD`
 - Permission evidence linked: `TBD`
 - Unlicensed or uncertain assets removed from the stable package: `TBD`
+
+## Stable snapshot verification
+
+- Stable commit: `92ff73ac17211755dd6790a89519371717eaeacf`
+- Release tag: `v2.0.0`
+- Marketplace preflight: `review-required`, zero findings
+- Preflight artifact: `marketplace-preflight-92ff73ac17211755dd6790a89519371717eaeacf`
+- CI run: <https://github.com/prettyletto/omagen/actions/runs/33668731439>
