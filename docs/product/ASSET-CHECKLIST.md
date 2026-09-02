@@ -18,7 +18,7 @@ assets have been selected and all links have been updated.
 | Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Needs v2 capture |
 | Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Existing baseline; review for v2 |
 | Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Existing baseline; curate v2 set |
-| Product icon/wordmark | `docs/product/assets/` | Optional recognizable header mark if one is available | Not found in repository |
+| Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; confirm redistribution rights and export variants |
 | Marketplace preview | Root `preview.png` | Final listing image within marketplace limits | Existing asset; review for v2 |
 
 ## Recommended captures

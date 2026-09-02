@@ -1,4 +1,6 @@
 <!-- omagen-product-readme: canonical-source -->
+![Omagen wordmark](assets/branding/omagen-wordmark.png)
+
 <div align="center">
 
 # Omagen
