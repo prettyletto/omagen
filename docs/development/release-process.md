@@ -90,6 +90,13 @@ The preflight is not a security audit, certification, endorsement, or safety
 guarantee. Omagen remains unsandboxed plugin code; release documentation must
 describe what it can modify and how users can recover or uninstall it.
 
+On a pull request targeting `dev`, the manifest comparison baseline is the
+pull request's previous `dev` head. On a generated release pull request
+targeting `main`, the baseline is the exact `sourceSha` recorded in
+`.github/release-provenance.json`, not the older stable branch. This preserves
+the intentional v2 addition of `pretty.omagen.bar` while still proving that
+the stable projection did not alter the reviewed source-wide manifest set.
+
 ## Marketplace submission
 
 After the stable `main` commit is immutable:
