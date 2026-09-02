@@ -1,12 +1,12 @@
 package demo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/omarchy"
+	"github.com/prettyletto/omagen/backend/internal/processutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/theme"
 )
@@ -543,10 +544,12 @@ func (s *Service) CapturePreview(sessionID string) (CaptureResult, error) {
 	rawPath := filepath.Join(sessionDir, ".demo-capture.png")
 	previewPath := filepath.Join(sessionDir, "apply-preview.png")
 	_ = os.Remove(rawPath)
-	cmd := exec.Command("grim", "-o", monitor.Name, rawPath)
-	output, err := cmd.CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	output, stderr, err := processutil.Run(ctx, "grim", "-o", monitor.Name, rawPath)
 	if err != nil {
-		return CaptureResult{}, fmt.Errorf("capture Demo monitor %q: %w: %s", monitor.Name, err, strings.TrimSpace(string(output)))
+		message := strings.TrimSpace(strings.TrimSpace(stderr) + "\n" + strings.TrimSpace(output))
+		return CaptureResult{}, fmt.Errorf("capture Demo monitor %q: %w: %s", monitor.Name, err, message)
 	}
 	defer os.Remove(rawPath)
 	if err := theme.WritePreviewFile(previewPath, rawPath); err != nil {

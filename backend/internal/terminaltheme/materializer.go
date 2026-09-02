@@ -4,17 +4,19 @@
 package terminaltheme
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
+	"github.com/prettyletto/omagen/backend/internal/processutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
 )
 
@@ -512,9 +514,9 @@ func inspectCapabilities(spec session.TerminalTranslucency) []Capability {
 	for _, item := range targets() {
 		capability := Capability{Terminal: item.terminal, CellModeSupported: item.terminal != Kitty}
 		command, args := versionCommand(item.terminal)
-		if _, err := exec.LookPath(command); err == nil {
+		if resolved, err := processutil.Resolve(command); err == nil {
 			capability.Installed = true
-			capability.Version = commandVersion(command, args...)
+			capability.Version = commandVersion(resolved, args...)
 		} else {
 			capability.Message = "terminal executable is not installed; theme artifact remains portable"
 		}
@@ -546,7 +548,9 @@ func versionCommand(terminal Terminal) (string, []string) {
 }
 
 func commandVersion(command string, args ...string) string {
-	output, err := exec.Command(command, args...).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	output, _, err := processutil.Run(ctx, command, args...)
 	if err != nil {
 		return ""
 	}
