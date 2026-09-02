@@ -47,10 +47,13 @@ def main() -> int:
             "> authoring note\n"
             "<!-- omagen-product-source-only:end -->\n\n"
             "[Install](installation.md) [Asset](assets/README.md) "
-            "[Contribute](../../CONTRIBUTING.md) [External](https://example.com)\n",
+            "[Contribute](../../CONTRIBUTING.md) [External](https://example.com)\n"
+            "<img src=\"../../assets/examples/example.webp\" alt=\"Example\">\n",
             encoding="utf-8",
         )
         (product / "installation.md").write_text("# Install\n", encoding="utf-8")
+        (root / "assets/examples").mkdir(parents=True)
+        (root / "assets/examples/example.webp").write_bytes(b"example")
         (root / "README.md").write_text("# Developer README\n", encoding="utf-8")
 
         checked = run("--check-source", cwd=root)
@@ -66,6 +69,7 @@ def main() -> int:
             "# Product\n\n"
             "[Install](docs/product/installation.md) [Asset](docs/product/assets/README.md) "
             "[Contribute](CONTRIBUTING.md) [External](https://example.com)\n"
+            "<img src=\"assets/examples/example.webp\" alt=\"Example\">\n"
         )
         if (root / "README.md").read_text(encoding="utf-8") != expected:
             print("unexpected projected README", file=sys.stderr)

@@ -7,7 +7,7 @@ use locally.
 
 ## Release rule
 
-Before the `dev → main` promotion, a maintainer must confirm that every asset
+Before marketplace submission, a maintainer must confirm that every asset
 copied into the stable repository may be redistributed under the repository's
 license or under the asset's documented license. Record the source, creator,
 license, and permission evidence in this file or in an adjacent notice. Do not
@@ -44,7 +44,7 @@ The historical gallery remains labeled “made with Omagen v1”. It should be
 reviewed by the same process before being treated as a redistributable release
 asset.
 
-## Maintainer completion record
+## Marketplace handoff completion record
 
 This is the maintainer's release declaration for the project-provided assets
 in this snapshot. Marketplace verification remains a separate exact-commit
