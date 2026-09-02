@@ -1,4 +1,5 @@
 import QtTest
+import QtQml
 import "../services"
 
 TestCase {
