@@ -15,11 +15,13 @@ import (
 	"github.com/prettyletto/omagen/backend/internal/imageanalysis"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	settingspkg "github.com/prettyletto/omagen/backend/internal/settings"
+	"github.com/prettyletto/omagen/backend/internal/theme"
 )
 
 type Service struct {
 	sessions *session.Store
 	settings *settingspkg.Store
+	omarchy  session.Omarchy
 }
 
 func NewService(
@@ -29,6 +31,22 @@ func NewService(
 	return &Service{
 		sessions: sessions,
 		settings: settings,
+	}
+}
+
+// NewServiceWithBaselineRestorer wires the native rollback owner into the
+// generation service. The plain constructor remains useful for isolated
+// generation work, while the CLI's discard command must restore the original
+// theme and background before returning to configuration.
+func NewServiceWithBaselineRestorer(
+	sessions *session.Store,
+	settings *settingspkg.Store,
+	omarchy session.Omarchy,
+) *Service {
+	return &Service{
+		sessions: sessions,
+		settings: settings,
+		omarchy:  omarchy,
 	}
 }
 
@@ -49,11 +67,17 @@ func (s *Service) Generate(
 	shellStyle := session.NormalizeShellStyle(record.ShellStyle)
 	desktopStyle := session.NormalizeDesktopStyle(record.DesktopStyle)
 	barStyle := session.NormalizeBarStyle(record.BarStyle)
+	animationsStyle := session.NormalizeAnimationsStyle(record.AnimationsStyle)
+	lookFeel := session.NormalizeLookFeelDocument(record.LookFeel)
+	terminalTranslucency := session.NormalizeTerminalTranslucency(record.TerminalTranslucency)
 	if request.Configuration != nil {
 		configuration := *request.Configuration
 		configuration.ShellStyle = session.NormalizeShellStyle(configuration.ShellStyle)
 		configuration.DesktopStyle = session.NormalizeDesktopStyle(configuration.DesktopStyle)
 		configuration.BarStyle = session.NormalizeBarStyle(configuration.BarStyle)
+		configuration.AnimationsStyle = session.NormalizeAnimationsStyle(configuration.AnimationsStyle)
+		configuration.LookFeel = session.NormalizeLookFeelDocument(configuration.LookFeel)
+		configuration.Terminal = session.NormalizeTerminalTranslucency(configuration.Terminal)
 		if !configuration.ShellStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid shell style configuration")
 		}
@@ -63,14 +87,29 @@ func (s *Service) Generate(
 		if !configuration.BarStyle.Valid() {
 			return Result{}, fmt.Errorf("invalid bar style configuration")
 		}
+		if !configuration.AnimationsStyle.Valid() {
+			return Result{}, fmt.Errorf("invalid animations style configuration")
+		}
+		if !configuration.LookFeel.Valid() {
+			return Result{}, fmt.Errorf("invalid Look & Feel configuration")
+		}
+		if !configuration.Terminal.Valid() {
+			return Result{}, fmt.Errorf("invalid terminal translucency configuration")
+		}
 		request.Configuration = &configuration
 		shellStyle = configuration.ShellStyle
 		desktopStyle = configuration.DesktopStyle
 		barStyle = configuration.BarStyle
+		animationsStyle = configuration.AnimationsStyle
+		lookFeel = configuration.LookFeel
+		terminalTranslucency = configuration.Terminal
 	} else if !record.ExtraConfigs {
 		shellStyle = session.ShellStyle{}
 		desktopStyle = session.DesktopStyle{}
 		barStyle = session.BarStyle{}
+		animationsStyle = session.AnimationsStyle{}
+		lookFeel = session.LookFeelDocument{}
+		terminalTranslucency = session.TerminalTranslucency{}
 	} else if !shellStyle.Valid() {
 		shellStyle = session.DefaultShellStyle()
 	}
@@ -87,15 +126,28 @@ func (s *Service) Generate(
 		return Result{}, fmt.Errorf("apply generation overrides: %w", err)
 	}
 
-	if err := validateSourceImage(
-		request.SourceImage,
-	); err != nil {
+	var basePalette *theme.Palette
+	var sourceThemeDir string
+	if record.Workflow == "theme-edit" && request.SourceImage == "" {
+		if record.GenerationID == "" {
+			return Result{}, fmt.Errorf("theme-edit session has no source generation")
+		}
+		sourceThemeDir = filepath.Join(s.sessions.SessionDir(request.SessionID), "generations", record.GenerationID, "source")
+		palette, paletteErr := theme.ReadColors(sourceThemeDir)
+		if paletteErr != nil {
+			return Result{}, fmt.Errorf("read theme-edit source palette: %w", paletteErr)
+		}
+		basePalette = &palette
+		request.SourceImage, err = findThemeBackground(sourceThemeDir)
+		if err != nil {
+			return Result{}, err
+		}
+	}
+	if err := validateSourceImage(request.SourceImage); err != nil {
 		return Result{}, err
 	}
 
-	analysis, err := imageanalysis.DecodeFile(
-		request.SourceImage,
-	)
+	analysis, err := imageanalysis.DecodeFile(request.SourceImage)
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"analyze source image: %w",
@@ -159,17 +211,21 @@ func (s *Service) Generate(
 		return Result{}, err
 	}
 
-	if err := runJobs(
-		ctx,
-		tmpRoot,
-		cachedSource,
-		analysis,
-		effectiveSettings,
-		shellStyle,
-		desktopStyle,
-		barStyle,
+	if err := runJobsWithBasePalette(
+		ctx, tmpRoot, cachedSource, analysis, effectiveSettings, shellStyle, desktopStyle, barStyle, animationsStyle,
+		basePalette,
+		compositionInput{lookFeel: lookFeel, terminal: terminalTranslucency},
 	); err != nil {
 		return Result{}, err
+	}
+	if basePalette != nil {
+		// Keep theme-owned files that the generator does not synthesize (icons,
+		// app templates, hooks, and custom assets) in every derived variant.
+		for _, variant := range orderedVariants {
+			if err := copyMissingTree(sourceThemeDir, filepath.Join(tmpRoot, string(variant))); err != nil {
+				return Result{}, fmt.Errorf("preserve theme files for %s: %w", variant, err)
+			}
+		}
 	}
 	if err := fsutil.SyncDir(tmpRoot); err != nil {
 		return Result{}, fmt.Errorf("sync temporary generation: %w", err)
@@ -241,7 +297,9 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 		_ = fsutil.RemoveAllAndSync(finalRoot)
 		return false, err
 	}
-	record.SourceImage = request.SourceImage
+	if record.Workflow != "theme-edit" {
+		record.SourceImage = request.SourceImage
+	}
 	record.GenerationID = generationID
 	record.PreviewVariant = ""
 	if request.Configuration != nil {
@@ -249,6 +307,9 @@ func (s *Service) commitGeneration(tmpRoot, finalRoot string, request Request, g
 		record.ShellStyle = request.Configuration.ShellStyle
 		record.DesktopStyle = request.Configuration.DesktopStyle
 		record.BarStyle = request.Configuration.BarStyle
+		record.AnimationsStyle = request.Configuration.AnimationsStyle
+		record.LookFeel = request.Configuration.LookFeel
+		record.TerminalTranslucency = request.Configuration.Terminal
 	}
 	if err := s.sessions.Save(record); err != nil {
 		_ = fsutil.RemoveAllAndSync(finalRoot)
@@ -262,6 +323,11 @@ type jobResult struct {
 	err     error
 }
 
+type compositionInput struct {
+	lookFeel session.LookFeelDocument
+	terminal session.TerminalTranslucency
+}
+
 func runJobs(
 	ctx context.Context,
 	generationRoot string,
@@ -271,7 +337,31 @@ func runJobs(
 	shellStyle session.ShellStyle,
 	desktopStyle session.DesktopStyle,
 	barStyle session.BarStyle,
+	animationsStyle session.AnimationsStyle,
+	composition ...compositionInput,
 ) error {
+	return runJobsWithBasePalette(ctx, generationRoot, sourceImage, analysis, effectiveSettings, shellStyle, desktopStyle, barStyle, animationsStyle, nil, composition...)
+}
+
+func runJobsWithBasePalette(
+	ctx context.Context,
+	generationRoot string,
+	sourceImage string,
+	analysis *imageanalysis.Analysis,
+	effectiveSettings settingspkg.Settings,
+	shellStyle session.ShellStyle,
+	desktopStyle session.DesktopStyle,
+	barStyle session.BarStyle,
+	animationsStyle session.AnimationsStyle,
+	basePalette *theme.Palette,
+	composition ...compositionInput,
+) error {
+	var lookFeel session.LookFeelDocument
+	var terminal session.TerminalTranslucency
+	if len(composition) > 0 {
+		lookFeel = composition[0].lookFeel
+		terminal = composition[0].terminal
+	}
 	parentCtx := ctx
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -292,13 +382,17 @@ func runJobs(
 			defer wg.Done()
 
 			err := (job{
-				variant:      variant,
-				sourceImage:  sourceImage,
-				analysis:     analysis,
-				settings:     effectiveSettings,
-				shellStyle:   shellStyle,
-				desktopStyle: desktopStyle,
-				barStyle:     barStyle,
+				variant:         variant,
+				sourceImage:     sourceImage,
+				basePalette:     basePalette,
+				analysis:        analysis,
+				settings:        effectiveSettings,
+				shellStyle:      shellStyle,
+				desktopStyle:    desktopStyle,
+				barStyle:        barStyle,
+				animationsStyle: animationsStyle,
+				lookFeel:        lookFeel,
+				terminal:        terminal,
 			}).run(
 				ctx,
 				generationRoot,

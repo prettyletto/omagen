@@ -71,6 +71,28 @@ func saveGenerationRecord(t *testing.T, store *session.Store, record session.Rec
 	}
 }
 
+type discardBaselineOmarchy struct {
+	theme              string
+	background         session.BackgroundRef
+	restoredTheme      string
+	restoredBackground session.BackgroundRef
+}
+
+func (f *discardBaselineOmarchy) CurrentTheme() (string, error) { return f.theme, nil }
+func (f *discardBaselineOmarchy) CurrentBackground() (session.BackgroundRef, error) {
+	return f.background, nil
+}
+func (f *discardBaselineOmarchy) RestoreThemeFast(theme, _ string) error {
+	f.restoredTheme = theme
+	f.theme = theme
+	return nil
+}
+func (f *discardBaselineOmarchy) RestoreBackground(background session.BackgroundRef) error {
+	f.restoredBackground = background
+	f.background = background
+	return nil
+}
+
 func TestGenerate(t *testing.T) {
 	store := generationStore(t)
 	record := session.Record{SessionID: "session", OriginalTheme: "theme", OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"}}
@@ -118,9 +140,12 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 		t.Fatal(err)
 	}
 	configuration := &Configuration{
-		ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-		DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
-		BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+		ShellStyle:      session.ShellStyle{Preset: session.ShellPresetDefault, Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+		DesktopStyle:    session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSizeMode: "fixed", BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Active: "native", Inactive: "frosted_balanced"},
+		BarStyle:        session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+		AnimationsStyle: session.DefaultAnimationsStyle(),
+		LookFeel:        session.LookFeelDocument{SchemaVersion: 1, Preset: "glass-blur", PresetRevision: 1, Customized: map[string]bool{"window": false, "shell": false, "bar": false, "animations": false, "terminal": false}},
+		Terminal:        session.TerminalTranslucency{SchemaVersion: 1, Mode: "preset", Opacity: 0.82, CellMode: "background"},
 	}
 
 	result, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
@@ -143,7 +168,9 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 	}
 	if !updated.ExtraConfigs || !reflect.DeepEqual(updated.ShellStyle, configuration.ShellStyle) ||
 		!reflect.DeepEqual(updated.DesktopStyle, configuration.DesktopStyle) ||
-		!reflect.DeepEqual(updated.BarStyle, configuration.BarStyle) {
+		!reflect.DeepEqual(updated.BarStyle, configuration.BarStyle) ||
+		!reflect.DeepEqual(updated.LookFeel, configuration.LookFeel) ||
+		!reflect.DeepEqual(updated.TerminalTranslucency, configuration.Terminal) {
 		t.Fatalf("configuration not committed: %#v", updated)
 	}
 	sourceDir := filepath.Join(store.SessionDir(record.SessionID), "generations", result.GenerationID, string(Source))
@@ -154,8 +181,16 @@ func TestRegenerateCommitsConfigurationWithoutReplacingActiveSession(t *testing.
 	if !strings.Contains(string(metadata), `form = "docked"`) || !strings.Contains(string(metadata), `visibility = "islands"`) {
 		t.Fatalf("replacement generation did not use updated bar configuration:\n%s", metadata)
 	}
+	for _, name := range []string{"omagen.look-feel.json", "omagen.terminal.json"} {
+		if _, err := os.Stat(filepath.Join(sourceDir, name)); err != nil {
+			t.Fatalf("generated %s missing: %v", name, err)
+		}
+	}
 	if _, err := os.Stat(filepath.Join(sourceDir, "shell.notifications.toml")); err != nil {
 		t.Fatalf("replacement generation did not use updated notification configuration: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(sourceDir, "omagen.runtime.json")); err != nil {
+		t.Fatalf("advanced generation did not declare its runtime requirement: %v", err)
 	}
 	active, exists, err := store.LoadActive()
 	if err != nil || !exists || active.SessionID != record.SessionID {
@@ -180,9 +215,10 @@ func TestFailedRegenerationPreservesPreviousConfiguration(t *testing.T) {
 		SessionID:   record.SessionID,
 		SourceImage: filepath.Join(t.TempDir(), "missing.png"),
 		Configuration: &Configuration{
-			ShellStyle:   session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
-			DesktopStyle: session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
-			BarStyle:     session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+			ShellStyle:      session.ShellStyle{Surface: "accent", Detail: "edge", Tooltip: "accent", Notifications: "accent"},
+			DesktopStyle:    session.DesktopStyle{BorderStyle: "split_top", BorderSize: 2, BorderSpeed: 36, Shape: "rounded", Spacing: "airy", Depth: "shadow", Inactive: "blur"},
+			BarStyle:        session.BarStyle{Surface: "accent", Density: "compact", Attention: "accent", Form: "docked", Visibility: "islands"},
+			AnimationsStyle: session.DefaultAnimationsStyle(),
 		},
 	})
 	if err == nil {
@@ -235,6 +271,43 @@ func TestDiscardClearsWorkspaceButPreservesActiveSessionAndBaseline(t *testing.T
 	active, exists, err := store.LoadActive()
 	if err != nil || !exists || active.SessionID != record.SessionID {
 		t.Fatalf("discard ended active session: active=%#v exists=%t err=%v", active, exists, err)
+	}
+}
+
+func TestDiscardRestoresBaselineThemeAndBackgroundBeforeReturningToConfiguration(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "discard-restores-baseline",
+		OriginalTheme:      "original-theme",
+		OriginalBackground: session.BackgroundRef{Kind: "theme", Path: "backgrounds/wallpaper.jpg"},
+		GenerationID:       "generation-current",
+		PreviewVariant:     "vibrant",
+	}
+	saveGenerationRecord(t, store, record)
+	fake := &discardBaselineOmarchy{
+		theme:      "omagen-preview-discard-restores-baseline-vibrant",
+		background: session.BackgroundRef{Kind: "theme", Path: "backgrounds/wallpaper.png"},
+	}
+
+	result, err := NewServiceWithBaselineRestorer(store, generationSettingsStore(t), fake).Discard(record.SessionID, record.GenerationID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK {
+		t.Fatalf("discard result was not successful: %#v", result)
+	}
+	if fake.restoredTheme != record.OriginalTheme || fake.restoredBackground != record.OriginalBackground {
+		t.Fatalf("discard did not restore the original baseline: %#v", fake)
+	}
+	updated, err := store.Load(record.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.GenerationID != "" || updated.PreviewVariant != "" {
+		t.Fatalf("discard left generated workspace current: %#v", updated)
+	}
+	if _, exists, err := store.LoadActive(); err != nil || !exists {
+		t.Fatalf("discard ended the active session: exists=%t err=%v", exists, err)
 	}
 }
 
@@ -358,7 +431,63 @@ func TestGenerateWritesSixNativePalettes(t *testing.T) {
 	}
 }
 
-func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
+func TestThemeEditGenerationDerivesDirectionsFromAuthoredSource(t *testing.T) {
+	store := generationStore(t)
+	record := session.Record{
+		SessionID:          "theme-edit-generation",
+		OriginalTheme:      "theme",
+		OriginalBackground: session.BackgroundRef{Kind: "external", Path: "/tmp/bg"},
+	}
+	saveGenerationRecord(t, store, record)
+
+	imagePath := filepath.Join(t.TempDir(), "source.png")
+	if err := os.WriteFile(imagePath, testPNG(t), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{
+		SessionID:   record.SessionID,
+		SourceImage: imagePath,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	authoredSourcePath := filepath.Join(store.SessionDir(record.SessionID), "generations", initial.GenerationID, string(Source), "colors.toml")
+	authoredSource, err := os.ReadFile(authoredSourcePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	updated := record
+	updated.Workflow = "theme-edit"
+	updated.ExtraConfigs = true
+	updated.GenerationID = initial.GenerationID
+	updated.ThemeEdit = &session.ThemeEdit{SourceID: "theme", SourceName: "Theme", SourcePath: "/themes/theme", SourceKind: "stock"}
+	if err := store.Save(updated); err != nil {
+		t.Fatal(err)
+	}
+
+	derived, err := NewService(store, generationSettingsStore(t)).Generate(context.Background(), Request{SessionID: record.SessionID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(derived.Variants) != len(orderedVariants) {
+		t.Fatalf("expected six derived variants, got %d", len(derived.Variants))
+	}
+	derivedSource, err := os.ReadFile(filepath.Join(store.SessionDir(record.SessionID), "generations", derived.GenerationID, string(Source), "colors.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(derivedSource, authoredSource) {
+		t.Fatal("theme-edit source palette was rewritten while deriving directions")
+	}
+	for _, variant := range []Variant{Calm, Mute, Deep, Vibrant, Balanced} {
+		if _, err := os.Stat(filepath.Join(store.SessionDir(record.SessionID), "generations", derived.GenerationID, string(variant), "colors.toml")); err != nil {
+			t.Fatalf("derived %s palette missing: %v", variant, err)
+		}
+	}
+}
+
+func TestGenerateEmitsMergedShellAndSectionOverrides(t *testing.T) {
 	store := generationStore(t)
 	saveGenerationRecord(t, store, session.Record{
 		SessionID:          "styled-session",
@@ -384,8 +513,12 @@ func TestGenerateEmitsShellSectionOverridesWithoutRootShellTOML(t *testing.T) {
 	}
 
 	sourceDir := filepath.Join(store.SessionDir("styled-session"), "generations", result.GenerationID, string(Source))
-	if _, err := os.Stat(filepath.Join(sourceDir, "shell.toml")); !os.IsNotExist(err) {
-		t.Fatalf("unexpected generated root shell.toml: %v", err)
+	rootShell, err := os.ReadFile(filepath.Join(sourceDir, "shell.toml"))
+	if err != nil {
+		t.Fatalf("read generated root shell.toml: %v", err)
+	}
+	if !strings.Contains(string(rootShell), "[bar]\n") || !strings.Contains(string(rootShell), "[popups]\n") {
+		t.Fatalf("generated root shell.toml is missing merged sections:\n%s", rootShell)
 	}
 	for section, wants := range map[string][]string{
 		"bar":      {"background-alpha = 0.0", "size-horizontal = 30", "size-vertical = 32", "active = "},
@@ -469,7 +602,7 @@ func TestGenerateValidationAndJobErrors(t *testing.T) {
 		Format:          "png",
 		Samples:         []imageanalysis.Sample{{R: 255, A: 255}},
 		Representatives: []imageanalysis.RepresentativeColor{{Coverage: 1}},
-	}, settings.Defaults(), session.ShellStyle{}, session.DesktopStyle{}, session.BarStyle{}); err == nil {
+	}, settings.Defaults(), session.ShellStyle{}, session.DesktopStyle{}, session.BarStyle{}, session.AnimationsStyle{}); err == nil {
 		t.Fatal("expected cancelled jobs error")
 	}
 	if err := (job{

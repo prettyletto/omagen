@@ -1,0 +1,386 @@
+#!/usr/bin/env zsh
+
+# Small host-side GUI test adapter for the Omagen overlay.
+#
+# This intentionally talks to the user's already-running Hyprland and
+# Omarchy shell. It does not start a second Quickshell instance, modify
+# Hyprland configuration, or manage a background input daemon.
+
+set -euo pipefail
+
+ROOT_DIR="${0:A:h:h}"
+DEFAULT_SCREENSHOT_DIR="$ROOT_DIR/.tmp/ui-tests"
+
+die() {
+    print -u2 -- "ui-test: $*"
+    exit 1
+}
+
+usage() {
+    cat <<'EOF'
+Usage: scripts/ui-test <operation> [arguments]
+
+Operations:
+  check                         Check host session, Hyprland, shell IPC, and tools
+  session                       Print the discovered desktop-session values
+  clients                      Print Hyprland client JSON
+  layers                       Print Hyprland layer-surface JSON
+  screenshot [path]             Capture the focused monitor (default: .tmp/ui-tests/latest.png)
+  summon [payload-json]         Summon the enabled pretty.omagen overlay through shell IPC
+  hide                          Hide the pretty.omagen overlay through shell IPC
+  wait-window <selector> [sec]  Wait for a client or layer matching the selector
+  focus <selector>              Focus one ordinary Hyprland client by its address
+  key <key-or-chord>            Send a key via the Wayland virtual-keyboard protocol
+  type <text>                   Type text via the Wayland virtual-keyboard protocol
+  move <x> <y>                  Move the pointer through Hyprland's dispatcher
+  click [left|middle|right]      Click with ydotool when an existing daemon is available
+  workspace <name>              Dispatch a workspace change
+
+Selectors:
+  Bare text matches client address/class/title and layer namespace.
+  field=value supports address, class, initialClass, title, initialTitle, pid,
+  workspace, namespace, and monitor. Prefix with client: or layer: to constrain
+  the surface kind. Examples: layer:omagen-, namespace=omagen-setup,
+  class=zen, title=ChatGPT.
+
+The helper discovers XDG_RUNTIME_DIR, WAYLAND_DISPLAY, HYPRLAND_INSTANCE_SIGNATURE,
+and DBUS_SESSION_BUS_ADDRESS when they are absent. Run it with host/full desktop
+access when the Codex sandbox cannot reach the Hyprland socket or Wayland display.
+EOF
+}
+
+need_command() {
+    command -v "$1" >/dev/null 2>&1 || die "required command is unavailable: $1"
+}
+
+discover_session() {
+    if [[ -z "${XDG_RUNTIME_DIR:-}" ]]; then
+        export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    fi
+    [[ -d "$XDG_RUNTIME_DIR" ]] || die "XDG_RUNTIME_DIR does not exist: $XDG_RUNTIME_DIR"
+
+    need_command hyprctl
+    need_command jq
+
+    if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" || -z "${WAYLAND_DISPLAY:-}" ]]; then
+        local instances selected
+        instances="$(hyprctl instances -j 2>/dev/null)" || die "cannot discover a running Hyprland instance; use host/full desktop access"
+        selected="$(jq -c '.[0] // {}' <<< "$instances")" || die "Hyprland returned invalid instance JSON"
+        if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+            export HYPRLAND_INSTANCE_SIGNATURE="$(jq -r '.instance // empty' <<< "$selected")"
+        fi
+        if [[ -z "${WAYLAND_DISPLAY:-}" ]]; then
+            export WAYLAND_DISPLAY="$(jq -r '.wl_socket // empty' <<< "$selected")"
+        fi
+    fi
+
+    [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] || die "HYPRLAND_INSTANCE_SIGNATURE is unavailable"
+    [[ -n "${WAYLAND_DISPLAY:-}" ]] || die "WAYLAND_DISPLAY is unavailable"
+    [[ -S "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" ]] || die "Wayland socket is unavailable: $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY"
+
+    if [[ -z "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=$XDG_RUNTIME_DIR/bus"
+    fi
+}
+
+require_desktop() {
+    discover_session
+    need_command jq
+    hyprctl -j clients >/dev/null 2>&1 || die "Hyprland control socket is unreachable; run with host/full desktop access"
+}
+
+hypr_json() {
+    hyprctl -j "$@"
+}
+
+combined_state() {
+    local clients layers
+    clients="$(hypr_json clients)" || die "hyprctl clients failed"
+    layers="$(hypr_json layers)" || die "hyprctl layers failed"
+    jq -n --argjson clients "$clients" --argjson layers "$layers" \
+        '{clients: $clients, layers: $layers}'
+}
+
+matching_surfaces() {
+    local selector="$1"
+    jq -c --arg selector "$selector" '
+        def lowered: tostring | ascii_downcase;
+        def value_for($item; $field):
+            if $field == "address" or $field == "addr" then ($item.address // "")
+            elif $field == "class" then ($item.class // "")
+            elif $field == "initialclass" then ($item.initialClass // "")
+            elif $field == "title" then ($item.title // "")
+            elif $field == "initialtitle" then ($item.initialTitle // "")
+            elif $field == "pid" then ($item.pid // "")
+            elif $field == "workspace" then ($item.workspace.name // $item.workspace.id // "")
+            elif $field == "namespace" then ($item.namespace // "")
+            elif $field == "monitor" then ($item.monitor // "")
+            else ""
+            end;
+        def prefixed_matches($item; $kind; $rest):
+            if ($rest | contains("=")) then
+                ($rest | index("=")) as $equals |
+                ($rest[:$equals]) as $field |
+                ($rest[($equals + 1):]) as $needle |
+                ($item.kind == $kind and
+                    ((value_for($item; $field)) | tostring | lowered | contains($needle)))
+            else
+                ($item.kind == $kind) and
+                (if $kind == "client" then
+                    [$item.address, $item.class, $item.initialClass, $item.title, $item.initialTitle]
+                 else
+                    [$item.namespace, $item.monitor]
+                 end | map(tostring | lowered | contains($rest)) | any)
+            end;
+        def matches($item):
+            ($selector | lowered) as $s |
+            if ($s | startswith("client:")) then
+                prefixed_matches($item; "client"; $s[7:])
+            elif ($s | startswith("layer:")) then
+                prefixed_matches($item; "layer"; $s[6:])
+            elif ($s | contains("=")) then
+                ($s | index("=")) as $equals |
+                ($s[:$equals]) as $field |
+                ($s[($equals + 1):]) as $needle |
+                ((value_for($item; $field)) | tostring | lowered | contains($needle))
+            else
+                ([$item.address, $item.class, $item.initialClass, $item.title,
+                  $item.initialTitle, $item.namespace, $item.monitor]
+                    | map(tostring | lowered | contains($s)) | any)
+            end;
+        def layer_surfaces:
+            [.layers | to_entries[] as $monitor |
+                ($monitor.value.levels // {}) | to_entries[] as $level |
+                $level.value[]
+                | . + {kind: "layer", monitor: $monitor.key, level: $level.key}];
+        ([.clients[] | . + {kind: "client"}] + layer_surfaces)
+        | map(select(matches(.)))
+    '
+}
+
+focused_monitor() {
+    hypr_json monitors | jq -r '([.[] | select(.focused == true)] + [.[] | select(.disabled != true)])[0].name // empty'
+}
+
+wait_for_surface() {
+    local selector="$1"
+    local seconds="${2:-8}"
+    [[ "$seconds" == <-> ]] || die "timeout must be a non-negative integer: $seconds"
+
+    local checks=$((seconds * 10 + 1))
+    local result
+    while (( checks > 0 )); do
+        result="$(combined_state | matching_surfaces "$selector")"
+        if [[ "$result" != "[]" ]]; then
+            print -- "$result"
+            return 0
+        fi
+        checks=$((checks - 1))
+        sleep 0.1
+    done
+    die "timed out waiting for surface matching: $selector"
+}
+
+normalize_key() {
+    case "${1:l}" in
+        esc|escape) print -- Escape ;;
+        enter|return) print -- Return ;;
+        backspace|back) print -- BackSpace ;;
+        delete|del) print -- Delete ;;
+        space) print -- space ;;
+        tab) print -- Tab ;;
+        up) print -- Up ;;
+        down) print -- Down ;;
+        left) print -- Left ;;
+        right) print -- Right ;;
+        pageup) print -- Page_Up ;;
+        pagedown) print -- Page_Down ;;
+        *) print -- "$1" ;;
+    esac
+}
+
+send_key() {
+    need_command wtype
+    [[ $# -eq 1 ]] || die "key expects one key or chord, such as Escape or Ctrl+L"
+
+    local spec="$1"
+    spec="${spec//+/ }"
+    local -a parts
+    read -rA parts <<< "$spec"
+    (( ${#parts[@]} > 0 )) || die "empty key"
+
+    local -a modifiers args
+    modifiers=()
+    args=()
+    local part modifier
+    integer i
+    for (( i = 1; i < ${#parts[@]}; i++ )); do
+        part="${parts[i]:l}"
+        case "$part" in
+            ctrl|control) modifier=ctrl ;;
+            alt|option) modifier=alt ;;
+            shift) modifier=shift ;;
+            super|logo|win|windows) modifier=logo ;;
+            capslock) modifier=capslock ;;
+            *) die "unknown modifier in key chord: ${parts[i]}" ;;
+        esac
+        modifiers+=("$modifier")
+        args+=(-M "$modifier")
+    done
+
+    args+=(-k "$(normalize_key "${parts[-1]}")")
+    for (( i = ${#modifiers[@]}; i >= 1; i-- )); do
+        args+=(-m "${modifiers[i]}")
+    done
+    wtype "${args[@]}"
+}
+
+check_environment() {
+    require_desktop
+    local monitor
+    monitor="$(focused_monitor)"
+    [[ -n "$monitor" ]] || die "Hyprland reports no enabled monitor"
+
+    print -- "GUI test environment: ready"
+    print -- "  XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+    print -- "  WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+    print -- "  HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE"
+    print -- "  DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
+    print -- "  focused monitor=$monitor"
+    for command_name in hyprctl jq grim omarchy-shell wtype; do
+        print -- "  $command_name=$(command -v "$command_name")"
+    done
+
+    need_command omarchy-shell
+    [[ "$(omarchy-shell shell ping 2>/dev/null)" == "ok" ]] \
+        || die "Omarchy shell IPC is unreachable"
+    print -- "  shell IPC=ok"
+
+    if command -v dbus-send >/dev/null 2>&1 \
+        && dbus-send --session --dest=org.freedesktop.DBus --type=method_call \
+            --print-reply /org/freedesktop/DBus org.freedesktop.DBus.ListNames \
+            >/dev/null 2>&1; then
+        print -- "  DBus session=ok"
+    else
+        print -- "  DBus session=unavailable (optional for the helper; launch paths may need it)"
+    fi
+
+    if command -v ydotool >/dev/null 2>&1 \
+        && command -v ydotoold >/dev/null 2>&1 \
+        && [[ -e /dev/uinput ]]; then
+        print -- "  pointer injection=available (existing ydotool/ydotoold and /dev/uinput detected)"
+    else
+        print -- "  pointer injection=unavailable (optional; use keyboard navigation or install/configure ydotool separately)"
+    fi
+}
+
+operation="${1:-}"
+if [[ -z "$operation" || "$operation" == "-h" || "$operation" == "--help" ]]; then
+    usage
+    exit 0
+fi
+shift
+
+case "$operation" in
+    check)
+        check_environment
+        ;;
+    session)
+        discover_session
+        print -- "XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR"
+        print -- "WAYLAND_DISPLAY=$WAYLAND_DISPLAY"
+        print -- "HYPRLAND_INSTANCE_SIGNATURE=$HYPRLAND_INSTANCE_SIGNATURE"
+        print -- "DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS"
+        ;;
+    clients)
+        require_desktop
+        hypr_json clients
+        ;;
+    layers)
+        require_desktop
+        hypr_json layers
+        ;;
+    screenshot)
+        require_desktop
+        need_command grim
+        local_path="${1:-$DEFAULT_SCREENSHOT_DIR/latest.png}"
+        [[ "$local_path" == /* ]] || local_path="$ROOT_DIR/$local_path"
+        monitor="$(focused_monitor)"
+        [[ -n "$monitor" ]] || die "no focused monitor found"
+        mkdir -p "${local_path:h}"
+        grim -o "$monitor" "$local_path"
+        print -- "$local_path"
+        ;;
+    summon)
+        require_desktop
+        need_command omarchy-shell
+        payload="${1:-{}}"
+        omarchy-shell shell summon pretty.omagen "$payload" >/dev/null \
+            || die "Omarchy shell could not summon pretty.omagen"
+        wait_for_surface 'layer:omagen-' 10
+        ;;
+    hide)
+        require_desktop
+        need_command omarchy-shell
+        omarchy-shell shell hide pretty.omagen >/dev/null \
+            || die "Omarchy shell could not hide pretty.omagen"
+        print -- "hidden: pretty.omagen"
+        ;;
+    wait-window)
+        require_desktop
+        [[ $# -ge 1 ]] || die "wait-window expects a selector"
+        wait_for_surface "$1" "${2:-8}"
+        ;;
+    focus)
+        require_desktop
+        [[ $# -eq 1 ]] || die "focus expects one selector"
+        matches="$(combined_state | matching_surfaces "$1")"
+        count="$(jq 'length' <<< "$matches")"
+        (( count > 0 )) || die "no client or layer matched: $1"
+        (( count == 1 )) || die "selector matched $count surfaces; use a more specific selector: $1"
+        kind="$(jq -r '.[0].kind' <<< "$matches")"
+        [[ "$kind" == "client" ]] || die "layer surfaces receive focus from their own keyboard-focus policy; summon the overlay instead of focuswindow"
+        address="$(jq -r '.[0].address' <<< "$matches")"
+        hyprctl dispatch "hl.dsp.focus({ window = 'address:$address' })"
+        ;;
+    key)
+        require_desktop
+        send_key "$@"
+        ;;
+    type)
+        require_desktop
+        need_command wtype
+        [[ $# -ge 1 ]] || die "type expects text"
+        wtype -- "$*"
+        ;;
+    move)
+        require_desktop
+        [[ $# -eq 2 ]] || die "move expects x and y"
+        [[ "$1" =~ '^-?[0-9]+$' && "$2" =~ '^-?[0-9]+$' ]] || die "move coordinates must be integers"
+        # Hyprland 0.55+ exposes dispatchers through its Lua API. Keep the
+        # coordinates integer-validated above before interpolating them.
+        hyprctl dispatch "hl.dsp.cursor.move({ x = $1, y = $2 })"
+        ;;
+    click)
+        require_desktop
+        need_command ydotool
+        command -v ydotoold >/dev/null 2>&1 || die "ydotoold is unavailable; click is optional and no daemon was started"
+        [[ -e /dev/uinput ]] || die "/dev/uinput is unavailable; click is optional and no input device was changed"
+        button="${1:-left}"
+        case "${button:l}" in
+            left) ydotool click 0xC0 ;;
+            right) ydotool click 0xC1 ;;
+            middle) ydotool click 0xC2 ;;
+            *) die "click button must be left, middle, or right" ;;
+        esac
+        ;;
+    workspace)
+        require_desktop
+        [[ $# -eq 1 ]] || die "workspace expects a workspace name or id"
+        [[ "$1" =~ '^[A-Za-z0-9:_-]+$' ]] || die "workspace names may only contain letters, numbers, ':', '_', and '-'"
+        hyprctl dispatch "hl.dsp.focus({ workspace = '$1' })"
+        ;;
+    *)
+        die "unknown operation: $operation (try --help)"
+        ;;
+esac

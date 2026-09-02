@@ -10,7 +10,10 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/apply"
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 	"github.com/prettyletto/omagen/backend/internal/generation"
+	"github.com/prettyletto/omagen/backend/internal/lookfeel"
+	omagenruntime "github.com/prettyletto/omagen/backend/internal/runtime"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"github.com/prettyletto/omagen/backend/internal/settings"
 	"github.com/prettyletto/omagen/backend/internal/testenv"
@@ -24,7 +27,7 @@ func TestRunCommandValidation(t *testing.T) {
 	}{
 		{nil, 2, "missing command"}, {[]string{"unknown"}, 2, "unknown command"},
 		{[]string{"session"}, 2, "missing session subcommand"}, {[]string{"session", "unknown"}, 2, "unknown session subcommand"},
-		{[]string{"session", "cancel"}, 2, "usage:"}, {[]string{"generate"}, 2, "usage:"},
+		{[]string{"session", "cancel"}, 2, "usage:"}, {[]string{"generate"}, 2, "usage:"}, {[]string{"look-feel"}, 2, "usage:"},
 	} {
 		t.Run(strings.Join(tc.args, "_"), func(t *testing.T) {
 			var out, err bytes.Buffer
@@ -32,6 +35,87 @@ func TestRunCommandValidation(t *testing.T) {
 				t.Fatalf("code=%d stderr=%q", code, err.String())
 			}
 		})
+	}
+}
+
+func TestRunDemoReaderRejectsUnsupportedMode(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"demo", "open-reader", "session-1", "full"}, &out, &errOut); code != 2 {
+		t.Fatalf("code=%d stderr=%q, want invalid-usage exit", code, errOut.String())
+	}
+	if !strings.Contains(errOut.String(), "unsupported reader Demo mode") {
+		t.Fatalf("stderr=%q", errOut.String())
+	}
+}
+
+func TestRunLookFeelListAndResolve(t *testing.T) {
+	testenv.Isolate(t)
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "list"}, &out, &errOut); code != 0 {
+		t.Fatalf("list code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), "glass-blur") || !strings.Contains(out.String(), "omarchy-native") {
+		t.Fatalf("catalog output=%q", out.String())
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "resolve", "glass-blur"}, &out, &errOut); code != 0 {
+		t.Fatalf("resolve code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"preset":"glass-blur"`) || !strings.Contains(out.String(), `"opacity":0.82`) {
+		t.Fatalf("composition output=%q", out.String())
+	}
+}
+
+func TestRunLookFeelSaveWritesLocalPreset(t *testing.T) {
+	testenv.Isolate(t)
+	composition, err := lookfeel.Resolve(lookfeel.PresetGlassBlur)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(composition)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "save", "My staged glass", string(payload)}, &out, &errOut); code != 0 {
+		t.Fatalf("save code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"id":"local-my-staged-glass"`) || !strings.Contains(out.String(), `"local":true`) {
+		t.Fatalf("save output=%q", out.String())
+	}
+
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "list"}, &out, &errOut); code != 0 {
+		t.Fatalf("list code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"id":"local-my-staged-glass"`) {
+		t.Fatalf("saved preset missing from catalog=%q", out.String())
+	}
+}
+
+func TestRunLookFeelExportsAndImportsPortableManifest(t *testing.T) {
+	testenv.Isolate(t)
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"look-feel", "export", "nature"}, &out, &errOut); code != 0 {
+		t.Fatalf("export code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"kind":"omagen.look-feel.recipe"`) || !strings.Contains(out.String(), `"id":"nature"`) {
+		t.Fatalf("manifest output=%q", out.String())
+	}
+	path := filepath.Join(t.TempDir(), "nature.omagen-recipe.json")
+	if err := os.WriteFile(path, out.Bytes(), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	out.Reset()
+	errOut.Reset()
+	if code := Run([]string{"look-feel", "import", path}, &out, &errOut); code != 0 {
+		t.Fatalf("import code=%d stderr=%q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"preset":"nature"`) || !strings.Contains(out.String(), `"curve":"spring"`) {
+		t.Fatalf("imported recipe=%q", out.String())
 	}
 }
 
@@ -68,18 +152,118 @@ func TestParseGenerateArgsWithConfiguration(t *testing.T) {
 	}
 }
 
+func TestParseGenerateArgsCarriesWindowOpacityWithoutChangingDesktopStyleArity(t *testing.T) {
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--window-opacity", "0",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.DesktopStyle.WindowOpacity == nil || *request.Configuration.DesktopStyle.WindowOpacity != 0 {
+		t.Fatalf("window opacity was not preserved: %#v", request.Configuration)
+	}
+}
+
+func TestParseGenerateArgsWithLookFeelComposition(t *testing.T) {
+	request, err := parseGenerateArgs([]string{"session", "image", "--look-feel", "glass-blur"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil {
+		t.Fatal("Look & Feel did not create a generation configuration")
+	}
+	configuration := request.Configuration
+	if configuration.LookFeel.Preset != "glass-blur" || configuration.Terminal.Mode != "preset" || configuration.Terminal.Opacity != 0.82 || configuration.Terminal.CellMode != "painted" {
+		t.Fatalf("unexpected Look & Feel configuration: %#v", configuration)
+	}
+	if configuration.DesktopStyle.Active != "frosted_light" || configuration.ShellStyle.Preset != "glass" || configuration.BarStyle.Spec == nil || configuration.BarStyle.Profile == nil || configuration.BarStyle.Profile.Implementation != barprofile.ImplementationReplacement || configuration.AnimationsStyle.Preset != "smooth" {
+		t.Fatalf("composition did not populate all engines: %#v", configuration)
+	}
+}
+
+func TestParseGenerateArgsWithThemeBarProfile(t *testing.T) {
+	profile := `{"schema_version":1,"ownership":"theme-owned","implementation":"replacement","bar":{"id":"pretty.theme.bar"},"behavior":{"form":"dock","visibility":"auto-hide","reveal":"edge","expansion":"hover","workspace":"dots"}}`
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+		"--bar-profile-json", profile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.BarStyle.Profile == nil {
+		t.Fatalf("profile was not parsed: %#v", request.Configuration)
+	}
+	if request.Configuration.BarStyle.Profile.Implementation != barprofile.ImplementationReplacement || request.Configuration.BarStyle.Profile.Behavior.Workspace != "dots" {
+		t.Fatalf("unexpected profile: %#v", request.Configuration.BarStyle.Profile)
+	}
+}
+
+func TestParseGenerateArgsWithBarSpecUsesDefaultCompatibilityStyles(t *testing.T) {
+	spec := `{"version":2,"engine":"auto","topology":"minimal","position":"top","surface":{"role":"transparent","opacity":0},"geometry":{"density":"compact"},"attention":{"mode":"semantic"},"behavior":{"visibility":"always","exclusive_zone":"reserve"},"motion":{"preset":"native"}}`
+	request, err := parseGenerateArgs([]string{"session", "image", "--bar-spec-json", spec})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.BarStyle.Spec == nil {
+		t.Fatalf("bar spec configuration was not parsed: %#v", request.Configuration)
+	}
+	if request.Configuration.ShellStyle.Surface != "flat" || request.Configuration.DesktopStyle.BorderStyle != "solid" || request.Configuration.BarStyle.Surface != "native" {
+		t.Fatalf("compatibility defaults were not applied: %#v", request.Configuration)
+	}
+}
+
+func TestParseGenerateArgsWithBorderSizeMode(t *testing.T) {
+	request, err := parseGenerateArgs([]string{
+		"session", "image",
+		"--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "0", "none", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.Configuration == nil || request.Configuration.DesktopStyle.BorderSize != 0 || request.Configuration.DesktopStyle.BorderSizeMode != "none" {
+		t.Fatalf("explicit none border mode was not parsed: %#v", request.Configuration)
+	}
+}
+
 func TestParseGenerateArgsRejectsInvalidOptions(t *testing.T) {
 	for _, args := range [][]string{
 		{"session", "image", "--harmony"},
 		{"session", "image", "--harmony", "random"},
 		{"session", "image", "--harmony=triadic", "--harmony", "auto"},
 		{"session", "image", "--unknown"},
-		{"session", "image", "--shell-style", "flat", "native", "native", "native"},
+		{"session", "image", "--shell-style", "flat", "native", "native"},
 		{"session", "image", "--desktop-style", "solid", "not-a-number", "native", "native", "native", "native"},
+		{"session", "image", "--window-opacity", "101"},
 	} {
 		if _, err := parseGenerateArgs(args); err == nil {
 			t.Fatalf("expected args %v to fail", args)
 		}
+	}
+}
+
+func TestParseStudioOptions(t *testing.T) {
+	options, err := parseStudioOptions([]string{"--scope", "theme,shell", "--wait", "full", "--run", "terminal", "--allow-trusted-hooks"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if options.Scope != "theme,shell" || options.WaitMode != "full" || options.RetintRun != "terminal" || !options.AllowTrustedHooks {
+		t.Fatalf("options=%#v", options)
+	}
+	if _, err := parseStudioOptions([]string{"--wait", "eventually"}); err == nil {
+		t.Fatal("expected invalid wait mode to fail")
+	}
+	options, err = parseStudioOptions([]string{"--apps", "browser"})
+	if err != nil || options.RetintRun != "browser" {
+		t.Fatalf("--apps alias was not preserved: options=%#v err=%v", options, err)
 	}
 }
 
@@ -88,8 +272,34 @@ func TestRunPing(t *testing.T) {
 	if code := Run([]string{"ping"}, &out, &err); code != 0 {
 		t.Fatalf("code=%d err=%q", code, err.String())
 	}
-	if !strings.Contains(out.String(), `"ok":true`) || !strings.Contains(out.String(), `"version":"1.0.0"`) {
+	if !strings.Contains(out.String(), `"ok":true`) || !strings.Contains(out.String(), `"version":"2.0.0"`) {
 		t.Fatalf("output=%q", out.String())
+	}
+}
+
+func TestRuntimeThemeSetIgnoresSupersededHook(t *testing.T) {
+	root := testenv.Isolate(t)
+	currentRoot := filepath.Join(root, ".local", "state", "omarchy", "current")
+	if err := os.MkdirAll(filepath.Join(currentRoot, "theme"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(currentRoot, "theme.name"), []byte("new-theme\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var out, errOut bytes.Buffer
+	if code := Run([]string{"runtime", "theme-set", "old-theme"}, &out, &errOut); code != 0 {
+		t.Fatalf("stale hook code=%d stderr=%q", code, errOut.String())
+	}
+	var result omagenruntime.ThemeSetResult
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.Superseded || result.Theme != "old-theme" {
+		t.Fatalf("stale hook was not reported as superseded: %#v", result)
+	}
+	if _, err := os.Stat(filepath.Join(root, "state", "omagen", omagenruntime.StateFileName)); !os.IsNotExist(err) {
+		t.Fatalf("stale hook mutated runtime state: %v", err)
 	}
 }
 
@@ -151,10 +361,10 @@ func TestSessionHandlers(t *testing.T) {
 	}
 	service := session.NewService(store, cliOmarchy{})
 	var out, stderr bytes.Buffer
-	if code := runSession([]string{"begin"}, service, nil, &out, &stderr); code != 0 {
+	if code := runSessionWithDependencies([]string{"begin"}, service, nil, nil, nil, nil, nil, &out, &stderr); code != 0 {
 		t.Fatalf("begin code=%d err=%q", code, stderr.String())
 	}
-	if code := runSession([]string{"cancel", "missing"}, service, nil, &out, &stderr); code != 1 {
+	if code := runSessionWithDependencies([]string{"cancel", "missing"}, service, nil, nil, nil, nil, nil, &out, &stderr); code != 1 {
 		t.Fatalf("cancel code=%d", code)
 	}
 	if code := runGenerate([]string{"too-few"}, nil, &out, &stderr); code != 2 {
@@ -175,8 +385,41 @@ func TestSessionBeginAcceptsInactiveStyleArgumentShape(t *testing.T) {
 		"--desktop-style", "invalid", "2", "native", "native", "native", "blur",
 		"--bar-style", "native", "native", "semantic", "continuous",
 	}
-	if code := runSession(args, service, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
+	if code := runSessionWithDependencies(args, service, nil, nil, nil, nil, nil, &out, &stderr); code != 1 || strings.Contains(stderr.String(), "usage:") {
 		t.Fatalf("inactive-style argument shape was rejected before validation: code=%d stderr=%q", code, stderr.String())
+	}
+}
+
+func TestSessionBeginAcceptsWindowOpacityAfterBarStyle(t *testing.T) {
+	testenv.Isolate(t)
+	store, err := session.NewStore()
+	if err != nil {
+		t.Fatal(err)
+	}
+	service := session.NewService(store, cliOmarchy{})
+	var out, stderr bytes.Buffer
+	args := []string{
+		"begin", "--shell-style", "flat", "native", "native", "native",
+		"--desktop-style", "solid", "-1", "default", "native", "native", "native", "native",
+		"--bar-style", "native", "native", "semantic", "continuous", "native",
+		"--window-opacity", "0",
+	}
+	if code := runSessionWithDependencies(args, service, nil, nil, nil, nil, nil, &out, &stderr); code != 0 {
+		t.Fatalf("window opacity argument was rejected: code=%d stderr=%q", code, stderr.String())
+	}
+	active, _, err := store.LoadActive()
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := store.Load(active.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.DesktopStyle.WindowOpacity == nil || *record.DesktopStyle.WindowOpacity != 0 {
+		t.Fatalf("window opacity was not stored: %#v", record.DesktopStyle)
+	}
+	if err := service.Cancel(active.SessionID); err != nil {
+		t.Fatal(err)
 	}
 }
 

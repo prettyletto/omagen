@@ -82,6 +82,9 @@ func TestCleanupRemovesInactiveOwnedResourcesAndIsIdempotent(t *testing.T) {
 	if err := os.MkdirAll(temp, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(temp, ".omagen-owner"), []byte(record.SessionID+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	service := NewService(store, themes)
 	result, err := service.Run()
 	if err != nil {

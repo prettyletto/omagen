@@ -67,11 +67,21 @@ func TestStoreSaveLoadDelete(t *testing.T) {
 	if got.SessionID != record.SessionID || got.OriginalTheme != record.OriginalTheme || got.OriginalBackground != record.OriginalBackground {
 		t.Fatalf("loaded record differs: %#v", got)
 	}
+	legacyProtocol := filepath.Join(s.StateRoot(), "protocol", record.SessionID)
+	if err := os.MkdirAll(legacyProtocol, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(legacyProtocol, "events.jsonl"), []byte("legacy"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.Delete(record.SessionID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Load(record.SessionID); err == nil {
 		t.Fatal("expected deleted session to be unavailable")
+	}
+	if _, err := os.Stat(legacyProtocol); !os.IsNotExist(err) {
+		t.Fatalf("legacy protocol history still exists: %v", err)
 	}
 }
 

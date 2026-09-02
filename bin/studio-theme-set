@@ -1,0 +1,878 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Studio-owned, source-derived Studio driver.
+#
+# This intentionally follows the installed omarchy-theme-set transaction up to
+# the point where the active theme and shell have been promoted. Preview mode
+# never runs arbitrary theme hooks. Its post-apply work is an explicit,
+# Studio-owned allowlist of independent adapters that run in parallel.
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: studio-theme-set {preview|apply|restore} <theme-name> [--no-hooks]
+       [--scope <scopes>] [--wait <critical|full|none>]
+       [--run <policy>] [--skip <adapters>] [--allow-trusted-hooks]
+       studio-theme-set inspect [--json]
+
+Apply a Studio candidate to the live desktop without running arbitrary theme
+hooks. Preview mode is always no-hook; --no-hooks is accepted explicitly for
+callers that want to document the policy. The default app policy is all
+reviewed adapters.
+
+Run policy is one of: none, terminal, all, or a comma-separated list of
+reviewed adapters. --apps remains an alias for --run. --skip removes reviewed
+adapters from that selection. Adapter names are:
+hyprland,btop,opencode,helix,foot,tmux,gnome,pi,claude,browser,vscode,
+obsidian,keyboard.
+
+Scopes are comma-separated: theme,shell,hyprland,apps,background. The theme
+scope is required for mutating modes. User hooks remain disabled unless
+--allow-trusted-hooks is explicitly provided.
+EOF
+}
+
+if [[ ${1:-} != "preview" && ${1:-} != "apply" && ${1:-} != "restore" && ${1:-} != "inspect" ]]; then
+  usage
+  exit 2
+fi
+
+MODE="$1"
+THEME_INPUT="${2:-}"
+if [[ "$MODE" == "inspect" ]]; then
+  shift
+else
+  if (($# < 2)); then
+    usage
+    exit 2
+  fi
+  shift 2
+fi
+RUN_POLICY="${OMAGEN_STUDIO_PREVIEW_APPS:-all}"
+SKIP_POLICY="${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-keyboard}"
+SCOPE_POLICY="${OMAGEN_STUDIO_SCOPE:-theme,shell,hyprland,apps,background}"
+WAIT_MODE="${OMAGEN_STUDIO_WAIT:-critical}"
+ALLOW_TRUSTED_HOOKS=0
+if [[ "${OMAGEN_STUDIO_ALLOW_TRUSTED_HOOKS:-0}" == "1" ]]; then
+  ALLOW_TRUSTED_HOOKS=1
+fi
+DEFAULT_KEYBOARD_SKIP=0
+if [[ -z "${OMAGEN_STUDIO_PREVIEW_APPS:-}" && -z "${OMAGEN_STUDIO_PREVIEW_SKIP_APPS:-}" ]]; then
+  DEFAULT_KEYBOARD_SKIP=1
+  SKIP_POLICY=""
+fi
+while (($# > 0)); do
+  arg="$1"
+  case "$arg" in
+    --no-hooks) ;;
+    --run|--apps)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: %s requires a policy\n' "$arg" >&2
+        usage
+        exit 2
+      fi
+      RUN_POLICY="$2"
+      DEFAULT_KEYBOARD_SKIP=0
+      shift
+      ;;
+    --skip)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: --skip requires adapter names\n' >&2
+        usage
+        exit 2
+      fi
+      SKIP_POLICY="$2"
+      DEFAULT_KEYBOARD_SKIP=0
+      shift
+      ;;
+    --scope)
+      if (($# < 2)) || [[ -z "$2" ]]; then
+        printf 'studio-theme-set: --scope requires scope names\n' >&2
+        usage
+        exit 2
+      fi
+      SCOPE_POLICY="$2"
+      shift
+      ;;
+    --wait)
+      if (($# < 2)) || [[ "$2" != "critical" && "$2" != "full" && "$2" != "none" ]]; then
+        printf 'studio-theme-set: --wait must be critical, full, or none\n' >&2
+        usage
+        exit 2
+      fi
+      WAIT_MODE="$2"
+      shift
+      ;;
+    --allow-trusted-hooks)
+      ALLOW_TRUSTED_HOOKS=1
+      ;;
+    --json)
+      [[ "$MODE" == "inspect" ]] || { printf 'studio-theme-set: --json is only valid for inspect\n' >&2; exit 2; }
+      ;;
+    *)
+      printf 'studio-theme-set: unsupported preview option: %s\n' "$arg" >&2
+      usage
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+scope_enabled() {
+  local wanted="$1" scope
+  IFS=',' read -r -a scopes <<< "$SCOPE_POLICY"
+  for scope in "${scopes[@]}"; do
+    scope="${scope//[[:space:]]/}"
+    [[ "$scope" == "$wanted" ]] && return 0
+  done
+  return 1
+}
+
+validate_scopes() {
+  local scope
+  IFS=',' read -r -a scopes <<< "$SCOPE_POLICY"
+  for scope in "${scopes[@]}"; do
+    scope="${scope//[[:space:]]/}"
+    case "$scope" in
+      theme|shell|hyprland|apps|background) ;;
+      *) printf 'studio-theme-set: unknown scope: %s\n' "$scope" >&2; return 2 ;;
+    esac
+  done
+  scope_enabled theme || { printf 'studio-theme-set: mutating modes require the theme scope\n' >&2; return 2; }
+}
+
+if (( DEFAULT_KEYBOARD_SKIP )); then
+  SKIP_POLICY="keyboard"
+fi
+
+# Resolve the running Omarchy checkout using the same supported locations as
+# the plugin installer. Do not edit any package-owned source.
+for candidate in "${OMARCHY_PATH:-}" "$HOME/.local/share/omarchy" "/usr/share/omarchy"; do
+  if [[ -n "$candidate" && -f "$candidate/shell/shell.qml" ]]; then
+    export OMARCHY_PATH="$candidate"
+    break
+  fi
+done
+
+if [[ -z "${OMARCHY_PATH:-}" || ! -d "$OMARCHY_PATH/themes" ]]; then
+  printf 'studio-theme-set: cannot resolve OMARCHY_PATH\n' >&2
+  exit 1
+fi
+
+CURRENT_THEME_PATH="$HOME/.local/state/omarchy/current/theme"
+NEXT_THEME_PATH="$HOME/.local/state/omarchy/current/next-theme"
+CURRENT_BACKGROUND_LINK="$HOME/.local/state/omarchy/current/background"
+BACKGROUND_TRANSITION_CACHE="$HOME/.cache/omarchy/background-transitions"
+THEME_SET_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omarchy-theme-set.lock"
+POST_COMMIT_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-post-commit.lock"
+CACHE_WARM_LOCK="${XDG_RUNTIME_DIR:-/tmp}/omagen-cache-warm.lock"
+USER_THEMES_PATH="$HOME/.config/omarchy/themes"
+OMARCHY_THEMES_PATH="$OMARCHY_PATH/themes"
+
+# Keep the native installed-theme safety policy in the shared Studio staging
+# seam. A generated marker must never bypass Omarchy's protection for a cloned
+# repository theme's executable files or symlinked entries.
+INSTALLED_THEME_DENIED=(alacritty.toml foot.ini ghostty.conf kitty.conf vscode.json)
+IGNORED_THEME_FILES=()
+
+is_denied_installed_file() {
+  local name="$1" denied
+  [[ "$name" == *.lua ]] && return 0
+  for denied in "${INSTALLED_THEME_DENIED[@]}"; do
+    [[ "$name" == "$denied" ]] && return 0
+  done
+  return 1
+}
+
+stage_installed_dir() {
+  local source="$1" dest="$2" entry name
+  mkdir -p "$dest"
+  for entry in "$source"/*; do
+    [[ -e "$entry" && ! -L "$entry" ]] || continue
+    name=${entry##*/}
+    if [[ -d "$entry" ]]; then
+      stage_installed_dir "$entry" "$dest/$name"
+    else
+      cp "$entry" "$dest/$name"
+    fi
+  done
+}
+
+stage_installed_colors_from_alacritty() {
+  local source="$1" scratch
+  [[ -f "$NEXT_THEME_PATH/colors.toml" ]] && return 0
+  [[ -f "$source/alacritty.toml" && ! -L "$source/alacritty.toml" ]] || return 0
+  scratch=$(mktemp -d)
+  cp "$source/alacritty.toml" "$scratch/alacritty.toml"
+  omarchy-theme-colors-from-alacritty "$scratch"
+  [[ -f "$scratch/colors.toml" ]] && cp "$scratch/colors.toml" "$NEXT_THEME_PATH/colors.toml"
+  rm -rf "$scratch"
+}
+
+theme_came_from_a_repo() {
+  local source="$1"
+  [[ ! -L "$source" && -d "$source/.git" ]]
+}
+
+stage_installed_theme() {
+  local source="$1" entry name
+  [[ -d "$source" ]] || return 0
+  for entry in "$source"/*; do
+    [[ -e "$entry" ]] || continue
+    name=${entry##*/}
+    if [[ -L "$entry" ]] || is_denied_installed_file "$name"; then
+      case "${name,,}" in
+        readme*|license*|changelog*|*.md|*.txt) ;;
+        *) IGNORED_THEME_FILES+=("$name") ;;
+      esac
+    elif [[ -d "$entry" ]]; then
+      stage_installed_dir "$entry" "$NEXT_THEME_PATH/$name"
+    else
+      cp "$entry" "$NEXT_THEME_PATH/$name"
+    fi
+  done
+  stage_installed_colors_from_alacritty "$source"
+}
+
+report_ignored_theme_files() {
+  (( ${#IGNORED_THEME_FILES[@]} > 0 )) || return 0
+  printf 'Ignored in %s: %s\n' "$USER_THEMES_PATH/$THEME_NAME" "${IGNORED_THEME_FILES[*]}" >&2
+  printf 'A theme installed from a git repo cannot supply Lua, a terminal config, or vscode.json.\n' >&2
+}
+
+activation_is_current() {
+  local current
+  current=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  [[ "$current" == "$THEME_NAME" ]]
+}
+
+json_escape() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//$'\n'/\\n}
+  value=${value//$'\r'/\\r}
+  value=${value//$'\t'/\\t}
+  value=${value//$'\b'/\\b}
+  value=${value//$'\f'/\\f}
+  printf '%s' "$value"
+}
+
+if [[ "$MODE" == "inspect" ]]; then
+  current_theme=$(tr -d '\n' <"$HOME/.local/state/omarchy/current/theme.name" 2>/dev/null || true)
+  background=$(readlink -f "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  colors=false; shell=false; hyprland=false
+  [[ -s "$CURRENT_THEME_PATH/colors.toml" ]] && colors=true
+  [[ -s "$CURRENT_THEME_PATH/shell.toml" ]] && shell=true
+  [[ -s "$CURRENT_THEME_PATH/hyprland.conf" ]] && hyprland=true
+  printf '{"mode":"inspect","theme":"%s","theme_root":"%s","background":"%s","readers":{"colors":%s,"shell":%s,"hyprland":%s}}\n' \
+    "$(json_escape "$current_theme")" "$(json_escape "$CURRENT_THEME_PATH")" "$(json_escape "$background")" "$colors" "$shell" "$hyprland"
+  exit 0
+fi
+
+validate_scopes || exit $?
+
+run_parallel() {
+  local pid
+  local pids=()
+
+  for command in "$@"; do
+    bash -lc "$command" &
+    pids+=("$!")
+  done
+
+  for pid in "${pids[@]}"; do
+    wait "$pid"
+  done
+}
+
+run_low_priority() {
+  # Post-commit retints and cache warmers are correctness-independent. Keep
+  # them from competing with Quickshell's scene rebuild and Hyprland's first
+  # frames after the critical theme handoff. nice/ionice priority is inherited
+  # by helpers and their children; fall back cleanly on minimal installations.
+  if command -v ionice >/dev/null 2>&1 && command -v nice >/dev/null 2>&1; then
+    ionice -c 3 nice -n 10 "$@"
+  elif command -v nice >/dev/null 2>&1; then
+    nice -n 10 "$@"
+  else
+    "$@"
+  fi
+}
+
+# Keep this declaration in the same order as Omarchy's post_theme_commands
+# array. Selection filters this ordered list; execution remains parallel.
+RETINT_ADAPTERS=(
+  terminal
+  hyprland
+  btop
+  opencode
+  helix
+  foot
+  tmux
+  gnome
+  pi
+  claude
+  browser
+  vscode
+  obsidian
+  keyboard
+)
+
+retint_command() {
+  case "$1" in
+    terminal) printf '%s' 'omarchy-restart-terminal' ;;
+    hyprland) printf '%s' 'omarchy-restart-hyprctl' ;;
+    btop) printf '%s' 'omarchy-restart-btop' ;;
+    opencode) printf '%s' 'omarchy-restart-opencode' ;;
+    helix) printf '%s' 'omarchy-restart-helix' ;;
+    foot) printf '%s' 'omarchy-theme-set-foot' ;;
+    tmux) printf '%s' 'omarchy-theme-set-tmux' ;;
+    gnome) printf '%s' 'omarchy-theme-set-gnome' ;;
+    pi) printf '%s' 'omarchy-theme-set-pi' ;;
+    claude) printf '%s' 'omarchy-theme-set-claude' ;;
+    browser) printf '%s' 'omarchy-theme-set-browser' ;;
+    vscode) printf '%s' 'omarchy-theme-set-vscode' ;;
+    obsidian) printf '%s' 'omarchy-theme-set-obsidian' ;;
+    keyboard) printf '%s' 'omarchy-theme-set-keyboard' ;;
+    *) return 1 ;;
+  esac
+}
+
+selected_retint_adapters() {
+  local requested adapter found
+  RETINT_SELECTION=()
+  case "$RUN_POLICY" in
+    none) ;;
+    terminal) RETINT_SELECTION=(terminal) ;;
+    all) RETINT_SELECTION=("${RETINT_ADAPTERS[@]}") ;;
+    *)
+      IFS=',' read -r -a requested_adapters <<< "$RUN_POLICY"
+      for requested in "${requested_adapters[@]}"; do
+        requested="${requested//[[:space:]]/}"
+        [[ -n "$requested" ]] || continue
+        found=0
+        for adapter in "${RETINT_ADAPTERS[@]}"; do
+          if [[ "$requested" == "$adapter" ]]; then
+            RETINT_SELECTION+=("$adapter")
+            found=1
+            break
+          fi
+        done
+        if (( ! found )); then
+          printf 'studio-theme-set: unknown retint adapter: %s\n' "$requested" >&2
+          return 2
+        fi
+      done
+      ;;
+  esac
+
+  IFS=',' read -r -a skipped_adapters <<< "$SKIP_POLICY"
+  for requested in "${skipped_adapters[@]}"; do
+    requested="${requested//[[:space:]]/}"
+    [[ -n "$requested" ]] || continue
+    if [[ "$requested" == "all" ]]; then
+      RETINT_SELECTION=()
+      continue
+    fi
+    found=0
+    for adapter in "${RETINT_ADAPTERS[@]}"; do
+      if [[ "$requested" == "$adapter" ]]; then
+        found=1
+        break
+      fi
+    done
+    if (( ! found )); then
+      printf 'studio-theme-set: unknown skipped retint adapter: %s\n' "$requested" >&2
+      return 2
+    fi
+    filtered_selection=()
+    for adapter in "${RETINT_SELECTION[@]}"; do
+      [[ "$adapter" == "$requested" ]] || filtered_selection+=("$adapter")
+    done
+    RETINT_SELECTION=("${filtered_selection[@]}")
+  done
+}
+
+run_retint_adapter() {
+  local adapter="$1"
+  local command
+  local -a adapter_runner
+  # A newer Apply may have superseded this post-commit job while it was
+  # waiting for an adapter. Never let stale work repaint the newer theme.
+  activation_is_current || {
+    printf '%s retint adapter=%s status=skipped reason=stale-activation activation=%s\n' "$MODE" "$adapter" "${OMAGEN_ACTIVATION_ID:-unknown}"
+    return 0
+  }
+  command=$(retint_command "$adapter")
+  if ! command -v "$command" >/dev/null 2>&1; then
+    printf 'preview retint adapter=%s status=skipped reason=command-missing command=%s\n' "$adapter" "$command"
+    return 0
+  fi
+  printf 'preview retint adapter=%s status=started command=%s\n' "$adapter" "$command"
+  # Terminal signalling and the compositor reload are short, visible parts of
+  # the handoff. Deprioritize the filesystem/editor/browser adapters that can
+  # otherwise saturate CPU or storage immediately after Preview returns.
+  if [[ "$adapter" == "terminal" || "$adapter" == "hyprland" ]]; then
+    adapter_runner=(bash -lc "$command")
+  else
+    adapter_runner=(run_low_priority bash -lc "$command")
+  fi
+  if "${adapter_runner[@]}"; then
+    printf 'preview retint adapter=%s status=success\n' "$adapter"
+  else
+    printf 'preview retint adapter=%s status=failed command=%s\n' "$adapter" "$command" >&2
+    return 1
+  fi
+}
+
+run_selected_retints() {
+  local adapter pid
+  local pids=()
+  for adapter in "${RETINT_SELECTION[@]}"; do
+    run_retint_adapter "$adapter" &
+    pids+=("$!")
+  done
+  for pid in "${pids[@]}"; do
+    # Retint adapters are post-commit convenience work. A broken or
+    # unavailable adapter must never turn an already-live theme transaction
+    # into a failed Apply; the per-adapter log above is the diagnostic.
+    wait "$pid" || true
+  done
+  return 0
+}
+
+run_trusted_hooks() {
+  if (( ! ALLOW_TRUSTED_HOOKS )); then
+    return 0
+  fi
+  if ! command -v omarchy-hook >/dev/null 2>&1; then
+    printf '%s trusted-hooks status=skipped reason=command-missing\n' "$MODE"
+    return 0
+  fi
+  printf '%s trusted-hooks status=started timeout=30s\n' "$MODE"
+  if timeout 30 omarchy-hook theme-set "$THEME_NAME"; then
+    printf '%s trusted-hooks status=success\n' "$MODE"
+  else
+    printf '%s trusted-hooks status=failed\n' "$MODE" >&2
+  fi
+}
+
+run_owned_omagen_hook() {
+  # Studio preview is intentionally no-hook. Permanent Apply is different:
+  # after the native theme files are promoted, activate Omagen's own
+  # consented runtime bridge so advanced Shell/Bar adapters are part of the
+  # same end-to-end path. This is deliberately narrower than omarchy-hook:
+  # arbitrary user hooks remain disabled unless explicitly allowed below.
+  [[ "$MODE" == "apply" ]] || return 0
+
+  local config_home runtime_hook
+  config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+  runtime_hook="${OMAGEN_RUNTIME_HOOK:-$config_home/omarchy/hooks/theme-set.d/omagen-theme-set}"
+  if [[ ! -x "$runtime_hook" ]]; then
+    printf '%s omagen-runtime status=skipped reason=hook-missing path=%s\n' "$MODE" "$runtime_hook"
+    return 0
+  fi
+
+  printf '%s omagen-runtime status=started path=%s\n' "$MODE" "$runtime_hook"
+  if "$runtime_hook" "$THEME_NAME"; then
+    printf '%s omagen-runtime status=success\n' "$MODE"
+  else
+    # Native theme promotion is already committed. Keep Apply successful and
+    # leave a precise post-commit diagnostic for runtime status/recovery.
+    printf '%s omagen-runtime status=failed\n' "$MODE" >&2
+  fi
+}
+
+run_post_commit() {
+  activation_is_current || return 0
+  if scope_enabled apps || scope_enabled hyprland; then
+    run_selected_retints
+  fi
+  activation_is_current || return 0
+  run_trusted_hooks
+}
+
+run_post_commit_async() {
+  local post_commit_log=${OMAGEN_STUDIO_POST_COMMIT_LOG:-}
+
+  # The critical Studio driver log is captured by the Go client. A background
+  # post-commit job must not inherit that pipe: even though the shell launches
+  # the job with &, the client would otherwise wait for the inherited writer
+  # to close before it can return the critical Preview result. Keep diagnostics
+  # in a separate per-operation log and fully detach stdin/stdout/stderr from
+  # the critical transaction.
+  if [[ -n "$post_commit_log" ]] && mkdir -p "$(dirname -- "$post_commit_log")" 2>/dev/null && : >"$post_commit_log"; then
+    (
+      # Detached post-commit work must never inherit the critical theme-set
+      # lock. The parent releases it below, but keeping a duplicated fd open
+      # can extend the lock lifetime until the adapter jobs finish.
+      exec 9>&-
+      if [[ -L "$POST_COMMIT_LOCK" ]]; then
+        exit 1
+      fi
+      exec 8>"$POST_COMMIT_LOCK"
+      flock 8
+      activation_is_current || exit 0
+      run_post_commit >>"$post_commit_log" 2>&1 </dev/null
+    ) &
+  else
+    (
+      exec 9>&-
+      exec 8>"$POST_COMMIT_LOCK"
+      flock 8
+      activation_is_current || exit 0
+      run_post_commit >/dev/null 2>&1 </dev/null
+    ) &
+  fi
+}
+
+warm_apply_caches() {
+  # Applying a new user theme changes the theme directory signature used by
+  # the native image-based theme picker. Warm it after the permanent theme is
+  # live so the next Super+Ctrl+Shift+Space does not pay that scan/thumbnail
+  # cost. Keep only one cache worker alive: rapid Apply/re-Apply used to stack
+  # selector scans and image thumbnailers, which could still contend with the
+  # compositor despite their reduced priority. A newer Apply may make this
+  # worker stale between stages, so re-check ownership before warming the
+  # theme-specific background cache.
+  (
+    exec 9>&-
+    exec 7>"$CACHE_WARM_LOCK"
+    flock -n 7 || exit 0
+    activation_is_current || exit 0
+    if command -v omarchy-theme-switcher >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-switcher --preload
+    fi
+    activation_is_current || exit 0
+    if command -v omarchy-theme-bg-cache >/dev/null 2>&1; then
+      run_low_priority omarchy-theme-bg-cache
+    fi
+  ) >/dev/null 2>&1 </dev/null &
+}
+
+shell_ipc() {
+  timeout 2 omarchy-shell "$@" >/dev/null 2>&1
+}
+
+instant_background_handoff() {
+  local new_background="$1"
+  local detour="${2:-}"
+  local temporary_detour=0
+
+  # Quickshell's `setInstant` still compares the requested pathname before it
+  # reaches the instant branch. Theme swaps can replace the file behind an
+  # unchanged `current/theme/backgrounds/wallpaper.png` pathname, so briefly
+  # use a distinct hard-link pathname to invalidate that comparison. The
+  # detour has the old image for Preview (or the new image as a fallback), so
+  # it is visually harmless.
+  if [[ -z "$detour" || ! -f "$detour" || "$detour" == "$new_background" ]]; then
+    if detour=$(snapshot_background_path "$new_background" "instant"); then
+      temporary_detour=1
+    else
+      detour=""
+    fi
+  fi
+  if [[ -n "$detour" && "$detour" != "$new_background" && -f "$detour" ]]; then
+    shell_ipc background setInstant "$detour" || true
+  fi
+  shell_ipc background setInstant "$new_background" || true
+  if (( temporary_detour )); then
+    rm -f "$detour"
+  fi
+}
+
+snapshot_background_path() {
+  local background="$1"
+  local name="$2"
+  local snapshot extension
+
+  [[ -f "$background" ]] || return
+
+  mkdir -p "$BACKGROUND_TRANSITION_CACHE"
+  extension=${background##*.}
+  snapshot="$BACKGROUND_TRANSITION_CACHE/$name-$$.$extension"
+  ln "$background" "$snapshot" 2>/dev/null || cp "$background" "$snapshot"
+  echo "$snapshot"
+}
+
+snapshot_current_background() {
+  local current_background
+
+  current_background=$(readlink -f "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  snapshot_background_path "$current_background" "previous"
+}
+
+choose_theme_background() {
+  local backgrounds=()
+  local current_background index next_index i
+
+  CHOSEN_THEME_BACKGROUND=""
+  mapfile -d '' -t backgrounds < <(
+    find -P "$HOME/.config/omarchy/backgrounds/$THEME_NAME/" "$CURRENT_THEME_PATH/backgrounds/" -maxdepth 1 -type f \
+      \( -iname '*.jpg' -o -iname '*.jpeg' -o -iname '*.png' -o -iname '*.gif' -o -iname '*.bmp' -o -iname '*.webp' \) \
+      -print0 2>/dev/null | sort -z
+  )
+
+  (( ${#backgrounds[@]} > 0 )) || return 1
+
+  current_background=$(readlink "$CURRENT_BACKGROUND_LINK" 2>/dev/null || true)
+  index=-1
+  for i in "${!backgrounds[@]}"; do
+    if [[ ${backgrounds[$i]} == "$current_background" ]]; then
+      index=$i
+      break
+    fi
+  done
+
+  if (( index == -1 )); then
+    CHOSEN_THEME_BACKGROUND="${backgrounds[0]}"
+  else
+    next_index=$(((index + 1) % ${#backgrounds[@]}))
+    CHOSEN_THEME_BACKGROUND="${backgrounds[$next_index]}"
+  fi
+}
+
+set_theme_background_link() {
+  choose_theme_background || return 1
+  ln -nsf "$CHOSEN_THEME_BACKGROUND" "$CURRENT_BACKGROUND_LINK"
+}
+
+set_theme_background() {
+  local new_background new_background_snapshot
+
+  if ! choose_theme_background; then
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    return
+  fi
+
+  new_background="$CHOSEN_THEME_BACKGROUND"
+
+  # Live Canvas is an inspection loop, not a presentation transition. The
+  # generated wallpaper must become visible, but waiting for a crossfade and
+  # retaining transition snapshots only adds seconds to the first preview.
+  # Promote the link and force Quickshell to reread it instantly; permanent
+  # Apply keeps the animated transition below.
+  if [[ "$MODE" == "preview" ]]; then
+    if scope_enabled shell || scope_enabled hyprland; then
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    fi
+    ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+    if [[ "$THEME_HEADLESS" != "1" ]]; then
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
+    rm -f "$OLD_BACKGROUND_SNAPSHOT"
+    return 0
+  fi
+
+  new_background_snapshot=$(snapshot_background_path "$new_background" "next")
+
+  # A palette/preset preview commonly keeps the same wallpaper. Do not run a
+  # full background transition (or its delayed snapshot cleanup) when the
+  # image content is unchanged: update shell tokens directly and return while
+  # the critical lock is still available. This is the fast path for color-only
+  # Live Canvas tests, while cmp keeps same-path-but-replaced wallpapers safe.
+  if [[ -n "$OLD_BACKGROUND_SNAPSHOT" && -n "$new_background_snapshot" ]] && \
+     cmp -s "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot"; then
+    rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot"
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+    return 0
+  fi
+
+  if ! scope_enabled shell && ! scope_enabled hyprland; then
+    ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+    return 0
+  fi
+
+  if [[ -f "$OLD_BACKGROUND_SNAPSHOT" && -f "$new_background_snapshot" ]]; then
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
+    (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT" "$new_background_snapshot") &
+  elif [[ -f "$new_background_snapshot" ]]; then
+    if ! shell_ipc background themeTransition "" "$new_background_snapshot" "$new_background" "$colors_payload" "$shell_payload"; then
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$new_background_snapshot"
+    fi
+    (exec 9>&-; sleep 3; rm -f "$new_background_snapshot") &
+  else
+    if ! shell_ipc background themeTransition "$OLD_BACKGROUND_SNAPSHOT" "$new_background" "$new_background" "$colors_payload" "$shell_payload"; then
+      shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+      instant_background_handoff "$new_background" "$OLD_BACKGROUND_SNAPSHOT"
+    fi
+    if [[ -f "$OLD_BACKGROUND_SNAPSHOT" ]]; then
+      (exec 9>&-; sleep 3; rm -f "$OLD_BACKGROUND_SNAPSHOT") &
+    fi
+  fi
+
+  ln -nsf "$new_background" "$CURRENT_BACKGROUND_LINK"
+}
+
+THEME_NAME=$(echo "$THEME_INPUT" | sed -E 's/<[^>]+>//g' | tr '[:upper:]' '[:lower:]' | tr ' ' '-')
+if [[ ! "$THEME_NAME" =~ ^[a-z0-9][a-z0-9_-]*$ ]]; then
+  printf 'studio-theme-set: invalid theme name: %s\n' "$THEME_INPUT" >&2
+  exit 2
+fi
+THEME_HEADLESS=0
+if [[ ${OMARCHY_THEME_HEADLESS:-} == "1" || ${OMARCHY_THEME_OFFLINE:-} == "1" ]]; then
+  THEME_HEADLESS=1
+fi
+
+if [[ ! -d "$OMARCHY_THEMES_PATH/$THEME_NAME" ]] && [[ ! -d "$USER_THEMES_PATH/$THEME_NAME" ]]; then
+  printf "Theme '%s' does not exist\n" "$THEME_NAME" >&2
+  exit 1
+fi
+
+reject_theme_symlinks() {
+  local root="$1" link
+  [[ -d "$root" ]] || return 0
+  if [[ -L "$root" ]]; then
+    # Preview aliases are intentionally symlinks: the backend records the
+    # exact session-owned target and removes the alias during session cleanup.
+    # Keep the general symlink guard for installed themes, but allow only this
+    # narrow, preview-only alias shape and never allow links inside its tree.
+    if [[ "$MODE" == "preview" && "$root" == "$USER_THEMES_PATH/$THEME_NAME" && "$THEME_NAME" == omagen-preview-* ]]; then
+      local resolved state_root
+      resolved=$(readlink -f -- "$root" 2>/dev/null || true)
+      state_root=$(readlink -f -- "${XDG_STATE_HOME:-$HOME/.local/state}/omagen/sessions" 2>/dev/null || true)
+      if [[ -n "$resolved" && -n "$state_root" && -d "$resolved" && "$resolved" == "$state_root"/* ]]; then
+        link=$(find -P "$resolved" -mindepth 1 -type l -print -quit 2>/dev/null || true)
+        [[ -z "$link" ]] && return 0
+      fi
+    fi
+    printf 'studio-theme-set: refusing symlinked theme directory: %s\n' "$root" >&2
+    return 1
+  fi
+  link=$(find -P "$root" -type l -print -quit 2>/dev/null || true)
+  if [[ -n "$link" ]]; then
+    printf 'studio-theme-set: refusing symlinked theme entry: %s\n' "$link" >&2
+    return 1
+  fi
+}
+
+reject_theme_symlinks "$OMARCHY_THEMES_PATH/$THEME_NAME" || exit 1
+reject_theme_symlinks "$USER_THEMES_PATH/$THEME_NAME" || exit 1
+
+if ! selected_retint_adapters; then
+  exit 2
+fi
+if ! scope_enabled apps; then
+	filtered_selection=()
+	for adapter in "${RETINT_SELECTION[@]}"; do
+		if [[ "$adapter" == "hyprland" ]] && scope_enabled hyprland; then
+			filtered_selection+=("$adapter")
+		fi
+	done
+	RETINT_SELECTION=("${filtered_selection[@]}")
+fi
+if ! scope_enabled hyprland; then
+  filtered_selection=()
+  for adapter in "${RETINT_SELECTION[@]}"; do
+    [[ "$adapter" == "hyprland" ]] || filtered_selection+=("$adapter")
+  done
+  RETINT_SELECTION=("${filtered_selection[@]}")
+fi
+
+# Serialize with the native theme-set operation. The Studio driver owns the
+# command boundary, but the shared staging/current paths remain Omarchy-owned.
+if [[ -L "$THEME_SET_LOCK" ]]; then
+  printf 'studio-theme-set: refusing symlinked theme-set lock: %s\n' "$THEME_SET_LOCK" >&2
+  exit 1
+fi
+exec 9>"$THEME_SET_LOCK"
+flock 9
+
+rm -rf "$NEXT_THEME_PATH"
+mkdir -p "$NEXT_THEME_PATH"
+
+# Copy official theme first, then overlay user customizations on top. Match the
+# native repo-theme filter so the advanced marker does not widen trust.
+cp -r "$OMARCHY_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+if theme_came_from_a_repo "$USER_THEMES_PATH/$THEME_NAME"; then
+  stage_installed_theme "$USER_THEMES_PATH/$THEME_NAME"
+  report_ignored_theme_files
+else
+  cp -r "$USER_THEMES_PATH/$THEME_NAME/"* "$NEXT_THEME_PATH/" 2>/dev/null || true
+fi
+
+if [[ ! -f "$NEXT_THEME_PATH/colors.toml" && -f "$NEXT_THEME_PATH/alacritty.toml" ]]; then
+  omarchy-theme-colors-from-alacritty "$NEXT_THEME_PATH"
+fi
+
+omarchy-theme-set-templates
+
+# Materialize Omagen's terminal opacity intent only after the native templates
+# have produced the staged files and before the directory is promoted. The
+# materializer is deliberately a sibling backend binary so this hook never
+# edits a user's main terminal configuration or the active theme in place.
+if [[ -f "$NEXT_THEME_PATH/omagen.terminal.json" ]]; then
+  TERMINAL_MATERIALIZER="${OMAGEN_THEME_MATERIALIZER_BIN:-$SCRIPT_DIR/omagen}"
+  if [[ ! -x "$TERMINAL_MATERIALIZER" ]]; then
+    printf 'studio-theme-set: terminal intent exists but materializer is unavailable: %s\n' "$TERMINAL_MATERIALIZER" >&2
+    exit 1
+  fi
+  "$TERMINAL_MATERIALIZER" terminal materialize "$NEXT_THEME_PATH"
+fi
+
+OLD_BACKGROUND_SNAPSHOT=""
+if [[ "$THEME_HEADLESS" != "1" && ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]] && scope_enabled background; then
+  OLD_BACKGROUND_SNAPSHOT=$(snapshot_current_background)
+fi
+
+# Exchange the complete directories in one filesystem operation when a theme
+# already exists. Quickshell watches current/theme; deleting it and moving
+# next-theme into place exposes a partial tree and makes every shell plugin
+# rebuild against missing tokens. Keep the old complete tree at next-theme for
+# the next transaction to remove. A first install has no old tree to exchange,
+# so a normal atomic rename is sufficient in that case.
+if [[ -e "$CURRENT_THEME_PATH" ]]; then
+  mv --exchange -T "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+else
+  mv -T "$NEXT_THEME_PATH" "$CURRENT_THEME_PATH"
+fi
+echo "$THEME_NAME" >"$HOME/.local/state/omarchy/current/theme.name"
+
+colors_payload=$([[ -f "$CURRENT_THEME_PATH/colors.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/colors.toml")
+shell_payload=$([[ -f "$CURRENT_THEME_PATH/shell.toml" ]] && base64 -w 0 "$CURRENT_THEME_PATH/shell.toml")
+if [[ "$THEME_HEADLESS" == "1" ]]; then
+  if scope_enabled background && [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} != "1" ]]; then
+    set_theme_background_link || true
+  fi
+elif ! scope_enabled background || [[ ${OMARCHY_THEME_SKIP_BACKGROUND:-0} == "1" ]]; then
+  if scope_enabled shell || scope_enabled hyprland; then
+    shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
+  fi
+else
+  set_theme_background
+fi
+
+# Omagen's own consented runtime bridge is part of the critical Apply handoff.
+# Run it while the shared theme-set lock is still held so the backend cannot
+# observe a committed theme before Shell/Bar activation has completed. Preview
+# remains explicitly no-hook; arbitrary user hooks stay in the post-commit
+# allowlist below.
+if [[ "$THEME_HEADLESS" != "1" ]]; then
+  run_owned_omagen_hook
+fi
+
+# Release the shared critical section before the Studio-owned allowlist runs.
+flock -u 9
+
+if [[ "$THEME_HEADLESS" != "1" ]]; then
+  if [[ "$MODE" == "apply" ]]; then
+    warm_apply_caches
+  fi
+  # This is a Studio-owned allowlist. It intentionally excludes arbitrary user
+  # hooks and only runs the adapters selected by the explicit policy. Missing
+  # optional commands are reported as skipped; selected command failures are
+  # reported individually after all parallel adapters finish.
+  printf '%s scope=%s wait=%s retint-run=%s skip=%s selected=%s trusted-hooks=%s activation=%s\n' "$MODE" "$SCOPE_POLICY" "$WAIT_MODE" "$RUN_POLICY" "${SKIP_POLICY:-none}" "${RETINT_SELECTION[*]:-none}" "$ALLOW_TRUSTED_HOOKS" "${OMAGEN_ACTIVATION_ID:-unknown}"
+  if [[ "$WAIT_MODE" == "full" ]]; then
+    run_post_commit
+  else
+    run_post_commit_async
+  fi
+fi

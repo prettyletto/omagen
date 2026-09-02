@@ -2,6 +2,7 @@ package generation
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
@@ -13,8 +14,8 @@ type DiscardResult struct {
 	GenerationID string `json:"generation_id"`
 }
 
-// Discard detaches the current generated workspace while preserving the
-// active session's original rollback baseline and selected configuration.
+// Discard restores the session baseline, then detaches the current generated
+// workspace while preserving the active session and selected configuration.
 // Generation files remain session-owned and are removed when the session ends.
 func (s *Service) Discard(sessionID, generationID string) (DiscardResult, error) {
 	if !validGenerationComponent(sessionID) {
@@ -47,6 +48,9 @@ func (s *Service) Discard(sessionID, generationID string) (DiscardResult, error)
 	if record.GenerationID != generationID {
 		return DiscardResult{}, fmt.Errorf("generation %q is not current", generationID)
 	}
+	if err := s.restoreBaseline(record); err != nil {
+		return DiscardResult{}, err
+	}
 
 	record.GenerationID = ""
 	record.PreviewVariant = ""
@@ -54,4 +58,31 @@ func (s *Service) Discard(sessionID, generationID string) (DiscardResult, error)
 		return DiscardResult{}, fmt.Errorf("persist discarded generation: %w", err)
 	}
 	return DiscardResult{OK: true, SessionID: sessionID, GenerationID: generationID}, nil
+}
+
+func (s *Service) restoreBaseline(record session.Record) error {
+	if s.omarchy == nil {
+		return nil
+	}
+	if err := s.omarchy.RestoreThemeFast(record.OriginalTheme, s.sessions.SessionDir(record.SessionID)); err != nil {
+		return fmt.Errorf("restore generation baseline theme: %w", err)
+	}
+	theme, err := s.omarchy.CurrentTheme()
+	if err != nil {
+		return fmt.Errorf("verify generation baseline theme: %w", err)
+	}
+	if theme != record.OriginalTheme {
+		return fmt.Errorf("verify generation baseline theme: got %q, want %q", theme, record.OriginalTheme)
+	}
+	if err := s.omarchy.RestoreBackground(record.OriginalBackground); err != nil {
+		return fmt.Errorf("restore generation baseline background: %w", err)
+	}
+	background, err := s.omarchy.CurrentBackground()
+	if err != nil {
+		return fmt.Errorf("verify generation baseline background: %w", err)
+	}
+	if !reflect.DeepEqual(background, record.OriginalBackground) {
+		return fmt.Errorf("verify generation baseline background: got %#v, want %#v", background, record.OriginalBackground)
+	}
+	return nil
 }

@@ -24,7 +24,36 @@ const captureSettleDelay = 750 * time.Millisecond
 
 func NewService(sessions *session.Store) *Service { return &Service{sessions: sessions} }
 
+func (s *Service) Status(sessionID string) (SessionStatus, error) {
+	state, err := s.loadState(sessionID)
+	if errors.Is(err, os.ErrNotExist) {
+		return SessionStatus{}, nil
+	}
+	if err != nil {
+		return SessionStatus{}, fmt.Errorf("load live canvas state: %w", err)
+	}
+	return SessionStatus{Active: true, Mode: normalizeMode(state.Mode), Monitor: state.DemoMonitor}, nil
+}
+
 func (s *Service) Open(sessionID string) (OpenResult, error) {
+	return s.openMode(sessionID, ModeFull)
+}
+
+func (s *Service) OpenWindow(sessionID string) (OpenResult, error) {
+	return s.openMode(sessionID, ModeWindow)
+}
+
+// OpenReader reserves a session-owned workspace for a QML reader surface.
+// The reader itself is an overlay, but its workspace is still tracked by the
+// backend so switching, cancel, and recovery restore the user's desktop.
+func (s *Service) OpenReader(sessionID, mode string) (OpenResult, error) {
+	if mode != ModeShell && mode != ModeBar {
+		return OpenResult{}, fmt.Errorf("unsupported reader Demo mode %q", mode)
+	}
+	return s.openMode(sessionID, mode)
+}
+
+func (s *Service) openMode(sessionID, mode string) (OpenResult, error) {
 	if _, err := s.requireActiveIdle(sessionID); err != nil {
 		return OpenResult{}, fmt.Errorf("inspect session: %w", err)
 	}
@@ -33,9 +62,12 @@ func (s *Service) Open(sessionID string) (OpenResult, error) {
 		return OpenResult{}, fmt.Errorf("load demo state: %w", stateErr)
 	}
 	if stateErr == nil {
+		if normalizeMode(state.Mode) != normalizeMode(mode) {
+			return OpenResult{}, fmt.Errorf("demo mode %q is already active; close it before opening %q", normalizeMode(state.Mode), normalizeMode(mode))
+		}
 		return s.reopenDemo(state)
 	}
-	return s.createDemo(sessionID)
+	return s.createDemo(sessionID, normalizeMode(mode))
 }
 
 func (s *Service) requireActiveIdle(sessionID string) (session.Record, error) {
@@ -85,6 +117,7 @@ func (s *Service) saveStateIfActive(state State) error {
 }
 
 func (s *Service) reopenDemo(state State) (OpenResult, error) {
+	state.Mode = normalizeMode(state.Mode)
 	if state.OwnerToken == "" {
 		state.OwnerToken = makeOwnerToken(state.SessionID)
 	}
@@ -103,7 +136,7 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 	if err != nil {
 		return OpenResult{}, err
 	}
-	missing := missingSlots(surviving)
+	missing := missingSlotsForMode(state.Mode, surviving)
 	createdDuringReopen := map[Slot]string{}
 	if len(missing) > 0 {
 		before, err := windowAddresses()
@@ -111,7 +144,12 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 			return OpenResult{}, err
 		}
 		logger := appendLaunchLogger(s.launchLogPath(state.SessionID))
-		created, err := launchDemoSlots(state.DemoDir, state.OwnerToken, missing, ResolveCapabilities(), before, logger)
+		var created map[Slot]string
+		if state.Mode == ModeWindow {
+			created, err = launchWindowDemoSlot(state.DemoDir, state.OwnerToken, missing, ResolveCapabilities(), before, logger)
+		} else {
+			created, err = launchDemoSlots(state.DemoDir, state.OwnerToken, missing, ResolveCapabilities(), before, logger)
+		}
 		if err != nil {
 			return OpenResult{}, fmt.Errorf("recreate demo slots: %w", err)
 		}
@@ -125,7 +163,11 @@ func (s *Service) reopenDemo(state State) (OpenResult, error) {
 		return closeDemoWindows(createdDuringReopen, 3*time.Second, appendLaunchLogger(s.launchLogPath(state.SessionID)))
 	}
 	state.Windows = surviving
-	if err = placeDemoWindows(state, monitor); err != nil {
+	if state.Mode == ModeWindow {
+		if err = placeWindowDemo(state, monitor); err != nil {
+			return OpenResult{}, errors.Join(err, cleanupCreated())
+		}
+	} else if err = placeDemoWindows(state); err != nil {
 		return OpenResult{}, errors.Join(err, cleanupCreated())
 	}
 	if err = s.saveStateIfActive(state); err != nil {
@@ -143,7 +185,13 @@ func resolveDemoMonitor(state State) (monitorInfo, error) {
 	return focusedMonitor()
 }
 
-func (s *Service) createDemo(sessionID string) (OpenResult, error) {
+func (s *Service) createDemo(sessionID, mode string) (OpenResult, error) {
+	if mode == ModeWindow {
+		return s.createWindowDemo(sessionID)
+	}
+	if mode == ModeShell || mode == ModeBar {
+		return s.createReaderDemo(sessionID, mode)
+	}
 	m, err := focusedMonitor()
 	if err != nil {
 		return OpenResult{}, err
@@ -162,7 +210,7 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 		return OpenResult{}, fmt.Errorf("recheck session before opening Demo: %w", err)
 	}
 	workspace := workspacePrefix + shortID(sessionID)
-	state := State{SessionID: sessionID, Workspace: workspace, DemoMonitor: demoMonitor, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, OwnerToken: makeOwnerToken(sessionID), Windows: map[Slot]string{}, CreatedAt: time.Now().UTC()}
+	state := State{SessionID: sessionID, Mode: ModeFull, Workspace: workspace, DemoMonitor: demoMonitor, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, OwnerToken: makeOwnerToken(sessionID), Windows: map[Slot]string{}, CreatedAt: time.Now().UTC()}
 	if err = s.saveStateIfActive(state); err != nil {
 		return OpenResult{}, fmt.Errorf("persist initial demo state: %w", err)
 	}
@@ -187,7 +235,12 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 		_ = restoreWorkspace(origin)
 		return OpenResult{}, fmt.Errorf("wait for preview terminal reload: %w (demo launch log: %s)", err, logPath)
 	}
-	windows, err := launchDemoSlots(dir, state.OwnerToken, allDemoSlots(), ResolveCapabilities(), before, logger)
+	capabilities := ResolveCapabilities()
+	// Build the tiled tree from the terminal/editor panes first. Nautilus is a
+	// real GUI application with its own startup lifecycle; launching it only
+	// after the tree is ready avoids relocating a partially initialized
+	// GApplication through an empty workspace.
+	windows, err := launchDemoSlots(dir, state.OwnerToken, []Slot{SlotEditor, SlotBtop, SlotShell}, capabilities, before, logger)
 	if err != nil {
 		logger.line("launch failed error=%v; cleaning up classified windows", err)
 		state.Windows = cloneWindows(windows)
@@ -214,10 +267,167 @@ func (s *Service) createDemo(sessionID string) (OpenResult, error) {
 		}
 		return errors.Join(closeErr, restoreErr)
 	}
-	if err = placeDemoWindows(state, m); err != nil {
+	if err = placeDemoWindows(state); err != nil {
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	if err = arrangeDemoWindows(state); err != nil {
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	beforeFiles, err := windowAddresses()
+	if err != nil {
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	files, err := launchDemoSlots(dir, state.OwnerToken, []Slot{SlotFiles}, capabilities, beforeFiles, logger)
+	windows = mergeWindows(windows, files)
+	state.Windows = cloneWindows(windows)
+	if err != nil {
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	if err = shapeDemoWindows(state); err != nil {
 		return OpenResult{}, errors.Join(err, cleanup())
 	}
 	if err = s.saveStateIfActive(state); err != nil {
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	return s.openResult(state, false), nil
+}
+
+func (s *Service) createReaderDemo(sessionID, mode string) (OpenResult, error) {
+	m, err := focusedMonitor()
+	if err != nil {
+		return OpenResult{}, err
+	}
+	dir, err := s.prepareDemoDir(sessionID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	cleanupDir := func() { _ = os.RemoveAll(dir) }
+	if err = focusMonitor(m.Name); err != nil {
+		cleanupDir()
+		return OpenResult{}, err
+	}
+	if _, err = s.requireActiveIdle(sessionID); err != nil {
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("recheck session before opening %s Demo: %w", mode, err)
+	}
+
+	origin := State{
+		SessionID:           sessionID,
+		Mode:                mode,
+		DemoMonitor:         m.Name,
+		OriginMonitor:       m.Name,
+		OriginWorkspaceID:   m.ActiveWorkspace.ID,
+		OriginWorkspaceName: m.ActiveWorkspace.Name,
+	}
+	state := State{
+		SessionID:           sessionID,
+		Mode:                mode,
+		Workspace:           workspacePrefix + shortID(sessionID) + "_" + mode,
+		DemoMonitor:         m.Name,
+		OriginMonitor:       origin.OriginMonitor,
+		OriginWorkspaceID:   origin.OriginWorkspaceID,
+		OriginWorkspaceName: origin.OriginWorkspaceName,
+		DemoDir:             dir,
+		OwnerToken:          makeOwnerToken(sessionID),
+		Windows:             map[Slot]string{},
+		CreatedAt:           time.Now().UTC(),
+	}
+	if err = s.saveStateIfActive(state); err != nil {
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("persist %s Demo state: %w", mode, err)
+	}
+	if err = switchWorkspace(state.Workspace); err != nil {
+		_ = restoreWorkspace(origin)
+		_ = os.Remove(s.statePath(sessionID))
+		cleanupDir()
+		return OpenResult{}, fmt.Errorf("open %s Demo workspace: %w", mode, err)
+	}
+	return s.openResult(state, false), nil
+}
+
+func (s *Service) createWindowDemo(sessionID string) (OpenResult, error) {
+	m, err := focusedMonitor()
+	if err != nil {
+		return OpenResult{}, err
+	}
+	origin := State{SessionID: sessionID, Mode: ModeWindow, DemoMonitor: m.Name, OriginMonitor: m.Name, OriginWorkspaceID: m.ActiveWorkspace.ID, OriginWorkspaceName: m.ActiveWorkspace.Name}
+	dir, err := s.prepareDemoDir(sessionID)
+	if err != nil {
+		return OpenResult{}, err
+	}
+	if err = focusMonitor(m.Name); err != nil {
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, err
+	}
+	if _, err = s.requireActiveIdle(sessionID); err != nil {
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("recheck session before opening Window Demo: %w", err)
+	}
+	workspace := workspacePrefix + shortID(sessionID) + "_window"
+	state := State{SessionID: sessionID, Mode: ModeWindow, Workspace: workspace, DemoMonitor: m.Name, OriginMonitor: origin.OriginMonitor, OriginWorkspaceID: origin.OriginWorkspaceID, OriginWorkspaceName: origin.OriginWorkspaceName, DemoDir: dir, OwnerToken: makeOwnerToken(sessionID), Windows: map[Slot]string{}, CreatedAt: time.Now().UTC()}
+	if err = s.saveStateIfActive(state); err != nil {
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("persist initial Window Demo state: %w", err)
+	}
+	if err = switchWorkspace(workspace); err != nil {
+		_ = os.Remove(s.statePath(sessionID))
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, err
+	}
+	logPath := s.launchLogPath(sessionID)
+	logger, err := newLaunchLogger(logPath)
+	if err != nil {
+		_ = restoreWorkspace(origin)
+		_ = os.Remove(s.statePath(sessionID))
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("create Window Demo launch log: %w", err)
+	}
+	logger.line("session=%s mode=%s demo_dir=%q monitor=%q workspace=%q", sessionID, ModeWindow, dir, m.Name, workspace)
+	before, err := windowAddresses()
+	if err != nil {
+		_ = restoreWorkspace(origin)
+		_ = os.Remove(s.statePath(sessionID))
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("snapshot clients before Window Demo: %w (demo launch log: %s)", err, logPath)
+	}
+	if err := omarchy.WaitForPendingTerminalReload(s.sessions.SessionDir(sessionID)); err != nil {
+		_ = restoreWorkspace(origin)
+		_ = os.Remove(s.statePath(sessionID))
+		_ = os.RemoveAll(dir)
+		return OpenResult{}, fmt.Errorf("wait for preview terminal reload: %w (demo launch log: %s)", err, logPath)
+	}
+	windows, err := launchWindowDemoSlot(dir, state.OwnerToken, []Slot{SlotEditor, SlotBtop}, ResolveCapabilities(), before, logger)
+	if err != nil {
+		state.Windows = cloneWindows(windows)
+		_ = s.saveStateIfActive(state)
+		closeErr := closeDemoWindows(windows, 3*time.Second, logger)
+		restoreErr := restoreWorkspace(origin)
+		if closeErr == nil && restoreErr == nil {
+			_ = os.RemoveAll(dir)
+			_ = os.Remove(s.statePath(sessionID))
+		}
+		return OpenResult{}, fmt.Errorf("launch Window Demo: %w (demo launch log: %s): cleanup=%v restore=%v", err, logPath, closeErr, restoreErr)
+	}
+	state.Windows = cloneWindows(windows)
+	cleanup := func() error {
+		closeErr := closeDemoWindows(windows, 3*time.Second, logger)
+		restoreErr := restoreWorkspace(origin)
+		if closeErr == nil && restoreErr == nil {
+			if err := os.RemoveAll(dir); err != nil {
+				return err
+			}
+			if err := os.Remove(s.statePath(sessionID)); err != nil && !errors.Is(err, os.ErrNotExist) {
+				return err
+			}
+		}
+		return errors.Join(closeErr, restoreErr)
+	}
+	if err = placeWindowDemo(state, m); err != nil {
+		logger.line("Window Demo placement failed error=%v; cleaning up", err)
+		return OpenResult{}, errors.Join(err, cleanup())
+	}
+	if err = s.saveStateIfActive(state); err != nil {
+		logger.line("Window Demo state save failed error=%v; cleaning up", err)
 		return OpenResult{}, errors.Join(err, cleanup())
 	}
 	return s.openResult(state, false), nil
@@ -250,6 +460,49 @@ func (s *Service) Close(sessionID string) (CloseResult, error) {
 	return CloseResult{OK: true, SessionID: sessionID, Closed: true}, nil
 }
 
+// Reflow reasserts the owned canvas workspace after a live theme changes
+// compositor state. Demo windows remain in Hyprland's normal dwindle layout;
+// this operation never creates, closes, floats, or resizes them.
+func (s *Service) Reflow(sessionID string) error {
+	if _, err := s.requireActiveIdle(sessionID); err != nil {
+		return fmt.Errorf("inspect session: %w", err)
+	}
+	state, err := s.loadState(sessionID)
+	if err != nil {
+		return fmt.Errorf("load live canvas state: %w", err)
+	}
+	monitor, err := resolveDemoMonitor(state)
+	if err != nil {
+		return err
+	}
+	surviving, err := survivingWindows(state)
+	if err != nil {
+		return fmt.Errorf("find live canvas windows: %w", err)
+	}
+	if missing := missingSlotsForMode(state.Mode, surviving); len(missing) > 0 {
+		return fmt.Errorf("cannot reflow live canvas before all windows are ready: missing %s", strings.Join(slotNames(missing), ", "))
+	}
+	state.DemoMonitor = monitor.Name
+	state.Windows = surviving
+	if err := focusMonitor(monitor.Name); err != nil {
+		return err
+	}
+	if err := switchWorkspace(state.Workspace); err != nil {
+		return err
+	}
+	if normalizeMode(state.Mode) == ModeWindow {
+		if err := placeWindowDemo(state, monitor); err != nil {
+			return fmt.Errorf("place Window Demo window: %w", err)
+		}
+	} else if err := placeDemoWindows(state); err != nil {
+		return fmt.Errorf("place live canvas windows: %w", err)
+	}
+	if err := s.saveStateIfActive(state); err != nil {
+		return fmt.Errorf("persist live canvas layout: %w", err)
+	}
+	return nil
+}
+
 // CapturePreview takes a screenshot only for an Apply request. It deliberately
 // uses the Demo state monitor/workspace instead of the current focus, then
 // normalizes the result into the session's staged preview.png asset.
@@ -269,7 +522,7 @@ func (s *Service) CapturePreview(sessionID string) (CaptureResult, error) {
 	if err != nil {
 		return CaptureResult{}, fmt.Errorf("find demo windows: %w", err)
 	}
-	if missing := missingSlots(surviving); len(missing) > 0 {
+	if missing := missingSlotsForMode(state.Mode, surviving); len(missing) > 0 {
 		return CaptureResult{}, fmt.Errorf("cannot capture Demo before all windows are ready: missing %s", strings.Join(slotNames(missing), ", "))
 	}
 	if err := focusMonitor(monitor.Name); err != nil {
@@ -311,7 +564,25 @@ func slotNames(slots []Slot) []string {
 }
 
 func (s *Service) openResult(state State, reused bool) OpenResult {
-	return OpenResult{OK: true, SessionID: state.SessionID, Workspace: state.Workspace, DemoDir: state.DemoDir, LogPath: s.launchLogPath(state.SessionID), Reused: reused, Windows: cloneWindows(state.Windows)}
+	return OpenResult{OK: true, SessionID: state.SessionID, Mode: normalizeMode(state.Mode), Workspace: state.Workspace, Monitor: state.DemoMonitor, DemoDir: state.DemoDir, LogPath: s.launchLogPath(state.SessionID), Reused: reused, Windows: cloneWindows(state.Windows)}
+}
+
+func missingSlotsForMode(mode string, windows map[Slot]string) []Slot {
+	switch normalizeMode(mode) {
+	case ModeShell, ModeBar:
+		return nil
+	case ModeWindow:
+		var result []Slot
+		if windows[SlotEditor] == "" {
+			result = append(result, SlotEditor)
+		}
+		if windows[SlotBtop] == "" {
+			result = append(result, SlotBtop)
+		}
+		return result
+	default:
+		return missingSlots(windows)
+	}
 }
 func (s *Service) prepareDemoDir(sessionID string) (string, error) {
 	dst := filepath.Join(s.sessions.SessionDir(sessionID), "demo-scene")
@@ -447,14 +718,20 @@ func shortID(id string) string {
 		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
 			b.WriteRune(r)
 		}
-		if b.Len() >= 12 {
-			break
-		}
 	}
 	if b.Len() == 0 {
 		return "session"
 	}
-	return b.String()
+	value := b.String()
+	// Session IDs begin with a timestamp, so a timestamp-only prefix collides
+	// for every Demo opened during the same minute. Keep the unique suffix as
+	// well: this token is used both for the Hyprland workspace and for the
+	// session-specific application identities.
+	const maxTokenLength = 32
+	if len(value) > maxTokenLength {
+		return value[:16] + "-" + value[len(value)-15:]
+	}
+	return value
 }
 func cloneWindows(src map[Slot]string) map[Slot]string {
 	dst := make(map[Slot]string, len(src))

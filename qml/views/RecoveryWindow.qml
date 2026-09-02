@@ -4,6 +4,7 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components" as Components
 
 PanelWindow {
     id: root
@@ -14,6 +15,8 @@ PanelWindow {
     property string previewVariant: ""
     property bool workspaceResumable: false
     property int cursorIndex: 0
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
 
     signal resumeRequested()
     signal restoreRequested()
@@ -21,6 +24,11 @@ PanelWindow {
 
     visible: active
     color: "transparent"
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.active
+        onActivated: root.closeRequested()
+    }
     WlrLayershell.namespace: "omagen-recovery"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
@@ -39,6 +47,7 @@ PanelWindow {
     MouseArea { anchors.fill: parent; onClicked: root.closeRequested() }
 
     Rectangle {
+        id: card
         anchors.centerIn: parent
         width: Math.min(Style.space(560), parent.width - Style.space(48))
         height: Style.space(360)
@@ -47,6 +56,15 @@ PanelWindow {
         border.width: 1
         border.color: Color.popups.border
         z: 1
+
+        Components.SignalGlitch {
+            anchors.fill: parent
+            z: 10
+            enabled: root.glitchEnabled
+            triggerEpoch: root.glitchEpoch
+            accentColor: Color.accent
+            secondaryColor: Color.foreground
+        }
 
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
 

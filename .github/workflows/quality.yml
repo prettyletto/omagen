@@ -1,0 +1,65 @@
+name: QML and documentation quality
+
+on:
+  push:
+    branches:
+      - dev
+      - main
+  pull_request:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  qml-behavior:
+    name: QML behavior tests
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install Qt test runtime
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes qt6-declarative-dev-tools qml6-module-qtquick qml6-module-qtquick-window qml6-module-qtqml-workerscript qml6-module-qttest xvfb
+
+      - name: Run QML behavior tests in a virtual display
+        run: |
+          runner="$(command -v qmltestrunner || true)"
+          test -n "$runner" || runner=/usr/lib/qt6/bin/qmltestrunner
+          test -x "$runner"
+          # The service test exercises cancellation through a small CI-only
+          # Quickshell.Io double; the production plugin still uses Quickshell.
+          xvfb-run --auto-servernum env \
+            QML2_IMPORT_PATH="$GITHUB_WORKSPACE/.github/qml-test-fixtures" \
+            QT_QUICK_BACKEND=software "$runner" -input qml/tests
+
+  documentation:
+    name: Documentation checks
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install documentation tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cargo
+          cargo install mdbook --version 0.4.40 --locked
+
+      - name: Validate relative links
+        run: python3 scripts/check-doc-links.py
+
+      - name: Validate canonical product documentation source
+        if: github.base_ref == 'dev' || github.ref == 'refs/heads/dev'
+        run: python3 scripts/promote-product-docs.py --check-source
+
+      - name: Validate stable README projection
+        if: github.base_ref == 'main' || github.ref == 'refs/heads/main'
+        run: python3 scripts/promote-product-docs.py --check
+
+      - name: Build documentation
+        run: mdbook build

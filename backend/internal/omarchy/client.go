@@ -1,6 +1,7 @@
 package omarchy
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -11,15 +12,52 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/prettyletto/omagen/backend/internal/fsutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
+	"golang.org/x/sys/unix"
+)
+
+type ThemeInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	Kind        string `json:"kind"`
+	PreviewPath string `json:"preview_path,omitempty"`
+	StockPath   string `json:"stock_path,omitempty"`
+	UserPath    string `json:"user_path,omitempty"`
+}
+
+const (
+	maxStudioLogBytes        int64 = 1 << 20
+	omagenPreviewThemePrefix       = "omagen-preview-"
 )
 
 type Client struct {
-	stderr io.Writer
+	stderr               io.Writer
+	studioPreviewCommand string
 }
 
 func NewClient(stderr io.Writer) *Client {
-	return &Client{stderr: stderr}
+	return &Client{stderr: stderr, studioPreviewCommand: resolveStudioPreviewCommand()}
+}
+
+func resolveStudioPreviewCommand() string {
+	if configured := strings.TrimSpace(os.Getenv("OMAGEN_STUDIO_THEME_SET")); configured != "" {
+		if info, err := os.Stat(configured); err == nil && info.Mode().IsRegular() && info.Mode()&0o111 != 0 {
+			return configured
+		}
+		return ""
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	configured := filepath.Join(filepath.Dir(executable), "studio-theme-set")
+	info, err := os.Stat(configured)
+	if err != nil || !info.Mode().IsRegular() || info.Mode()&0o111 == 0 {
+		return ""
+	}
+	return configured
 }
 
 func (c *Client) CurrentTheme() (string, error) {
@@ -27,7 +65,7 @@ func (c *Client) CurrentTheme() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(filepath.Join(home, ".local", "state", "omarchy", "current", "theme.name"))
+	data, err := fsutil.ReadFileLimited(filepath.Join(home, ".local", "state", "omarchy", "current", "theme.name"), 4096)
 	if err != nil {
 		return "", err
 	}
@@ -36,6 +74,147 @@ func (c *Client) CurrentTheme() (string, error) {
 		return "", fmt.Errorf("theme.name is empty")
 	}
 	return theme, nil
+}
+
+// ListThemes delegates discovery to Omarchy so stock and user-installed
+// themes follow the same precedence rules as the native switcher.
+func (c *Client) ListThemes() ([]ThemeInfo, error) {
+	command := exec.Command("omarchy", "theme", "list")
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = c.stderr
+	command.Env = appendOmarchyEnvironment(os.Environ())
+	if err := command.Run(); err != nil {
+		return nil, fmt.Errorf("list Omarchy themes: %w", err)
+	}
+	lines := strings.Split(strings.ReplaceAll(output.String(), "\r\n", "\n"), "\n")
+	result := make([]ThemeInfo, 0, len(lines))
+	seen := make(map[string]struct{})
+	for _, line := range lines {
+		name := strings.TrimSpace(line)
+		if name == "" {
+			continue
+		}
+		id := themeSlug(name)
+		// Preview aliases are short-lived session artifacts. Omarchy includes
+		// them in its human-facing theme list, but they are not installed
+		// themes and `omarchy theme dir` cannot resolve them. Never let an
+		// active or stale preview alias make the installed-theme catalog fail.
+		if strings.HasPrefix(id, omagenPreviewThemePrefix) {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		path, err := c.ThemeDir(id)
+		if err != nil {
+			return nil, fmt.Errorf("resolve Omarchy theme %q: %w", name, err)
+		}
+		stockPath, userPath := c.themeRoots(id)
+		kind := "stock"
+		if userPath != "" && stockPath != "" {
+			kind = "user-overlay"
+		} else if userPath != "" {
+			kind = "user"
+		}
+		previewPath := firstThemeAsset("preview.png", userPath, stockPath, path)
+		result = append(result, ThemeInfo{ID: id, Name: name, Path: path, Kind: kind, PreviewPath: previewPath, StockPath: stockPath, UserPath: userPath})
+	}
+	return result, nil
+}
+
+// firstThemeAsset follows native overlay precedence while keeping the catalog
+// response useful to visual consumers. A missing preview is valid; the picker
+// renders a deliberate placeholder instead of hiding the theme.
+func firstThemeAsset(name string, roots ...string) string {
+	for _, root := range roots {
+		if strings.TrimSpace(root) == "" {
+			continue
+		}
+		candidate := filepath.Join(root, name)
+		info, err := os.Stat(candidate)
+		if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			return candidate
+		}
+	}
+	return ""
+}
+
+func (c *Client) ThemeDir(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name, "\r\n") {
+		return "", fmt.Errorf("invalid theme name")
+	}
+	command := exec.Command("omarchy", "theme", "dir", name)
+	var output bytes.Buffer
+	command.Stdout = &output
+	command.Stderr = c.stderr
+	command.Env = appendOmarchyEnvironment(os.Environ())
+	if err := command.Run(); err != nil {
+		return "", fmt.Errorf("resolve Omarchy theme directory: %w", err)
+	}
+	path := strings.TrimSpace(output.String())
+	if !filepath.IsAbs(path) || path == "/" {
+		return "", fmt.Errorf("Omarchy returned an invalid theme directory")
+	}
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("theme directory is not a directory")
+	}
+	return path, nil
+}
+
+func themeSlug(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	var b strings.Builder
+	dash := false
+	for _, r := range name {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			if dash && b.Len() > 0 {
+				b.WriteByte('-')
+			}
+			b.WriteRune(r)
+			dash = false
+		} else {
+			dash = b.Len() > 0
+		}
+	}
+	return strings.Trim(b.String(), "-")
+}
+
+func (c *Client) themeRoots(slug string) (stockPath, userPath string) {
+	home, homeErr := os.UserHomeDir()
+	if homeErr == nil {
+		candidate := filepath.Join(home, ".config", "omarchy", "themes", slug)
+		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+			userPath = candidate
+		}
+	}
+	root := strings.TrimSpace(os.Getenv("OMARCHY_PATH"))
+	if root == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			candidate := filepath.Join(home, ".local", "share", "omarchy")
+			if _, err := os.Stat(filepath.Join(candidate, "themes")); err == nil {
+				root = candidate
+			}
+		}
+	}
+	if root == "" {
+		root = "/usr/share/omarchy"
+	}
+	candidate := filepath.Join(root, "themes", slug)
+	if info, err := os.Stat(candidate); err == nil && info.IsDir() {
+		stockPath = candidate
+	}
+	return stockPath, userPath
 }
 
 func (c *Client) CurrentBackground() (session.BackgroundRef, error) {
@@ -67,14 +246,61 @@ func (c *Client) CurrentBackground() (session.BackgroundRef, error) {
 	return session.BackgroundRef{Kind: "external", Path: resolved}, nil
 }
 
+// VerifyNativeState checks the files and readers that form the stable native
+// evidence available without inventing a shell-specific IPC query. It is
+// deliberately conservative: theme.name, the promoted theme directory,
+// colors.toml, shell.toml, and the current background link must be readable.
+func (c *Client) VerifyNativeState(expectedTheme string) (string, error) {
+	current, err := c.CurrentTheme()
+	if err != nil {
+		return "", fmt.Errorf("verify active theme: %w", err)
+	}
+	if current != expectedTheme {
+		return "", fmt.Errorf("verify active theme: expected %q, got %q", expectedTheme, current)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	themeRoot := filepath.Join(home, ".local", "state", "omarchy", "current", "theme")
+	for _, name := range []string{"colors.toml", "shell.toml"} {
+		info, statErr := os.Stat(filepath.Join(themeRoot, name))
+		if statErr != nil {
+			return "", fmt.Errorf("verify native reader input %s: %w", name, statErr)
+		}
+		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return "", fmt.Errorf("verify native reader input %s: not a non-empty regular file", name)
+		}
+	}
+	background, err := c.CurrentBackground()
+	if err != nil {
+		return "", fmt.Errorf("verify current background: %w", err)
+	}
+	return fmt.Sprintf("theme.name=%s colors.toml=read shell.toml=read background=%s:%s", current, background.Kind, background.Path), nil
+}
+
 func (c *Client) RestoreThemeFast(theme, sessionDir string) error {
+	// Rollback is the fast path: the session has already closed its owned Demo
+	// windows before this call, so it only needs to wait until Omarchy has
+	// promoted the original theme and released its transaction lock. Native
+	// terminal, Hyprland, and other post-commit adapters may continue after that
+	// point; waiting for all of them here makes Restore & close unnecessarily
+	// block the UI and is not part of the rollback transaction.
 	_, _, err := c.runThemeSetUntilCritical(theme, filepath.Join(sessionDir, "theme-set.log"), []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=1",
-	}, 10*time.Second)
+	}, 30*time.Second)
 	return err
 }
 
 func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error) {
+	return c.ApplyThemePreviewWithPolicy(themeName, logPath, "", "")
+}
+
+func (c *Client) ApplyThemePreviewWithPolicy(themeName, logPath, retintRun, retintSkip string) (int, bool, error) {
+	return c.ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, "", "", false)
+}
+
+func (c *Client) ApplyThemePreviewWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) (int, bool, error) {
 	current, currentErr := c.CurrentTheme()
 	if currentErr == nil && current == themeName {
 		return 0, true, nil
@@ -88,8 +314,10 @@ func (c *Client) ApplyThemePreview(themeName, logPath string) (int, bool, error)
 	environment := []string{
 		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
 	}
+	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
+	environment = append(environment, "OMAGEN_STUDIO_POST_COMMIT_LOG="+logPath+".post-commit")
 	environment = append(environment, reloadSync.environment()...)
-	pid, _, err := c.runThemeSetUntilCritical(themeName, logPath, environment, 10*time.Second)
+	pid, _, err := c.runStudioThemeSetWithPolicy(themeName, logPath, environment, 10*time.Second, waitMode == "full", retintRun, retintSkip)
 	if err != nil {
 		_ = reloadSync.close()
 		return pid, false, err
@@ -116,19 +344,113 @@ func (c *Client) ApplyTheme(themeName, logPath string) error {
 	return err
 }
 
+func (c *Client) ApplyThemeWithPolicy(themeName, logPath, retintRun, retintSkip string) error {
+	return c.ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, "", "", false)
+}
+
+func (c *Client) ApplyThemeWithOptions(themeName, logPath, retintRun, retintSkip, scope, waitMode string, allowTrustedHooks bool) error {
+	if c.studioPreviewCommand == "" {
+		return fmt.Errorf("Studio theme driver is not installed")
+	}
+	environment := []string{
+		"OMARCHY_THEME_HEADLESS=0", "OMARCHY_THEME_OFFLINE=0", "OMARCHY_THEME_SKIP_BACKGROUND=0",
+	}
+	environment = appendStudioOptions(environment, scope, waitMode, allowTrustedHooks)
+	environment = append(environment, "OMAGEN_STUDIO_POST_COMMIT_LOG="+logPath+".post-commit")
+	// The core theme transaction is committed once the active theme and the
+	// shared theme-set lock are settled. Retint adapters are post-commit work;
+	// waiting for every application helper here can strand the UI if one hangs.
+	// The Studio driver remains alive to finish those adapters in parallel.
+	_, _, err := c.runStudioThemeSetApplyWithPolicy(themeName, logPath, environment, 30*time.Second, waitMode == "full", retintRun, retintSkip)
+	return err
+}
+
+func appendStudioOptions(environment []string, scope, waitMode string, allowTrustedHooks bool) []string {
+	if scope != "" {
+		environment = append(environment, "OMAGEN_STUDIO_SCOPE="+scope)
+	}
+	if waitMode != "" {
+		environment = append(environment, "OMAGEN_STUDIO_WAIT="+waitMode)
+	}
+	if allowTrustedHooks {
+		environment = append(environment, "OMAGEN_STUDIO_ALLOW_TRUSTED_HOOKS=1")
+	}
+	return environment
+}
+
+// FinalizePreviewTheme promotes an already-live Studio preview to its
+// permanent theme name without repeating the theme transaction or retinting
+// applications. The caller verifies the preview provenance before invoking
+// this method; this guard prevents accidentally renaming an unrelated active
+// theme.
+func (c *Client) FinalizePreviewTheme(themeName string) error {
+	if strings.TrimSpace(themeName) == "" || strings.ContainsAny(themeName, "\r\n") {
+		return fmt.Errorf("invalid finalized theme name")
+	}
+	current, err := c.CurrentTheme()
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(current, "omagen-preview-") {
+		return fmt.Errorf("active theme %q is not an Omagen preview", current)
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	currentDir := filepath.Join(home, ".local", "state", "omarchy", "current")
+	temp, err := os.CreateTemp(currentDir, ".theme.name-*.tmp")
+	if err != nil {
+		return fmt.Errorf("stage finalized theme name: %w", err)
+	}
+	tempPath := temp.Name()
+	defer os.Remove(tempPath)
+	if _, err := temp.WriteString(themeName + "\n"); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("write finalized theme name: %w", err)
+	}
+	if err := temp.Sync(); err != nil {
+		_ = temp.Close()
+		return fmt.Errorf("sync finalized theme name: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return fmt.Errorf("close finalized theme name: %w", err)
+	}
+	if err := os.Rename(tempPath, filepath.Join(currentDir, "theme.name")); err != nil {
+		return fmt.Errorf("promote finalized theme name: %w", err)
+	}
+	directory, err := os.Open(currentDir)
+	if err != nil {
+		return fmt.Errorf("open current theme directory: %w", err)
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil {
+		return fmt.Errorf("sync current theme directory: %w", err)
+	}
+	return nil
+}
+
 func (c *Client) runThemeSetUntilCritical(theme, logPath string, environment []string, timeoutDuration time.Duration) (int, bool, error) {
 	return c.runThemeSetUntilCriticalWithCleanup(theme, logPath, environment, timeoutDuration, nil)
 }
 
 func (c *Client) runThemeSetUntilCriticalWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false)
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, false, "", "", "")
+}
+
+func (c *Client) runStudioThemeSetWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, waitForCompletion bool, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, waitForCompletion, "preview", retintRun, retintSkip)
+}
+
+func (c *Client) runStudioThemeSetApplyWithPolicy(theme, logPath string, environment []string, timeoutDuration time.Duration, waitForCompletion bool, retintRun, retintSkip string) (int, bool, error) {
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, nil, waitForCompletion, "apply", retintRun, retintSkip)
 }
 
 func (c *Client) runThemeSetToCompletionWithCleanup(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func()) (int, bool, error) {
-	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true)
+	return c.runThemeSet(theme, logPath, environment, timeoutDuration, cleanup, true, "", "", "")
 }
 
-func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool) (int, bool, error) {
+func (c *Client) runThemeSet(theme, logPath string, environment []string, timeoutDuration time.Duration, cleanup func(), waitForCompletion bool, studioMode, retintRun, retintSkip string) (int, bool, error) {
 	var cleanupOnce sync.Once
 	waitTarget := "critical apply"
 	if waitForCompletion {
@@ -145,41 +467,111 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 		clean()
 		return 0, true, nil
 	}
+	// The log path is session-scoped and unique per operation. Pass a stable
+	// activation token to Studio so deferred adapters can fence themselves when
+	// a newer theme intent supersedes this one.
+	activationID := filepath.Base(logPath)
+	environment = append(environment, "OMAGEN_ACTIVATION_ID="+activationID)
 
 	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
 	if runtimeDir == "" {
 		runtimeDir = "/tmp"
 	}
-	lockFile, err := os.OpenFile(filepath.Join(runtimeDir, "omarchy-theme-set.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lockPath := filepath.Join(runtimeDir, "omarchy-theme-set.lock")
+	lockFD, err := unix.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0o600)
 	if err != nil {
 		clean()
 		return 0, false, fmt.Errorf("open theme-set lock: %w", err)
 	}
+	lockFile := os.NewFile(uintptr(lockFD), lockPath)
+	if lockFile == nil {
+		_ = unix.Close(lockFD)
+		clean()
+		return 0, false, fmt.Errorf("open theme-set lock: invalid file descriptor")
+	}
 	defer lockFile.Close()
 
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o600)
 	if err != nil {
 		clean()
 		return 0, false, fmt.Errorf("open theme-set log: %w", err)
 	}
+	logReader, logWriter, err := os.Pipe()
+	if err != nil {
+		_ = logFile.Close()
+		clean()
+		return 0, false, fmt.Errorf("prepare bounded theme-set log: %w", err)
+	}
+	logDone := make(chan error, 1)
+	go func() {
+		writer := &boundedLogWriter{dst: logFile, remaining: maxStudioLogBytes}
+		_, copyErr := io.Copy(writer, logReader)
+		if writer.truncated {
+			_, _ = io.WriteString(logFile, "\n[omagen] log truncated at 1048576 bytes\n")
+		}
+		if syncErr := logFile.Sync(); copyErr == nil {
+			copyErr = syncErr
+		}
+		_ = logReader.Close()
+		_ = logFile.Close()
+		logDone <- copyErr
+	}()
 
-	cmd := exec.Command("omarchy", "theme", "set", theme)
-	cmd.Env = replaceEnvironment(os.Environ(), environment...)
-	cmd.Stdout = logFile
-	cmd.Stderr = logFile
+	command := "omarchy"
+	arguments := []string{"theme", "set", theme}
+	if studioMode != "" && c.studioPreviewCommand != "" {
+		command = c.studioPreviewCommand
+		arguments = []string{studioMode, theme, "--no-hooks"}
+		if retintRun != "" {
+			arguments = append(arguments, "--run", retintRun)
+		}
+		if retintSkip != "" {
+			arguments = append(arguments, "--skip", retintSkip)
+		}
+		if retintRun == "" && retintSkip == "" {
+			if policy := strings.TrimSpace(os.Getenv("OMAGEN_STUDIO_PREVIEW_APPS")); policy != "" {
+				arguments = append(arguments, "--run", policy)
+			}
+		}
+	}
+	cmd := exec.Command(command, arguments...)
+	cmd.Env = replaceEnvironment(appendOmarchyEnvironment(os.Environ()), environment...)
+	cmd.Stdout = logWriter
+	cmd.Stderr = logWriter
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if err := cmd.Start(); err != nil {
-		_ = logFile.Close()
+		_ = logWriter.Close()
+		_ = logReader.Close()
+		<-logDone
 		clean()
 		return 0, false, fmt.Errorf("start omarchy theme set %q: %w", theme, err)
 	}
 	pid := cmd.Process.Pid
-	_ = logFile.Close()
+	var logCloseOnce sync.Once
+	var logCloseErr error
+	closeLogOnce := func() error {
+		logCloseOnce.Do(func() {
+			logCloseErr = logWriter.Close()
+			if err := <-logDone; logCloseErr == nil {
+				logCloseErr = err
+			}
+		})
+		return logCloseErr
+	}
+	closeLog := func() error {
+		return closeLogOnce()
+	}
 
 	waitCh := make(chan error, 1)
 	go func() {
 		err := cmd.Wait()
 		clean()
+		// Preview returns as soon as the critical native state is ready, while
+		// the Studio driver may continue post-commit work. Close the parent's
+		// pipe end when that process finishes so the bounded-log goroutine can
+		// flush and release its file descriptor even though the caller already
+		// returned.
+		_ = closeLog()
 		waitCh <- err
 	}()
 	ticker := time.NewTicker(25 * time.Millisecond)
@@ -190,8 +582,12 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 	for {
 		select {
 		case err := <-waitCh:
+			logErr := closeLog()
 			currentTheme, readErr := c.CurrentTheme()
 			if err == nil && readErr == nil && currentTheme == theme && themeSetLockFree(lockFile) {
+				if logErr != nil {
+					return pid, false, fmt.Errorf("persist theme-set log: %w", logErr)
+				}
 				return pid, false, nil
 			}
 			logData, _ := os.ReadFile(logPath)
@@ -213,9 +609,37 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 				_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 				<-waitCh
 			}
+			_ = closeLog()
 			return pid, false, fmt.Errorf("timed out waiting for theme %q %s", theme, waitTarget)
 		}
 	}
+}
+
+type boundedLogWriter struct {
+	dst       io.Writer
+	remaining int64
+	truncated bool
+}
+
+func (w *boundedLogWriter) Write(data []byte) (int, error) {
+	if w.remaining <= 0 {
+		w.truncated = true
+		return len(data), nil
+	}
+	limit := int64(len(data))
+	if limit > w.remaining {
+		limit = w.remaining
+		w.truncated = true
+	}
+	n, err := w.dst.Write(data[:limit])
+	w.remaining -= int64(n)
+	if err != nil {
+		return n, err
+	}
+	if n < len(data) {
+		return len(data), nil
+	}
+	return n, nil
 }
 
 func replaceEnvironment(base []string, replacements ...string) []string {
@@ -249,27 +673,125 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	if err != nil {
 		return err
 	}
+	forceRefresh := false
+	if current, currentErr := c.CurrentBackground(); currentErr == nil {
+		if currentPath, currentPathErr := c.resolveBackground(current); currentPathErr == nil {
+			forceRefresh = filepath.Clean(currentPath) == filepath.Clean(path)
+		}
+	}
 	cmd := exec.Command("omarchy", "theme", "bg", "set", path)
+	cmd.Env = appendOmarchyEnvironment(os.Environ())
 	cmd.Stdout = c.stderr
 	cmd.Stderr = c.stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("omarchy theme bg set %q: %w", path, err)
 	}
 	// Theme restoration can put the current/background symlink back at the
-	// same path that the preview used. Quattro's set/setInstant IPC compares
-	// the path string before loading, so it can ignore a changed symlink that
-	// points at a different image. Refresh makes the shell reread and resolve
-	// the symlink before updating the live wallpaper.
-	if _, err := exec.LookPath("omarchy-shell"); err != nil {
+	// same path that the preview used. Quattro's normal `set` and `refresh`
+	// paths compare the path string, so they can ignore a changed file behind
+	// that pathname. When that happens, the detour below gives setInstant a
+	// distinct pathname before handing it the restored target.
+	shell, err := exec.LookPath("omarchy-shell")
+	if err != nil {
 		return nil
 	}
-	refresh := exec.Command("omarchy-shell", "-q", "background", "refresh")
-	refresh.Stdout = c.stderr
-	refresh.Stderr = c.stderr
-	if err := refresh.Run(); err != nil {
-		return fmt.Errorf("refresh restored background: %w", err)
+	detour := ""
+	cleanupDetour := func() {}
+	if forceRefresh {
+		detour, cleanupDetour, err = c.backgroundRefreshDetour(path)
+		if err != nil {
+			return fmt.Errorf("prepare forced background refresh: %w", err)
+		}
+		defer cleanupDetour()
 	}
-	return nil
+	var lastErr error
+	for attempt := 0; attempt < 6; attempt++ {
+		if detour != "" {
+			force := exec.Command(shell, "background", "setInstant", detour)
+			force.Env = appendOmarchyEnvironment(os.Environ())
+			force.Stdout = c.stderr
+			force.Stderr = c.stderr
+			if err := force.Run(); err != nil {
+				lastErr = err
+				if attempt < 5 {
+					time.Sleep(500 * time.Millisecond)
+				}
+				continue
+			}
+		}
+		force := exec.Command(shell, "background", "setInstant", path)
+		force.Env = appendOmarchyEnvironment(os.Environ())
+		force.Stdout = c.stderr
+		force.Stderr = c.stderr
+		if err := force.Run(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if attempt < 5 {
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	return fmt.Errorf("force restored background through shell IPC: %w", lastErr)
+}
+
+func (c *Client) backgroundRefreshDetour(path string) (string, func(), error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", func() {}, err
+	}
+	cacheDir := filepath.Join(home, ".cache", "omarchy", "background-transitions")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		return "", func() {}, err
+	}
+	temporary, err := os.CreateTemp(cacheDir, "omagen-restore-background-*")
+	if err != nil {
+		return "", func() {}, err
+	}
+	detour := temporary.Name()
+	if err := temporary.Close(); err != nil {
+		_ = os.Remove(detour)
+		return "", func() {}, err
+	}
+	if err := os.Remove(detour); err != nil {
+		return "", func() {}, err
+	}
+	if err := os.Link(path, detour); err != nil {
+		if linkErr := os.Symlink(path, detour); linkErr != nil {
+			return "", func() {}, fmt.Errorf("link refresh detour: %w (hard link: %v)", linkErr, err)
+		}
+	}
+	return detour, func() { _ = os.Remove(detour) }, nil
+}
+
+// appendOmarchyEnvironment follows Omarchy's official OMARCHY_PATH first.
+// A valid user-local checkout remains a fallback for callers launched without
+// the session environment, followed by the packaged system path.
+func appendOmarchyEnvironment(environment []string) []string {
+	path := ""
+	if configured := strings.TrimSpace(os.Getenv("OMARCHY_PATH")); configured != "" {
+		if info, statErr := os.Stat(filepath.Join(configured, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+			path = configured
+		}
+	}
+	if path == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			candidate := filepath.Join(home, ".local", "share", "omarchy")
+			if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+				path = candidate
+			}
+		}
+	}
+	if path == "" {
+		candidate := "/usr/share/omarchy"
+		if info, statErr := os.Stat(filepath.Join(candidate, "shell", "shell.qml")); statErr == nil && info.Mode().IsRegular() {
+			path = candidate
+		}
+	}
+	if path == "" {
+		return environment
+	}
+	return replaceEnvironment(environment, "OMARCHY_PATH="+path)
 }
 
 func (c *Client) resolveBackground(background session.BackgroundRef) (string, error) {

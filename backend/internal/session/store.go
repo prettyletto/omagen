@@ -31,7 +31,7 @@ func (s *Store) Save(record Record) error {
 	if err := validateRecord(record, record.SessionID); err != nil {
 		return err
 	}
-	if err := fsutil.AtomicWriteJSON(filepath.Join(s.root, record.SessionID, "session.json"), record, 0o644); err != nil {
+	if err := fsutil.AtomicWriteJSON(filepath.Join(s.root, record.SessionID, "session.json"), record, 0o600); err != nil {
 		return fmt.Errorf("persist session record: %w", err)
 	}
 	return nil
@@ -71,6 +71,11 @@ func (s *Store) Delete(sessionID string) error {
 			errs = append(errs, err)
 		}
 	}
+	// Preview/apply history was removed. Clean any protocol journal left by an
+	// older engine when its owning session is cleared.
+	if err := fsutil.RemoveAllAndSync(filepath.Join(s.StateRoot(), "protocol", sessionID)); err != nil {
+		errs = append(errs, err)
+	}
 	return errors.Join(errs...)
 }
 
@@ -108,9 +113,22 @@ func validateRecord(record Record, expectedID string) error {
 	if record.OriginalBackground.Path == "" {
 		return fmt.Errorf("session has no original background path")
 	}
+	if record.Workflow == "" {
+		record.Workflow = "generate"
+	}
+	if record.Workflow != "generate" && record.Workflow != "theme-edit" {
+		return fmt.Errorf("session has unknown workflow %q", record.Workflow)
+	}
+	if record.Workflow == "theme-edit" {
+		if record.ThemeEdit == nil || record.ThemeEdit.SourceID == "" || record.ThemeEdit.SourceName == "" || record.ThemeEdit.SourcePath == "" || record.ThemeEdit.SourceKind == "" {
+			return fmt.Errorf("theme-edit session has incomplete source metadata")
+		}
+	} else if record.ThemeEdit != nil {
+		return fmt.Errorf("generated session has theme-edit metadata")
+	}
 	switch record.ApplyPhase {
 	case ApplyPhaseNone:
-		if record.AppliedTheme != "" || record.AppliedGeneration != "" || record.AppliedVariant != "" || record.AppliedDisplayName != "" {
+		if record.AppliedTheme != "" || record.AppliedGeneration != "" || record.AppliedVariant != "" || record.AppliedDisplayName != "" || record.AppliedBackup != "" {
 			return fmt.Errorf("session has apply metadata without a transaction phase")
 		}
 	case ApplyPhasePrepared, ApplyPhaseCommitted:
@@ -125,6 +143,9 @@ func validateRecord(record Record, expectedID string) error {
 		}
 		if record.AppliedDisplayName == "" {
 			return fmt.Errorf("session has no applied display name")
+		}
+		if record.AppliedBackup != "" && record.AppliedBackup != "replacement-backup" {
+			return fmt.Errorf("session has invalid applied backup")
 		}
 	default:
 		return fmt.Errorf("session has unknown apply phase %q", record.ApplyPhase)

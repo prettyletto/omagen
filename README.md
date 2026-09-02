@@ -1,191 +1,193 @@
+<!-- omagen-product-readme: canonical-source -->
+![Omagen wordmark](docs/product/assets/branding/omagen-wordmark.png)
+
 <div align="center">
 
 # Omagen
 
-**An image-to-theme studio for Omarchy Quattro**
+**Turn an image into an Omarchy desktop that feels like yours.**
 
-Generate a palette from an image, explore six directions, preview the result
-on your desktop, and apply the one that feels right.
+Generate a complete theme, explore meaningful variations, preview the result
+without committing to it, and apply it safely when it feels right.
+
+[![Build](https://img.shields.io/github/actions/workflow/status/prettyletto/omagen/verify-bundled-backend.yml?branch=main&style=flat-square&label=build)](https://github.com/prettyletto/omagen/actions)
+[![Documentation](https://img.shields.io/badge/docs-product%20guide-5b8def?style=flat-square)](docs/product/README.md)
+[![License](https://img.shields.io/badge/license-MIT-2ea44f?style=flat-square)](LICENSE)
+
+[Get started](#get-started) · [See the workflow](#the-omagen-workflow) · [Browse examples](docs/product/examples/README.md) · [Read the product docs](#product-documentation)
 
 </div>
 
-![Omagen demo](assets/omagen-demo.gif)
+![Omagen workflow preview](docs/product/assets/demos/omagen-demo-v2.gif)
 
-## Video walkthrough
+## Get started
 
-[![Watch the Omagen walkthrough](https://img.youtube.com/vi/Af06-XsdBHA/maxresdefault.jpg)](https://youtu.be/Af06-XsdBHA)
-
-Watch the full walkthrough on [YouTube](https://youtu.be/Af06-XsdBHA).
-
-## Install
-
-Install and enable Omagen through Omarchy:
+Omagen is built for Omarchy Quattro with Hyprland and Quickshell on Linux
+x86_64. Install the stable repository through Omarchy's plugin manager:
 
 ```sh
-omarchy plugin add https://github.com/prettyletto/omarchy-themegen.git --enable --yes
+omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
 ```
 
-That is the complete user installation. Omarchy clones the plugin, validates
-its manifest, enables it, and places the widget in its declared default bar
-section. Go is not required because the runtime backend is bundled with the
-plugin.
+Then open Omagen from the Omarchy launcher, choose a local image, review a
+palette direction, and use **Preview** or **Demo** before selecting **Apply**.
+The [getting started guide](docs/product/getting-started.md) covers requirements, first
+launch, optional applications, and removal.
 
-## How it works
-
-| Step | In Omagen | Result |
-| --- | --- | --- |
-| 1 | Choose an image | Omagen extracts representative colors. |
-| 2 | Explore the gallery | Six directions are generated: Source, Calm, Mute, Deep, Vibrant, and Balanced. |
-| 3 | Test the direction | Preview it live or open a temporary Demo workspace. |
-| 4 | Apply the result | Save a named, permanent Omarchy theme. |
-
-The preview uses the same production palette and semantic-contrast pipeline as
-the applied theme, so the gallery represents the colors that will actually be
-written to the theme.
-
-## Examples
-
-### Kanaawesome — Kanagawa Waves
-
-An image-derived Omagen theme generated from a Kanagawa-style wave wallpaper:
-
-<p align="center">
-  <img src="assets/examples/midnight-waves-wallpaper.webp" alt="Kanaawesome source wallpaper" width="480">
-  <img src="assets/examples/midnight-waves-theme.webp" alt="Kanaawesome generated Omagen theme" width="480">
-</p>
-
-### NieR:Automata — 2B Sunset
-
-An image-derived Omagen theme generated from a NieR:Automata-inspired wallpaper:
-
-<p align="center">
-  <img src="assets/examples/2b-sunset-wallpaper.webp" alt="NieR:Automata source wallpaper" width="480">
-  <img src="assets/examples/2b-sunset-theme.webp" alt="NieR:Automata generated Omagen theme" width="480">
-</p>
-
-### Ushinawareta — 失われた
-
-An image-derived Omagen theme generated from a neon anime wallpaper:
-
-<p align="center">
-  <img src="assets/examples/ushinawareta-wallpaper.webp" alt="Ushinawareta source wallpaper" width="480">
-  <img src="assets/examples/ushinawareta-theme.webp" alt="Ushinawareta generated Omagen theme" width="480">
-</p>
-
-### Neon Blue
-
-An image-derived Omagen theme generated from a blue scanline anime wallpaper:
-
-<p align="center">
-  <img src="assets/examples/neon-blue-wallpaper.webp" alt="Neon Blue source wallpaper" width="480">
-  <img src="assets/examples/neon-blue-theme.webp" alt="Neon Blue generated Omagen theme" width="480">
-</p>
-
-See the [Examples gallery](docs/examples.md) for the complete set of generated themes.
-
-## Features
-
-- Image-derived Omarchy palettes with six visual directions.
-- Live previews inside a recoverable Omagen session.
-- Optional Window, Shell, and Bar composition previews, including animated
-  borders, border thickness, inactive-window treatment, shell feedback
-  surfaces, and Docked-bar visibility.
-- Temporary Demo workspace with editor, terminal, system-monitor, and
-  file-manager views.
-- Capability detection and useful fallbacks when preferred Demo applications
-  are unavailable.
-- Optional Plymouth unlock-screen artwork.
-- Optional capture of the live Demo workspace as `preview.png`.
-- Keyboard and mouse navigation, including arrows and `h/j/k/l`.
-- Crash-safe Apply, Cancel, Quit, and recovery flows.
-
-The optional composition controls shape generated theme files without taking
-ownership of Quattro's native widget layout, ordering, transparency, or input.
-See [Styling and palette settings](docs/styling.md) for the complete option
-matrix.
-
-## Screenshots
-
-### Using Omagen
-
-Start with an image, review the generated directions, and tune the palette
-defaults from Settings:
-
-<p align="center">
-  <img src="assets/screenshots/onboarding.webp" alt="Omagen setup" width="320">
-  <img src="assets/screenshots/settings.webp" alt="Omagen settings" width="320">
-</p>
-
-<p align="center">
-  <img src="assets/screenshots/palette-gallery.webp" alt="Omagen palette gallery" width="960">
-</p>
-
-### Extra desktop composition
-
-Enable the optional composition step to preview how the generated palette can
-shape Window, Shell, and Bar surfaces while keeping Quattro's native layout:
-
-![Omagen Window styling](assets/screenshots/extras-window.webp)
-
-![Omagen Shell styling](assets/screenshots/extras-shell.webp)
-
-![Omagen Bar styling](assets/screenshots/extras-bar.webp)
-
-## First run
-
-After installation, click the Omagen widget in the Quattro bar:
-
-1. Choose an image.
-2. Optionally enable extra Window, Shell, and Bar configuration previews.
-3. Select a palette direction.
-4. Use **Test live**, **Demo**, or **Apply theme**.
-
-Use **Cancel** to restore the original theme and background. If Omagen is
-interrupted during a preview, its next launch offers **Restore & close** or
-**Resume** when the generated workspace is still available.
-
-Right-click the bar widget for **Open**, **Settings**, and **Quit**. Quit uses
-the same restore path as Cancel when an active session exists.
-
-## Requirements and integration
-
-- Omarchy Quattro
-- Hyprland
-- Quickshell
-- Linux x86_64 for the bundled V1 backend binary
-
-Demo applications are optional. Omagen resolves available terminals, editors,
-monitors, and file managers and provides fallbacks when a preferred
-application is not installed.
-
-Omagen preserves Quattro's native left, center, and right widget layout. Its
-optional Docked bar form is an additive surface beneath the native widgets when
-the native bar is opaque. Native transparency intentionally keeps this
-decoration transparent, while the explicit Show islands policy can keep it
-visible over a transparent native bar. Native widgets, layout, and input remain
-Omarchy-owned. It falls back to the normal continuous bar when the active shell
-does not expose the geometry hooks required for the three section surfaces.
-
-## Documentation
-
-| Guide | Audience | Covers |
-| --- | --- | --- |
-| [Usage](docs/usage.md) | Users | The complete workflow from image selection to Apply. |
-| [Styling and palette settings](docs/styling.md) | Users | Harmony, contrast, Window, Shell, Bar, and generated assets. |
-| [Demo workspace](docs/demo.md) | Users | Temporary workspaces, capability resolution, fallbacks, and preview capture. |
-| [Recovery and safety](docs/recovery.md) | Users and maintainers | Sessions, Cancel, Quit, Apply safety, and cleanup boundaries. |
-| [Development](docs/development.md) | Contributors | Local installation, tests, linting, and the V1 validation gate. |
-| [Architecture](docs/architecture.md) | Contributors | The plugin contract, QML/backend boundary, generation pipeline, and lifecycle. |
-
-The [documentation index](docs/README.md) mirrors this table and the
-[mdBook summary](SUMMARY.md) provides the rendered documentation navigation.
-
-## Remove
+To remove the packages later:
 
 ```sh
 omarchy plugin remove pretty.omagen --yes
+omarchy plugin remove pretty.omagen.bar --yes
 ```
 
-Removing the plugin does not delete user-created permanent themes. Omagen
-session state lives under `~/.local/state/omagen`; only remove that state
-after confirming that no session is active.
+Removing the plugins does not delete permanent themes created by you. If an
+Omagen session is active, use its recovery or restore path before removing
+state manually.
+
+## What is Omagen?
+
+Omagen is an image-to-theme studio for [Omarchy Quattro](https://omarchy.org/).
+It turns the colors and atmosphere of a source image into a coherent desktop
+direction, then gives you a safe way to judge that direction before it becomes
+permanent.
+
+The experience is designed around a simple loop:
+
+```text
+image → palette directions → preview or Demo → apply or cancel
+```
+
+Omagen is one product suite with two technical plugin packages:
+
+- `pretty.omagen` provides the Studio overlay, image generation, previews,
+  Demo, lifecycle, recovery, and the launcher/status widget.
+- `pretty.omagen.bar` is the optional full-bar experience for users who want
+  Omagen's Bar presets and behavior as their active bar.
+
+They remain separate because Omarchy registers overlays/widgets and full bars
+as different plugin kinds. They are presented as one suite, but the full bar
+is explicit and opt-in so installing Omagen does not silently replace the
+native Quattro bar.
+
+## Why Omagen?
+
+- Start from an image you already like instead of tuning colors from scratch.
+- Compare six generated directions: Source, Calm, Mute, Deep, Vibrant, and
+  Balanced.
+- Preview Window, Shell, Bar, and Animation choices in context when you want
+  more than a palette.
+- Open a temporary Demo workspace to judge the theme across real desktop
+  surfaces.
+- Apply a named theme only when you are satisfied—or Cancel and leave the
+  current desktop unchanged.
+- Recover an interrupted session through the durable session record instead of
+  guessing which temporary files are safe to remove.
+
+## The Omagen workflow
+
+### 1. Choose an image
+
+Choose a local image in a common raster format. Omagen extracts representative
+colors and keeps the selected image as the visual source for the session.
+
+### 2. Explore directions
+
+Review six palette directions generated by the same production pipeline used by
+the applied theme. The gallery is meant to help you choose a mood, not just a
+single dominant color.
+
+### 3. Preview safely
+
+Use Live Canvas to inspect the staged result. Use **Test live** for a reversible
+desktop preview, or open **Demo** to see the composition across a temporary
+editor, terminal, system monitor, and file manager workspace.
+
+### 4. Apply or cancel
+
+**Apply** writes a named permanent theme after the staged session is ready.
+**Cancel** restores the original theme, background, and Omagen-owned temporary
+resources. **Quit** uses the same recovery path when a session is active.
+
+### 5. Recover when interrupted
+
+If Omagen or the shell is interrupted during a preview or Apply, the next
+launch presents an explicit recovery choice. Restore the original desktop or
+resume the staged workspace when it can still be verified safely.
+
+## See it in action
+
+[![Watch the Omagen walkthrough](docs/product/assets/social/omagen-walkthrough-thumbnail-v2.png)](https://youtu.be/juDJe0zWwZI)
+
+Watch the [full Omagen walkthrough on YouTube](https://youtu.be/juDJe0zWwZI)
+for the image-to-theme flow, preview paths, Demo, and Apply experience.
+
+## Bar examples
+
+Here are a few examples of the optional Omagen bar direction across different
+placements and information densities. The full bar is an opt-in part of the
+Omagen suite; installing the core Studio does not silently replace Omarchy's
+native bar.
+
+<p align="center">
+  <img src="docs/product/assets/screenshots/bar-examples/bar-01-left-wide.png" width="850" alt="Wide bar placed toward the left">
+</p>
+<p align="center">
+  <img src="docs/product/assets/screenshots/bar-examples/bar-02-split-wide.png" width="850" alt="Wide split bar layout">
+</p>
+
+See the [full bar example gallery](docs/product/assets/screenshots/bar-examples/README.md)
+for all seven layouts, placement variants, and capture notes.
+
+## New v2 examples
+
+The v2 gallery pairs each generated theme's source background with its clean
+desktop preview. These examples show the range of compositions Omagen can
+produce from very different images.
+
+| Theme | Source background | Generated preview |
+| --- | --- | --- |
+| Elastic Example | <img src="assets/examples/v2/elastic-example-background.webp" alt="Elastic Example source background" width="300"> | <img src="assets/examples/v2/elastic-example-preview.webp" alt="Elastic Example generated preview" width="300"> |
+| Gothic Example | <img src="assets/examples/v2/gothic-example-background.webp" alt="Gothic Example source background" width="300"> | <img src="assets/examples/v2/gothic-example-preview.webp" alt="Gothic Example generated preview" width="300"> |
+| Japan Example | <img src="assets/examples/v2/japan-example-background.webp" alt="Japan Example source background" width="300"> | <img src="assets/examples/v2/japan-example-preview.webp" alt="Japan Example generated preview" width="300"> |
+| Nature Example | <img src="assets/examples/v2/nature-example-background.webp" alt="Nature Example source background" width="300"> | <img src="assets/examples/v2/nature-example-preview.webp" alt="Nature Example generated preview" width="300"> |
+| Retro Example | <img src="assets/examples/v2/retro-example-background.webp" alt="Retro Example source background" width="300"> | <img src="assets/examples/v2/retro-example-preview.webp" alt="Retro Example generated preview" width="300"> |
+| Spectral Example | <img src="assets/examples/v2/spectral-example-background.webp" alt="Spectral Example source background" width="300"> | <img src="assets/examples/v2/spectral-example-preview.webp" alt="Spectral Example generated preview" width="300"> |
+
+See the [complete v2 example gallery](docs/product/examples/README.md), including the
+historical examples explicitly labeled **made with Omagen v1**.
+
+## Product documentation
+
+| Guide | What it covers |
+| --- | --- |
+| [Getting started](docs/product/getting-started.md) | Installation, first launch, and the shortest path to a theme. |
+| [Product workflow](docs/product/workflow.md) | Preview, Test live, Demo, Apply, Cancel, and Quit. |
+| [Capabilities and trust](docs/product/capabilities.md) | What Omagen can read, write, invoke, and preserve. |
+| [Recovery and rollback](docs/product/recovery.md) | Interrupted sessions, restoration, ownership, and safe removal. |
+| [Examples](docs/product/examples/README.md) | Curated v2 wallpaper/theme pairs and example metadata. |
+| [Demo materials](docs/product/demos/README.md) | Product walkthroughs and the capture plan for v2. |
+| [Asset catalog](docs/product/assets/README.md) | Screenshots, recordings, examples, and provenance notes. |
+| [Asset checklist](docs/product/ASSET-CHECKLIST.md) | Evidence still required before stable release. |
+| [v2.0.0 release notes](docs/product/release-notes/v2.0.0.md) | Release scope, upgrade notes, limitations, and verification status. |
+
+For implementation contracts, contributor setup, compatibility evidence, and
+maintainer release procedures, use the [developer documentation](docs/README.md)
+and [release process](docs/development/release-process.md).
+
+## Trust boundary and capabilities
+
+Omagen is unsandboxed user-level plugin code. It can read the image and Omarchy
+configuration you select, write generated themes and Omagen-owned session
+state, invoke its bundled backend and explicit user-level adapters, and
+interact with the current Omarchy/Hyprland session.
+
+It does not require `sudo`, install system packages, or configure privileged
+services. It does not own unrelated themes, shell configuration, backgrounds,
+plugins, or user files. Read the [capabilities and trust guide](docs/product/capabilities.md)
+before installing if you want the complete boundary.
+
+The marketplace preflight is a release gate and exact-commit evidence; it is
+not a security certification, endorsement, or guarantee. See the developer
+[security policy](SECURITY.md) and [release process](docs/development/release-process.md)
+for the maintainer-level details.

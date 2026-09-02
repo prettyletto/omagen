@@ -1,5 +1,8 @@
 # Examples
 
+The entries below are historical examples made with Omagen v1. For the current
+v2 product gallery, see [Product examples](product/examples/README.md).
+
 Each example pairs the source wallpaper with the generated Omagen desktop
 result. The pair makes the image-to-theme transformation easy to compare:
 
@@ -7,7 +10,7 @@ result. The pair makes the image-to-theme transformation easy to compare:
 wallpaper → generated theme
 ~~~
 
-## Quattro Rules
+## Quattro Rules — made with Omagen v1
 
 This example uses an Audi Quattro sunset wallpaper and the generated
 `quattro-rules` theme preview.
@@ -16,7 +19,7 @@ This example uses an Audi Quattro sunset wallpaper and the generated
 | --- | --- |
 | <img src="../assets/examples/quattro-rules-wallpaper.webp" alt="Quattro Rules source wallpaper" width="480"> | <img src="../assets/examples/quattro-rules-theme.webp" alt="Quattro Rules generated Omagen theme" width="480"> |
 
-## Ushinawareta — 失われた
+## Ushinawareta — 失われた — made with Omagen v1
 
 This example uses a neon anime wallpaper and shows the generated theme with
 animated border and high-contrast shell styling.
@@ -25,7 +28,7 @@ animated border and high-contrast shell styling.
 | --- | --- |
 | <img src="../assets/examples/ushinawareta-wallpaper.webp" alt="Ushinawareta source wallpaper" width="480"> | <img src="../assets/examples/ushinawareta-theme.webp" alt="Ushinawareta generated Omagen theme" width="480"> |
 
-## Kanaawesome — Kanagawa Waves
+## Kanaawesome — Kanagawa Waves — made with Omagen v1
 
 This example uses a Kanagawa-style wave wallpaper and shows the generated
 theme across the Demo workspace.
@@ -34,7 +37,7 @@ theme across the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/midnight-waves-wallpaper.webp" alt="Kanaawesome source wallpaper" width="480"> | <img src="../assets/examples/midnight-waves-theme.webp" alt="Kanaawesome generated Omagen theme" width="480"> |
 
-## NieR:Automata
+## NieR:Automata — made with Omagen v1
 
 This example uses a NieR:Automata-inspired 2B sunset wallpaper and shows the
 generated theme across the Demo workspace.
@@ -43,7 +46,7 @@ generated theme across the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/2b-sunset-wallpaper.webp" alt="NieR:Automata source wallpaper" width="480"> | <img src="../assets/examples/2b-sunset-theme.webp" alt="NieR:Automata generated Omagen theme" width="480"> |
 
-## Neon District
+## Neon District — made with Omagen v1
 
 This example uses a neon city wallpaper and shows the generated theme across
 the Demo workspace.
@@ -52,7 +55,7 @@ the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/kanaawesome-wallpaper.webp" alt="Neon District source wallpaper" width="480"> | <img src="../assets/examples/kanaawesome-theme.webp" alt="Neon District generated Omagen theme" width="480"> |
 
-## Quiet Platform
+## Quiet Platform — made with Omagen v1
 
 This example uses a green railway-platform wallpaper and shows a quieter
 translucent desktop treatment across the Demo workspace.
@@ -61,7 +64,7 @@ translucent desktop treatment across the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/quiet-platform-wallpaper.webp" alt="Quiet Platform source wallpaper" width="480"> | <img src="../assets/examples/quiet-platform-theme.webp" alt="Quiet Platform generated Omagen theme" width="480"> |
 
-## Sakura Gate
+## Sakura Gate — made with Omagen v1
 
 This example uses a cherry-blossom mountain-gate wallpaper and shows the
 generated theme across the Demo workspace.
@@ -70,7 +73,7 @@ generated theme across the Demo workspace.
 | --- | --- |
 | <img src="../assets/examples/sakura-gate-wallpaper.webp" alt="Sakura Gate source wallpaper" width="480"> | <img src="../assets/examples/sakura-gate-theme.webp" alt="Sakura Gate generated Omagen theme" width="480"> |
 
-## Eva Deep
+## Eva Deep — made with Omagen v1
 
 This example uses a pink-and-blue Evangelion-inspired wallpaper and the
 generated `eva-deep` desktop preview.

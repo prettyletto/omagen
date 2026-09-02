@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -36,10 +35,6 @@ type clientInfo struct {
 	PID          int          `json:"pid"`
 	Workspace    workspaceRef `json:"workspace"`
 }
-type rect struct{ X, Y, W, H int }
-type demoRects struct{ Editor, Btop, Shell, Files rect }
-
-const demoGap = 24
 
 func hyprJSON(dst any, args ...string) error {
 	data, err := exec.Command("hyprctl", append([]string{"-j"}, args...)...).Output()
@@ -120,36 +115,186 @@ func restoreWorkspace(s State) error {
 	}
 	return fmt.Errorf("demo state has no origin workspace")
 }
-func placeWindow(address, workspace string, target rect) error {
+func placeWindow(address, workspace string) error {
 	if address == "" {
 		return fmt.Errorf("cannot place empty window address")
+	}
+	workspaceSelector := "name:" + workspace
+	if strings.HasPrefix(workspace, "special:") {
+		workspaceSelector = workspace
 	}
 	selector := luaString("address:" + address)
 	if err := hyprLuaDispatch(fmt.Sprintf(
 		"hl.dsp.window.move({ workspace = %s, follow = false, window = %s })",
-		luaString("name:"+workspace), selector,
+		luaString(workspaceSelector), selector,
 	)); err != nil {
 		return fmt.Errorf("move demo window %s to workspace: %w", address, err)
 	}
+	return nil
+}
+
+func focusWindow(address string) error {
+	if address == "" {
+		return fmt.Errorf("cannot focus empty window address")
+	}
 	if err := hyprLuaDispatch(fmt.Sprintf(
-		"hl.dsp.window.float({ action = \"set\", window = %s })", selector,
+		"hl.dsp.focus({ window = %s })", luaString("address:"+address),
 	)); err != nil {
+		return fmt.Errorf("focus demo window %s: %w", address, err)
+	}
+	return nil
+}
+
+// floatWindowLeft turns the focused-demo fixture into a compositor-managed
+// floating client and places it on the left side of the selected monitor. The
+// placement is ephemeral dispatch state: no user Hyprland rule is written.
+func floatWindowLeft(address string, monitor monitorInfo) error {
+	width, height, x, y := windowDemoActiveGeometry(monitor)
+	return floatWindowAt(address, width, height, x, y, true)
+}
+
+func windowDemoActiveGeometry(monitor monitorInfo) (width, height, x, y int) {
+	width = monitor.Width * 47 / 100
+	height = monitor.Height * 62 / 100
+	if width < 680 {
+		width = 680
+	}
+	if height < 480 {
+		height = 480
+	}
+	if monitor.Width > 0 && width > monitor.Width-64 {
+		width = monitor.Width - 64
+	}
+	if monitor.Height > 0 && height > monitor.Height-112 {
+		height = monitor.Height - 112
+	}
+	x = monitor.X + 32
+	y = monitor.Y + 80
+	return
+}
+
+func floatWindowAt(address string, width, height, x, y int, focus bool) error {
+	if address == "" {
+		return fmt.Errorf("cannot float empty window address")
+	}
+	selector := luaString("address:" + address)
+	if err := hyprLuaDispatch(fmt.Sprintf("hl.dsp.window.float({ action = \"on\", window = %s })", selector)); err != nil {
 		return fmt.Errorf("float demo window %s: %w", address, err)
 	}
 	if err := hyprLuaDispatch(fmt.Sprintf(
 		"hl.dsp.window.resize({ x = %d, y = %d, relative = false, window = %s })",
-		target.W, target.H, selector,
+		width, height, selector,
 	)); err != nil {
-		return fmt.Errorf("resize demo window %s: %w", address, err)
+		return fmt.Errorf("size focused demo window %s: %w", address, err)
 	}
 	if err := hyprLuaDispatch(fmt.Sprintf(
 		"hl.dsp.window.move({ x = %d, y = %d, relative = false, window = %s })",
-		target.X, target.Y, selector,
+		x, y, selector,
 	)); err != nil {
-		return fmt.Errorf("position demo window %s: %w", address, err)
+		return fmt.Errorf("place focused demo window %s: %w", address, err)
+	}
+	if focus {
+		return focusWindow(address)
 	}
 	return nil
 }
+
+func preselectDwindle(direction string) error {
+	if direction != "r" && direction != "d" {
+		return fmt.Errorf("unsupported Demo dwindle preselection %q", direction)
+	}
+	if err := hyprLuaDispatch(fmt.Sprintf("hl.dsp.layout(%s)", luaString("preselect "+direction))); err != nil {
+		return fmt.Errorf("preselect Demo dwindle %s: %w", direction, err)
+	}
+	return nil
+}
+
+func adjustDwindleRatio(delta float64) error {
+	if delta == 0 {
+		return nil
+	}
+	message := fmt.Sprintf("splitratio %+.3f", delta)
+	if err := hyprLuaDispatch(fmt.Sprintf("hl.dsp.layout(%s)", luaString(message))); err != nil {
+		return fmt.Errorf("adjust Demo dwindle split ratio by %.2f: %w", delta, err)
+	}
+	return nil
+}
+
+// shapeDemoWindows restores the historical Demo proportions after the four
+// leaves exist. Focusing each lower leaf makes splitratio address its column's
+// vertical parent: a positive delta gives the upper leaf roughly two-thirds
+// of the available height, while the lower leaf keeps the remaining third.
+func shapeDemoWindows(s State) error {
+	const topRowDelta = 0.33
+	for _, slot := range []Slot{SlotShell, SlotFiles} {
+		if err := focusWindow(s.Windows[slot]); err != nil {
+			return fmt.Errorf("focus Demo %s for historical row sizing: %w", slot, err)
+		}
+		if err := adjustDwindleRatio(topRowDelta); err != nil {
+			return fmt.Errorf("size Demo %s column: %w", slot, err)
+		}
+	}
+	return nil
+}
+
+// arrangeDemoWindows builds the Demo's stable four-pane shape using
+// Hyprland's native dwindle tree. The temporary named workspace is only a
+// staging area for the existing windows; no window is floated, resized, or
+// positioned with absolute coordinates. It is emptied immediately after the
+// tree is rebuilt, so Hyprland removes it from the workspace list.
+func arrangeDemoWindows(s State) error {
+	if s.Workspace == "" {
+		return fmt.Errorf("Demo has no target workspace")
+	}
+	if err := switchWorkspace(s.Workspace); err != nil {
+		return err
+	}
+	const stagingWorkspace = "__omagen_demo_layout"
+	for _, slot := range []Slot{SlotEditor, SlotBtop, SlotShell} {
+		if err := placeWindow(s.Windows[slot], stagingWorkspace); err != nil {
+			return fmt.Errorf("stage Demo %s window: %w", slot, err)
+		}
+	}
+
+	if err := placeWindow(s.Windows[SlotEditor], s.Workspace); err != nil {
+		return fmt.Errorf("place Demo editor root: %w", err)
+	}
+	if err := focusWindow(s.Windows[SlotEditor]); err != nil {
+		return err
+	}
+	if err := preselectDwindle("r"); err != nil {
+		return err
+	}
+	if err := placeWindow(s.Windows[SlotBtop], s.Workspace); err != nil {
+		return fmt.Errorf("place Demo btop split: %w", err)
+	}
+	if err := focusWindow(s.Windows[SlotEditor]); err != nil {
+		return err
+	}
+	// The previous absolute layout gave the editor column 48.5% of the
+	// content width. Apply that small bias while the root split is still the
+	// active two-leaf tree; subsequent preselection creates the two columns'
+	// vertical children without losing the ratio.
+	if err := adjustDwindleRatio(-0.030); err != nil {
+		return fmt.Errorf("restore Demo horizontal bias: %w", err)
+	}
+
+	if err := preselectDwindle("d"); err != nil {
+		return err
+	}
+	if err := placeWindow(s.Windows[SlotShell], s.Workspace); err != nil {
+		return fmt.Errorf("place Demo shell split: %w", err)
+	}
+
+	if err := focusWindow(s.Windows[SlotBtop]); err != nil {
+		return err
+	}
+	if err := preselectDwindle("d"); err != nil {
+		return err
+	}
+	return nil
+}
+
 func closeWindow(address string) error {
 	if address == "" {
 		return nil
@@ -274,44 +419,77 @@ func waitUntilClosed(addresses map[Slot]string, timeout time.Duration) (bool, er
 		time.Sleep(200 * time.Millisecond)
 	}
 }
-func layoutForMonitor(m monitorInfo) demoRects {
-	scale := m.Scale
-	if scale <= 0 {
-		scale = 1
+
+// placeDemoWindows only repairs workspace ownership. The Demo belongs to
+// Hyprland's normal dwindle tree; forcing float/resize/move geometry here
+// makes the Demo fight the compositor whenever an overlay is opened.
+func placeDemoWindows(s State) error {
+	current, err := windowAddresses()
+	if err != nil {
+		return err
 	}
-	w := int(math.Round(float64(m.Width) / scale))
-	h := int(math.Round(float64(m.Height) / scale))
-	if m.Transform == 1 || m.Transform == 3 || m.Transform == 5 || m.Transform == 7 {
-		w, h = h, w
-	}
-	const outerSide, outerTop, outerBottom = 12, 8, 12
-	gap := demoGap
-	left := m.Reserved[0]
-	top := m.Reserved[1]
-	right := m.Reserved[2]
-	bottom := m.Reserved[3]
-	x, y := m.X+left+outerSide, m.Y+top+outerTop
-	contentW := w - left - right - (outerSide * 2) - gap
-	contentH := h - top - bottom - outerTop - outerBottom - gap
-	if contentW+gap < 640 {
-		contentW = 640 - gap
-	}
-	if contentH+gap < 480 {
-		contentH = 480 - gap
-	}
-	lw := int(math.Round(float64(contentW) * 0.485))
-	rw := contentW - lw
-	th := int(math.Round(float64(contentH) * 0.665))
-	bh := contentH - th
-	return demoRects{Editor: rect{x, y, lw, th}, Btop: rect{x + lw + gap, y, rw, th}, Shell: rect{x, y + th + gap, lw, bh}, Files: rect{x + lw + gap, y + th + gap, rw, bh}}
-}
-func placeDemoWindows(s State, m monitorInfo) error {
-	r := layoutForMonitor(m)
-	placements := map[Slot]rect{SlotEditor: r.Editor, SlotBtop: r.Btop, SlotShell: r.Shell, SlotFiles: r.Files}
 	for _, slot := range []Slot{SlotEditor, SlotBtop, SlotShell, SlotFiles} {
-		if err := placeWindow(s.Windows[slot], s.Workspace, placements[slot]); err != nil {
+		address := s.Windows[slot]
+		if address == "" {
+			continue
+		}
+		if client, ok := current[address]; ok && client.Workspace.Name == s.Workspace {
+			continue
+		}
+		if err := placeWindow(address, s.Workspace); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func placeWindowDemo(s State, monitor monitorInfo) error {
+	activeAddress := s.Windows[SlotEditor]
+	inactiveAddress := s.Windows[SlotBtop]
+	if activeAddress == "" {
+		return fmt.Errorf("window demo has no terminal window")
+	}
+	if inactiveAddress == "" {
+		return fmt.Errorf("window demo has no inactive terminal window")
+	}
+	current, err := windowAddresses()
+	if err != nil {
+		return err
+	}
+	for _, address := range []string{activeAddress, inactiveAddress} {
+		if client, ok := current[address]; !ok || client.Workspace.Name != s.Workspace {
+			if err := placeWindow(address, s.Workspace); err != nil {
+				return err
+			}
+		}
+	}
+	if err := floatWindowLeft(activeAddress, monitor); err != nil {
+		return err
+	}
+
+	// Keep both fixtures inside the left side of the screen and stack the
+	// inactive companion beneath the active one. This leaves the right side
+	// clear for the Studio controls and makes the active/inactive relationship
+	// obvious without a second column competing for space.
+	activeWidth, activeHeight, activeX, activeY := windowDemoActiveGeometry(monitor)
+	width := activeWidth
+	height := monitor.Height * 22 / 100
+	if height < 160 {
+		height = 160
+	}
+	if monitor.Height > 0 && height > monitor.Height-112 {
+		height = monitor.Height - 112
+	}
+	x := activeX
+	y := activeY + activeHeight + 20
+	if err := floatWindowAt(inactiveAddress, width, height, x, y, false); err != nil {
+		return err
+	}
+	if err := switchWorkspace(s.Workspace); err != nil {
+		return fmt.Errorf("focus Window Demo workspace: %w", err)
+	}
+	if err := focusWindow(activeAddress); err != nil {
+		return fmt.Errorf("refocus active Window Demo terminal: %w", err)
 	}
 	return nil
 }
