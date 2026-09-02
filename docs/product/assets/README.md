@@ -72,3 +72,15 @@ layouts for the optional full-bar experience: compact and wide variants,
 centered and left placements, and a minimal state. The full bar remains an
 explicit opt-in package; these images are examples of its visual range, not a
 replacement for the native Omarchy bar in the default installation path.
+
+## Example pairs
+
+The generated v2 example pairs live in the repository's
+[`assets/examples/v2/`](../../../assets/examples/v2/) directory and are
+presented in the [product example gallery](../examples/README.md). Each theme
+has a source background and its generated `preview.png` represented as a
+documentation-friendly WebP asset. The older pairs remain available as
+historical references and are labeled as made with Omagen v1.
+
+Before the stable release, record the source background provenance and confirm
+that every background and preview can be redistributed with the project.
