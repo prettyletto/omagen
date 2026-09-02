@@ -19,10 +19,13 @@ The current v2 social-preview candidate is
 with a restrained image-to-palette visual, the supplied Omagen identity, and
 minimal copy that remains legible at thumbnail size.
 
-Keep this product-source candidate under review while the main promotion is
-prepared. The stable promotion may copy the approved exact asset to the
-repository-root `preview.png` used by marketplace tooling; do not change the
-image after the stable commit is submitted for verification.
+Keep this product-source artwork for GitHub and other link-preview surfaces.
+For the marketplace listing, the selected v2 preview is the walkthrough
+thumbnail below: it shows the product in use at a readable 16:9 size without
+duplicating the social-preview artwork. The current candidate copy is at the
+repository root as `preview.png`, sourced byte-for-byte from
+`social/omagen-walkthrough-thumbnail-v2.png`. Do not change that image after
+the stable commit is submitted for marketplace verification.
 
 The v2 YouTube walkthrough thumbnail is
 `social/omagen-walkthrough-thumbnail-v2.png`. It is a 1920×1080 product
