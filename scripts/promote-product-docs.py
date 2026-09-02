@@ -28,6 +28,7 @@ SOURCE_ONLY = re.compile(
     re.DOTALL,
 )
 MARKDOWN_LINK = re.compile(r"\]\(([^)\n]+)\)")
+HTML_SOURCE = re.compile(r"(?P<prefix>\bsrc=[\"'])(?P<target>[^\"']+)(?P<suffix>[\"'])")
 EXTERNAL_PREFIXES = ("http://", "https://", "mailto:", "#")
 
 
@@ -115,7 +116,17 @@ def render_readme(root: Path) -> str:
     def replace(match: re.Match[str]) -> str:
         return "](" + rewrite_link(root, source, match.group(1)) + ")"
 
-    return MARKDOWN_LINK.sub(replace, source_text)
+    projected = MARKDOWN_LINK.sub(replace, source_text)
+
+    def replace_html_source(match: re.Match[str]) -> str:
+        target = match.group("target")
+        return (
+            match.group("prefix")
+            + rewrite_link(root, source, target)
+            + match.group("suffix")
+        )
+
+    return HTML_SOURCE.sub(replace_html_source, projected)
 
 
 def validate_source(root: Path) -> None:
