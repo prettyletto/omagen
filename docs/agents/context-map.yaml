@@ -1,0 +1,325 @@
+version: 1
+domains:
+  lifecycle:
+    docs:
+      - docs/architecture/lifecycle.md
+      - docs/architecture/contracts/engine.md
+      - docs/agents/invariants.md
+    source:
+      - backend/internal/session
+      - backend/internal/preview
+      - backend/internal/apply
+      - backend/internal/cleanup
+      - backend/internal/fsutil
+      - qml/controllers/ApplyController.qml
+      - qml/controllers/DemoController.qml
+      - qml/controllers/PreviewController.qml
+    tests:
+      - backend/internal/session/*_test.go
+      - backend/internal/preview/*_test.go
+      - backend/internal/apply/*_test.go
+      - backend/internal/cleanup/*_test.go
+    dependencies:
+      - backend/internal/omarchy
+    avoid:
+      - backend/internal/palette
+      - bar
+      - docs/plans
+  palette:
+    docs:
+      - docs/architecture/backend.md
+      - docs/architecture/contracts/palette-generation.md
+      - docs/agents/recipes/palette-engine-change.md
+    source:
+      - backend/internal/imageanalysis
+      - backend/internal/colorspace
+      - backend/internal/palette
+      - backend/internal/contrast
+    tests:
+      - backend/internal/imageanalysis/*_test.go
+      - backend/internal/colorspace/*_test.go
+      - backend/internal/palette/*_test.go
+      - backend/internal/contrast/*_test.go
+    dependencies:
+      - backend/internal/generation
+    avoid:
+      - backend/internal/session
+      - bar
+      - qml/views
+      - docs/plans
+  generation:
+    docs:
+      - docs/architecture/backend.md
+      - docs/architecture/contracts/engine.md
+    source:
+      - backend/internal/generation
+      - backend/internal/theme
+      - backend/internal/terminaltheme
+    tests:
+      - backend/internal/generation/*_test.go
+      - backend/internal/theme/*_test.go
+      - backend/internal/terminaltheme/*_test.go
+    dependencies:
+      - backend/internal/palette
+      - backend/internal/contrast
+      - backend/internal/session
+    avoid:
+      - bar
+      - qml/components/AdvancedStyleEditor.qml
+      - docs/plans
+  qml-ui:
+    docs:
+      - docs/architecture/frontend.md
+      - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
+    source:
+      - Omagen.qml
+      - qml/views
+      - qml/components
+      - qml/app
+      - qml/features
+      - qml/controllers
+      - qml/gateways
+      - qml/services
+      - qml/state
+    tests:
+      - scripts/v1-check.sh
+    dependencies:
+      - backend/internal/cli
+      - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
+    avoid:
+      - backend/internal/palette
+      - backend/internal/session
+      - bar
+      - docs/plans
+  live-canvas:
+    docs:
+      - docs/agents/recipes/live-canvas-change.md
+      - docs/architecture/frontend.md
+      - docs/architecture/contracts/live-canvas.md
+      - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
+    source:
+      - qml/views/LiveCanvasPanel.qml
+      - qml/controllers/PreviewController.qml
+      - qml/controllers/DemoController.qml
+      - qml/components/AdvancedStyleEditor.qml
+      - qml/views/live-canvas/LookFeelStep.qml
+      - backend/internal/studio
+      - backend/internal/preview
+    tests:
+      - backend/internal/studio/*_test.go
+      - backend/internal/preview/*_test.go
+      - scripts/v1-check.sh
+    dependencies:
+      - qml/services/BackendService.qml
+      - backend/internal/cli
+      - backend/internal/session
+    avoid:
+      - backend/internal/palette
+      - bar
+      - docs/plans
+  studio:
+    docs:
+      - docs/architecture/frontend.md
+      - docs/architecture/contracts/qml-backend.md
+      - docs/architecture/contracts/qml-controllers.md
+      - docs/architecture/contracts/engine.md
+      - docs/agents/recipes/live-canvas-change.md
+    source:
+      - qml/views/LiveCanvasPanel.qml
+      - qml/components/AdvancedStyleEditor.qml
+      - qml/components/ShellLab.qml
+      - backend/internal/studio
+      - backend/internal/preview
+    tests:
+      - backend/internal/studio/*_test.go
+      - backend/internal/preview/*_test.go
+      - scripts/v1-check.sh
+    dependencies:
+      - qml/services/BackendService.qml
+      - backend/internal/cli
+      - backend/internal/session
+    avoid:
+      - backend/internal/palette
+      - bar
+      - docs/plans
+  style-editor:
+    docs:
+      - docs/agents/recipes/style-editor-change.md
+      - docs/architecture/contracts/style-editor.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/frontend.md
+    source:
+      - qml/components/AdvancedStyleEditor.qml
+      - qml/features/style-editor
+      - qml/components/ShellLab.qml
+      - qml/components/BarDockControls.qml
+      - qml/components/BarWorkspaceControls.qml
+    tests:
+      - scripts/v1-check.sh
+    dependencies:
+      - qml/views/LiveCanvasPanel.qml
+      - backend/internal/barprofile
+    avoid:
+      - qml/controllers
+      - backend/internal/palette
+      - backend/internal/apply
+      - bar
+      - docs/plans
+  bar:
+    docs:
+      - docs/architecture/product-boundaries.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/contracts/quattro-native-clone.md
+    source:
+      - bar
+      - OmagenBar.qml
+      - NativeBarClone.qml
+      - BarModel.js
+      - WorkspacePresentation.qml
+      - backend/internal/bar
+      - backend/internal/barprofile
+      - OmagenBarWidget.qml
+    tests:
+      - backend/internal/bar/*_test.go
+      - backend/internal/barprofile/*_test.go
+      - scripts/v1-check.sh
+    dependencies:
+      - manifest.json
+      - bar-manifest.json
+      - install.sh
+      - scripts/check-context-integrity.py
+    avoid:
+      - backend/internal/palette
+      - backend/internal/apply
+      - qml/views/LiveCanvasPanel.qml
+      - docs/plans
+  bar-host:
+    docs:
+      - docs/agents/recipes/bar-change.md
+      - docs/architecture/product-boundaries.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/contracts/quattro-native-clone.md
+    source:
+      - OmagenBar.qml
+      - OmagenBarWidget.qml
+      - BarModel.js
+      - WorkspacePresentation.qml
+      - bar/*.qml
+    tests:
+      - scripts/v1-check.sh
+      - backend/internal/bar/*_test.go
+    dependencies:
+      - backend/internal/barprofile
+      - bar-manifest.json
+    avoid:
+      - bar/presets
+      - NativeBarClone.qml
+      - qml/views/LiveCanvasPanel.qml
+      - backend/internal/palette
+      - backend/internal/apply
+      - docs/plans
+  bar-preset:
+    docs:
+      - docs/agents/recipes/bar-change.md
+      - docs/architecture/contracts/bar-spec.md
+      - docs/architecture/product-boundaries.md
+    source:
+      - bar/presets
+      - bar/BarPresetRouter.qml
+      - backend/internal/barprofile
+    tests:
+      - backend/internal/bar/*_test.go
+      - backend/internal/barprofile/*_test.go
+      - scripts/v1-check.sh
+    dependencies:
+      - BarModel.js
+      - bar/AGENTS.md
+    avoid:
+      - OmagenBar.qml
+      - NativeBarClone.qml
+      - backend/internal/session
+      - backend/internal/palette
+      - docs/plans
+  look-feel:
+    docs:
+      - docs/architecture/contracts/look-feel.md
+      - docs/agents/recipes/look-feel-change.md
+    source:
+      - backend/internal/lookfeel
+      - qml/views/live-canvas/LookFeelStep.qml
+      - qml/gateways/LookFeelGateway.qml
+      - qml/services/BackendService.qml
+    tests:
+      - backend/internal/lookfeel/*_test.go
+      - backend/internal/theme/lookfeel_test.go
+    dependencies:
+      - backend/internal/session
+      - backend/internal/bar
+    avoid:
+      - backend/internal/palette
+      - NativeBarClone.qml
+      - docs/plans
+  theme-edit:
+    docs:
+      - docs/architecture/contracts/theme-edit.md
+      - docs/architecture/frontend.md
+    source:
+      - backend/internal/themeedit
+      - qml/gateways/ThemeGateway.qml
+      - qml/controllers/ThemeEditController.qml
+    tests:
+      - backend/internal/themeedit/*_test.go
+      - qml/tests/tst_StyleDocuments.qml
+    dependencies:
+      - backend/internal/session
+      - qml/services/BackendService.qml
+    avoid:
+      - backend/internal/palette
+      - backend/internal/apply
+      - bar
+      - docs/plans
+  runtime:
+    docs:
+      - docs/architecture/contracts/runtime.md
+      - docs/agents/recipes/runtime-adapter-change.md
+    source:
+      - backend/internal/runtime
+      - bin/studio-theme-set
+      - backend/internal/omarchy
+    tests:
+      - backend/internal/runtime/*_test.go
+      - backend/internal/omarchy/*_test.go
+    dependencies:
+      - docs/development.md
+      - install.sh
+    avoid:
+      - backend/internal/palette
+      - qml/views/LiveCanvasPanel.qml
+      - docs/plans
+  packaging:
+    docs:
+      - docs/development.md
+      - docs/architecture/product-boundaries.md
+      - docs/agents/recipes/packaging-release.md
+    source:
+      - manifest.json
+      - bar-manifest.json
+      - install.sh
+      - dev-install.sh
+      - scripts
+      - scripts/check-doc-links.py
+      - .github/workflows
+      - backend/go.mod
+    tests:
+      - scripts/v1-check.sh
+      - scripts/verify-bundled-backend.sh
+      - .github/workflows/verify-bundled-backend.yml
+    dependencies:
+      - bin/omagen
+      - bin/omagen-studio
+    avoid:
+      - backend/internal/palette
+      - docs/plans

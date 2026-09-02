@@ -2,16 +2,19 @@
 set -Eeuo pipefail
 
 PLUGIN_ID="pretty.omagen"
+BAR_PLUGIN_ID="pretty.omagen.bar"
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$PLUGIN_ID"
+BAR_DEST_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/omarchy/plugins/$BAR_PLUGIN_ID"
+USER_BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+USER_THEME_SET="$USER_BIN_DIR/omagen-theme-set"
 
 # Omarchy's shell may be installed in the user's checkout rather than the
 # system path. Prefer a valid existing OMARCHY_PATH, then resolve the paths
 # used by the supported Omarchy layouts before making shell IPC calls.
-# The running Omarchy checkout is the per-user install on this machine. It
-# must win over a stale system-path value inherited from zshrc, otherwise the
-# IPC calls below target the wrong shell instance and report "not running".
-for candidate in "$HOME/.local/share/omarchy" "${OMARCHY_PATH:-}" "/usr/share/omarchy"; do
+# OMARCHY_PATH is Omarchy's session-level source of truth. The user-local and
+# packaged paths are fallbacks for callers launched without that environment.
+for candidate in "${OMARCHY_PATH:-}" "$HOME/.local/share/omarchy" "/usr/share/omarchy"; do
     if [[ -n "$candidate" && -f "$candidate/shell/shell.qml" ]]; then
         export OMARCHY_PATH="$candidate"
         break
@@ -20,28 +23,53 @@ done
 
 usage() {
     cat <<EOF
-Usage: $0
+Usage: $0 [--skip-build]
+
+Options:
+  --skip-build  Install the checked-in backend binary without compiling Go.
 EOF
 }
+
+BUILD_BACKEND=1
 
 for arg in "$@"; do
     case "$arg" in
         -h|--help) usage; exit 0 ;;
+        --skip-build) BUILD_BACKEND=0 ;;
         *) usage >&2; exit 2 ;;
     esac
 done
 
-echo "Building Omagen backend..."
-mkdir -p "$SRC_DIR/bin"
-"$SRC_DIR/scripts/build-backend.sh" "$SRC_DIR/bin/omagen"
+if ((BUILD_BACKEND)); then
+    echo "Building Omagen backend..."
+    mkdir -p "$SRC_DIR/bin"
+    "$SRC_DIR/scripts/build-backend.sh" "$SRC_DIR/bin/omagen"
+else
+    [[ -x "$SRC_DIR/bin/omagen" ]] || {
+        echo "Checked-in backend binary is missing or not executable: $SRC_DIR/bin/omagen" >&2
+        exit 1
+    }
+    echo "Using checked-in Omagen backend (Go build skipped)."
+fi
 
 echo "Installing Omagen..."
+if [[ -L "$DEST_DIR" ]]; then
+    echo "Refusing to install through symlinked plugin directory: $DEST_DIR" >&2
+    exit 1
+fi
 mkdir -p "$DEST_DIR"
 
-if [[ -L "$DEST_DIR" ]]; then
-    rm -f "$DEST_DIR"
-    mkdir -p "$DEST_DIR"
-fi
+for destination in \
+    "$DEST_DIR/manifest.json" \
+    "$DEST_DIR/Omagen.qml" \
+    "$DEST_DIR/OmagenBarWidget.qml" \
+    "$DEST_DIR/bin" \
+    "$DEST_DIR/bar"; do
+    if [[ -L "$destination" ]]; then
+        echo "Refusing to install through symlinked package path: $destination" >&2
+        exit 1
+    fi
+done
 
 cp "$SRC_DIR/manifest.json" "$DEST_DIR/manifest.json"
 cp "$SRC_DIR/Omagen.qml" "$DEST_DIR/Omagen.qml"
@@ -49,12 +77,106 @@ cp "$SRC_DIR/OmagenBarWidget.qml" "$DEST_DIR/OmagenBarWidget.qml"
 rm -f "$DEST_DIR/BarWidget.qml" "$DEST_DIR/Widget.qml"
 rm -rf "$DEST_DIR/demo"
 cp -a "$SRC_DIR/demo" "$DEST_DIR/demo"
-mkdir -p "$DEST_DIR/qml" "$DEST_DIR/bin"
-rsync -a --delete "$SRC_DIR/qml/" "$DEST_DIR/qml/"
+# Keep the package self-contained: rsync is not guaranteed to be installed on
+# every Omarchy system, while cp and rm are part of the base environment. The
+# destination is owned by this installer, so replacing this subtree preserves
+# the same delete-stale-files behavior as rsync --delete.
+rm -rf "$DEST_DIR/qml"
+mkdir -p "$DEST_DIR/bin"
+cp -a "$SRC_DIR/qml" "$DEST_DIR/qml"
+# QML tests stay in the source checkout and are not part of the production
+# plugin payload. The destination subtree is owned by this installer, so this
+# removes only the test files just copied into the package.
+rm -rf "$DEST_DIR/qml/tests"
+# AdvancedStyleEditor.qml lives in the overlay plugin but shares the bar
+# sizing contract with the full-bar plugin. Keep this helper available at the
+# relative import path used by the installed overlay without merging the two
+# plugin manifests or their ownership boundaries.
+mkdir -p "$DEST_DIR/bar"
+cp "$SRC_DIR/bar/BarSizing.js" "$DEST_DIR/bar/BarSizing.js"
 cp "$SRC_DIR/bin/omagen" "$DEST_DIR/bin/omagen"
 chmod +x "$DEST_DIR/bin/omagen"
+# Fail the install early if the bundled backend cannot answer the command used
+# by the Studio catalog. Without this check the UI can appear to load forever
+# after a partial or incompatible branch install.
+echo "Checking bundled Look & Feel catalog..."
+"$DEST_DIR/bin/omagen" look-feel list >/dev/null
+# Replace executables atomically. The running shell can still have the old
+# helper mapped, and copying over that inode returns ETXTBSY (Text file busy).
+cp "$SRC_DIR/bin/omagen-studio" "$DEST_DIR/bin/.omagen-studio.new"
+mv -f "$DEST_DIR/bin/.omagen-studio.new" "$DEST_DIR/bin/omagen-studio"
+chmod +x "$DEST_DIR/bin/omagen-studio"
+cp "$SRC_DIR/bin/studio-theme-set" "$DEST_DIR/bin/.studio-theme-set.new"
+mv -f "$DEST_DIR/bin/.studio-theme-set.new" "$DEST_DIR/bin/studio-theme-set"
+chmod +x "$DEST_DIR/bin/studio-theme-set"
+cp "$SRC_DIR/bin/omagen-file-select" "$DEST_DIR/bin/.omagen-file-select.new"
+mv -f "$DEST_DIR/bin/.omagen-file-select.new" "$DEST_DIR/bin/omagen-file-select"
+chmod +x "$DEST_DIR/bin/omagen-file-select"
+cp "$SRC_DIR/bin/omagen-theme-set" "$DEST_DIR/bin/.omagen-theme-set.new"
+mv -f "$DEST_DIR/bin/.omagen-theme-set.new" "$DEST_DIR/bin/omagen-theme-set"
+chmod +x "$DEST_DIR/bin/omagen-theme-set"
+
+# Make the routing seam directly callable without replacing a command the user
+# may already own.  The marker is intentionally short and stable so uninstall
+# can remove only a file written by this installer.
+mkdir -p "$USER_BIN_DIR"
+if [[ -e "$USER_THEME_SET" || -L "$USER_THEME_SET" ]]; then
+    if [[ -f "$USER_THEME_SET" && ! -L "$USER_THEME_SET" ]] &&
+       [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]]; then
+        cp "$SRC_DIR/bin/omagen-theme-set" "$USER_THEME_SET.new"
+        mv -f "$USER_THEME_SET.new" "$USER_THEME_SET"
+        chmod +x "$USER_THEME_SET"
+        echo "Updated user command: $USER_THEME_SET"
+    else
+        echo "Preserved existing user command (not Omagen-owned): $USER_THEME_SET" >&2
+        echo "Use the installed adapter directly: $DEST_DIR/bin/omagen-theme-set" >&2
+    fi
+else
+    cp "$SRC_DIR/bin/omagen-theme-set" "$USER_THEME_SET"
+    chmod +x "$USER_THEME_SET"
+    echo "Installed user command: $USER_THEME_SET"
+fi
+
+# The full bar is a separate plugin kind. Keeping it separate from the
+# bar-widget manifest is required by Quattro's registry: a manifest selected
+# as the active bar is not also treated as a layout widget.
+echo "Installing $BAR_PLUGIN_ID..."
+if [[ -L "$BAR_DEST_DIR" ]]; then
+    echo "Refusing to install through symlinked plugin directory: $BAR_DEST_DIR" >&2
+    exit 1
+fi
+mkdir -p "$BAR_DEST_DIR"
+for destination in \
+    "$BAR_DEST_DIR/manifest.json" \
+    "$BAR_DEST_DIR/OmagenBar.qml" \
+    "$BAR_DEST_DIR/BarSurface.qml" \
+    "$BAR_DEST_DIR/BarMoveGhostPanel.qml" \
+    "$BAR_DEST_DIR/CyberpunkBarSignal.qml" \
+    "$BAR_DEST_DIR/NativeBarClone.qml" \
+    "$BAR_DEST_DIR/WorkspacePresentation.qml" \
+    "$BAR_DEST_DIR/BarModel.js" \
+    "$BAR_DEST_DIR/glitch.frag.qsb" \
+    "$BAR_DEST_DIR/glitch.vert.qsb"; do
+    if [[ -L "$destination" ]]; then
+        echo "Refusing to install through symlinked package path: $destination" >&2
+        exit 1
+    fi
+done
+cp "$SRC_DIR/bar-manifest.json" "$BAR_DEST_DIR/manifest.json"
+cp "$SRC_DIR/OmagenBar.qml" "$BAR_DEST_DIR/OmagenBar.qml"
+cp "$SRC_DIR/BarSurface.qml" "$BAR_DEST_DIR/BarSurface.qml"
+cp "$SRC_DIR/BarMoveGhostPanel.qml" "$BAR_DEST_DIR/BarMoveGhostPanel.qml"
+cp "$SRC_DIR/CyberpunkBarSignal.qml" "$BAR_DEST_DIR/CyberpunkBarSignal.qml"
+cp "$SRC_DIR/NativeBarClone.qml" "$BAR_DEST_DIR/NativeBarClone.qml"
+cp "$SRC_DIR/WorkspacePresentation.qml" "$BAR_DEST_DIR/WorkspacePresentation.qml"
+cp "$SRC_DIR/BarModel.js" "$BAR_DEST_DIR/BarModel.js"
+rm -rf "$BAR_DEST_DIR/bar"
+cp -a "$SRC_DIR/bar" "$BAR_DEST_DIR/bar"
+cp "$SRC_DIR/qml/components/glitch.frag.qsb" "$BAR_DEST_DIR/glitch.frag.qsb"
+cp "$SRC_DIR/qml/components/glitch.vert.qsb" "$BAR_DEST_DIR/glitch.vert.qsb"
 
 echo "Installed $PLUGIN_ID -> $DEST_DIR"
+echo "Installed $BAR_PLUGIN_ID -> $BAR_DEST_DIR"
 
 if omarchy-shell shell rescanPlugins; then
     echo "Omarchy shell rescanned plugins."
@@ -63,7 +185,18 @@ else
     echo "  omarchy-shell shell rescanPlugins"
 fi
 
-if omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1; then
+enabled=0
+for attempt in 1 2 3; do
+    if omarchy plugin enable "$PLUGIN_ID" >/dev/null 2>&1; then
+        enabled=1
+        break
+    fi
+    # A shell rescan can return before the plugin manager has refreshed its
+    # registry. Retry briefly so a fresh branch install does not leave the
+    # overlay installed but disabled.
+    ((attempt < 3)) && sleep 1
+done
+if ((enabled)); then
     echo "Enabled $PLUGIN_ID."
 else
     echo "Plugin not enabled automatically; enable later with:"

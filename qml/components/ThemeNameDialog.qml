@@ -2,46 +2,79 @@ import QtQuick
 import QtQuick.Controls
 import qs.Commons
 import qs.Ui as Ui
+import "Contrast.js" as Contrast
 
 Item {
     id: root
     property bool opened: false
     property bool busy: false
     property string errorMessage: ""
+    property string validationError: ""
     property bool generateUnlock: false
     property bool capturePreview: false
+    property bool presetOnly: false
+    property string lookFeelPresetName: ""
+    property bool themeEditMode: false
+    property string sourceThemeName: ""
+    property bool replaceSource: false
     signal cancelled()
-    signal confirmed(string name, bool generateUnlock, bool capturePreview)
+    signal confirmed(string name, bool generateUnlock, bool capturePreview, bool replaceSource, bool saveLookFeelPreset, string lookFeelPresetName)
+    signal presetConfirmed(string name)
     visible: opened
 
     function openWith(name) {
-        errorMessage = ""
+        presetOnly = false
+        validationError = ""
         nameInput.text = name
+        lookFeelPresetName = ""
         generateUnlock = false
         capturePreview = false
+        replaceSource = false
         opened = true
         Qt.callLater(function() { nameInput.forceActiveFocus(); nameInput.selectAll() })
     }
-    function reset() {
-        opened = false
-        errorMessage = ""
+    function openForPreset(name) {
+        presetOnly = true
+        validationError = ""
         nameInput.text = ""
+        lookFeelPresetName = name
         generateUnlock = false
         capturePreview = false
+        replaceSource = false
+        opened = true
+        Qt.callLater(function() { presetNameInput.forceActiveFocus(); presetNameInput.selectAll() })
     }
-    function close() { if (!busy) { opened = false; errorMessage = "" } }
+    function reset() {
+        opened = false
+        validationError = ""
+        nameInput.text = ""
+        lookFeelPresetName = ""
+        generateUnlock = false
+        capturePreview = false
+        presetOnly = false
+        replaceSource = false
+    }
+    function close() { if (!busy) { opened = false; validationError = "" } }
     function submit() {
         if (busy) return
+        if (root.presetOnly) {
+            const presetName = root.lookFeelPresetName.trim()
+            if (presetName.length === 0) { validationError = "Look & Feel preset name cannot be empty"; return }
+            if (presetName.length > 64) { validationError = "Look & Feel preset name must be 64 characters or fewer"; return }
+            validationError = ""
+            presetConfirmed(presetName)
+            return
+        }
         const value = nameInput.text.trim()
-        if (value.length === 0) { errorMessage = "Theme name cannot be empty"; return }
-        if (value.length > 64) { errorMessage = "Theme name must be 64 characters or fewer"; return }
-        errorMessage = ""
-        confirmed(value, root.generateUnlock, root.capturePreview)
+        if (value.length === 0) { validationError = "Theme name cannot be empty"; return }
+        if (value.length > 64) { validationError = "Theme name must be 64 characters or fewer"; return }
+        validationError = ""
+        confirmed(value, root.generateUnlock, root.capturePreview, root.replaceSource, false, "")
     }
 
-    Rectangle { anchors.fill: parent; color: Util.alpha(Color.background, 0.72); MouseArea { anchors.fill: parent; onClicked: { root.close(); root.cancelled() } } }
+        Rectangle { anchors.fill: parent; color: Util.alpha(Color.background, 0.72); MouseArea { anchors.fill: parent; onClicked: { root.close(); root.cancelled() } } }
     Rectangle {
-        width: 430; height: 390; anchors.centerIn: parent; radius: 14; z: 1
+        width: 430; height: root.presetOnly ? 292 : (root.themeEditMode ? 458 : 390); anchors.centerIn: parent; radius: 14; z: 1
         visible: !root.busy
         color: Color.popups.background; border.width: 1; border.color: Color.popups.border
         Keys.onEscapePressed: { if (!root.busy) { root.close(); root.cancelled() } }
@@ -53,13 +86,14 @@ Item {
         Column {
             anchors.fill: parent; anchors.margins: 24; spacing: 16
             Column { width: parent.width; spacing: 5
-                Text { text: "Save theme"; color: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
-                Text { text: "Choose a name for the permanent Omarchy theme."; color: Color.popups.text; opacity: .58; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
+                Text { text: root.presetOnly ? "Save Look & Feel preset" : "Save theme"; color: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true }
+                Text { text: root.presetOnly ? "Save the complete staged Window, Shell, Bar, Animations, and terminal recipe locally." : (root.themeEditMode ? "Save your edits as a new clone, or replace the selected theme." : "Choose a name for the permanent Omarchy theme."); color: Color.popups.text; opacity: .58; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
             }
-            Rectangle { width: parent.width; height: 44; radius: 8; color: Util.alpha(Color.popups.text, 0.06); border.width: 1; border.color: nameInput.activeFocus ? Color.accent : Color.popups.border
+            Rectangle { visible: !root.presetOnly; width: parent.width; height: 44; radius: 8; color: Util.alpha(Color.popups.text, 0.06); border.width: 1; border.color: nameInput.activeFocus ? Color.accent : Color.popups.border
                 TextInput { id: nameInput; anchors.fill: parent; anchors.leftMargin: 12; anchors.rightMargin: 12; verticalAlignment: TextInput.AlignVCenter; color: Color.popups.text; selectionColor: Style.selectionFillFor(Color.popups.text, Color.accent, Color.urgent); selectedTextColor: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.body; maximumLength: 64; enabled: !root.busy; Keys.onReturnPressed: root.submit(); Keys.onEnterPressed: root.submit() }
             }
             Ui.Toggle {
+                visible: !root.presetOnly
                 width: parent.width
                 label: "Generate unlock screen"
                 description: "Include Plymouth artwork and its unlock-switcher preview."
@@ -70,24 +104,63 @@ Item {
                 onClicked: root.generateUnlock = !root.generateUnlock
             }
             Ui.Toggle {
+                visible: !root.presetOnly
                 width: parent.width
                 label: "Capture live Demo preview"
-                description: "Use the loaded Demo workspace as preview.png."
+                description: "Open a fresh Full Demo and use its screenshot as preview.png."
                 checked: root.capturePreview
                 foreground: Color.popups.text
                 accent: Color.accent
                 enabled: !root.busy
                 onClicked: root.capturePreview = !root.capturePreview
             }
-            Text { visible: root.errorMessage !== ""; width: parent.width; text: root.errorMessage; textFormat: Text.PlainText; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; elide: Text.ElideRight }
-            Item { width: 1; height: root.errorMessage !== "" ? 0 : 14 }
+            Rectangle {
+                visible: root.presetOnly
+                width: parent.width
+                height: 42
+                radius: 8
+                color: Util.alpha(Color.popups.text, 0.06)
+                border.width: 1
+                border.color: presetNameInput.activeFocus ? Color.accent : Color.popups.border
+                TextInput {
+                    id: presetNameInput
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    verticalAlignment: TextInput.AlignVCenter
+                    color: Color.popups.text
+                    selectionColor: Style.selectionFillFor(Color.popups.text, Color.accent, Color.urgent)
+                    selectedTextColor: Color.popups.text
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.bodySmall
+                    maximumLength: 64
+                    text: root.lookFeelPresetName
+                    enabled: !root.busy
+                    onTextChanged: root.lookFeelPresetName = text
+                    Keys.onReturnPressed: root.submit()
+                    Keys.onEnterPressed: root.submit()
+                }
+            }
+            Ui.Toggle {
+                visible: root.themeEditMode && !root.presetOnly
+                width: parent.width
+                label: "Replace selected theme in place"
+                description: "Explicitly overwrite " + (root.sourceThemeName || "the selected theme") + ". Leave this off to create a clone with a new name."
+                checked: root.replaceSource
+                foreground: Color.popups.text
+                accent: Color.accent
+                enabled: !root.busy
+                onClicked: root.replaceSource = !root.replaceSource
+            }
+            Text { visible: root.errorMessage !== "" || root.validationError !== ""; width: parent.width; text: root.errorMessage !== "" ? root.errorMessage : root.validationError; textFormat: Text.PlainText; color: Color.urgent; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; wrapMode: Text.WordWrap }
+            Item { width: 1; height: root.errorMessage !== "" || root.validationError !== "" ? 0 : 14 }
             Row { anchors.right: parent.right; spacing: 10
                 Rectangle { width: 95; height: 38; radius: 8; color: Util.alpha(Color.popups.text, 0.06); border.width: 1; border.color: Color.popups.border; opacity: root.busy ? .4 : 1
                     Text { anchors.centerIn: parent; text: "Cancel"; color: Color.popups.text; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall }
                     MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: { root.close(); root.cancelled() } }
                 }
                 Rectangle { width: 130; height: 38; radius: 8; color: Color.accent; opacity: root.busy ? .55 : 1
-                    Text { anchors.centerIn: parent; text: root.busy ? "Applying…" : "Save & Apply"; color: Color.background; font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
+                Text { anchors.centerIn: parent; text: root.busy ? (root.presetOnly ? "Saving…" : "Applying…") : (root.presetOnly ? "Save preset" : "Save & Apply"); color: Contrast.textFor(Color.accent, Color.background, Color.foreground); font.family: Style.font.family; font.pixelSize: Style.font.bodySmall; font.bold: true }
                     MouseArea { anchors.fill: parent; enabled: !root.busy; onClicked: root.submit() }
                 }
             }
@@ -125,7 +198,7 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: "Applying theme…"
+                    text: root.presetOnly ? "Saving Look & Feel preset…" : "Applying theme…"
                     horizontalAlignment: Text.AlignHCenter
                     color: Color.popups.text
                     font.family: Style.font.family
@@ -135,7 +208,7 @@ Item {
 
                 Text {
                     width: parent.width
-                    text: "Saving the theme and updating Omarchy."
+                    text: root.presetOnly ? "Writing the complete recipe locally." : "Saving the theme and updating Omarchy."
                     horizontalAlignment: Text.AlignHCenter
                     color: Color.popups.text
                     opacity: 0.58

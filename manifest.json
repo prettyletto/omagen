@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "pretty.omagen",
   "name": "Omagen",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "Prettyletto",
   "license": "MIT",
   "description": "Generate Omarchy themes from images",

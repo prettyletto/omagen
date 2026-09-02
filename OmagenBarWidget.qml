@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Effects
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 import "qml/components" as Components
@@ -22,7 +23,10 @@ BarWidget {
     property color animatedDiamondColor: idleDiamondColor
     property real diamondGlowOpacity: 0.28
 
-    readonly property color normalIconColor: root.bar ? root.bar.foreground : Color.foreground
+    // Match native WidgetButton: barForeground is the sampled contrast color
+    // when the active bar is translucent; foreground is only the static theme
+    // color and would leave the launcher icon unreadable on some wallpapers.
+    readonly property color normalIconColor: root.bar ? root.bar.barForeground : Color.foreground
     readonly property color accentAnchor: Color.accent
     readonly property color idleDiamondColor: Color.accent
     readonly property var accentRainbow: root.buildAccentRainbow(root.accentAnchor)
@@ -32,6 +36,69 @@ BarWidget {
         return configured && configured.length > 0 ? configured : home + "/.local/state"
     }
     readonly property string activeSessionPath: root.stateHome + "/omagen/active-session.json"
+    readonly property string barProfilePath: root.stateHome + "/omarchy/current/theme/omagen.bar.json"
+    readonly property string currentStatePath: root.stateHome + "/omarchy/current"
+    property bool replacementTheme: false
+    property string barImplementation: ""
+    // Older Theme Set candidates carry only omagen.bar.toml. DockedBarSurface
+    // already understands that metadata, so allow it to mount even before a
+    // versioned JSON profile exists. Without this bridge, shell.toml can set
+    // the native bar alpha to zero while no Omagen surface is visible.
+    readonly property bool legacyDockedAdapter: root.barImplementation === ""
+        && dockedSurface.metadataResolved
+        && dockedSurface.omagenBarForm === "docked"
+
+    // The Go runtime adapter is the sole shell.json writer for theme-owned bar
+    // activation. This widget only reads the promoted profile to decide which
+    // additive surface to render; it never races the critical transaction.
+    function readThemeBarProfile(raw) {
+        var document = ({})
+        try {
+            document = JSON.parse(String(raw || "{}"))
+        } catch (error) {
+            document = ({})
+        }
+        root.barImplementation = String(document && document.implementation || "")
+        root.replacementTheme = !!(document && String(document.implementation || "") === "replacement")
+    }
+
+    FileView {
+        id: barProfileFile
+        path: root.barProfilePath
+        watchChanges: true
+        printErrors: false
+        onLoaded: {
+            missingBarProfileTimer.stop()
+            root.readThemeBarProfile(text())
+        }
+        onFileChanged: reload()
+        onLoadFailed: missingBarProfileTimer.restart()
+        Component.onCompleted: reload()
+    }
+
+    Timer {
+        id: barProfileRefreshTimer
+        interval: 80
+        repeat: false
+        onTriggered: barProfileFile.reload()
+    }
+
+    Timer {
+        id: missingBarProfileTimer
+        interval: 280
+        repeat: false
+        onTriggered: root.readThemeBarProfile("")
+    }
+
+    FileView {
+        path: root.currentStatePath
+        watchChanges: true
+        printErrors: false
+        // Keep the long-lived widget attached to the promoted `current`
+        // directory rather than to the previous theme file inode.
+        onFileChanged: barProfileRefreshTimer.restart()
+    }
+
     function buildAccentRainbow(baseColor) {
         var base = Qt.color(baseColor)
         var hue = base.hsvHue
@@ -135,8 +202,113 @@ BarWidget {
     implicitHeight: barSize
 
     Components.DockedBarSurface {
+        id: dockedSurface
         anchorItem: root
         bar: root.bar
+        // In replacement mode this widget is only the Omagen launcher. The
+        // full bar host owns the surface, so mounting the old adapter here
+        // would recreate the additive-bar bug inside the replacement.
+        visible: !(root.bar && root.bar.replacementHost === true)
+            && (root.barImplementation === "adapter" || root.legacyDockedAdapter)
+    }
+
+    readonly property bool themedAutoHide: !(root.bar && root.bar.replacementHost === true) && root.barImplementation === "adapter"
+        && (dockedSurface.specAutoHide || (dockedSurface.profileResolved && dockedSurface.profileVisibility === "auto-hide"))
+    property bool revealHovered: false
+    property bool autoHideOwnsToggle: false
+    readonly property int autoHideDelayMs: 5000
+    readonly property string barTogglePath: Quickshell.env("XDG_STATE_HOME") !== ""
+        ? Quickshell.env("XDG_STATE_HOME") + "/omarchy/toggles/bar-off"
+        : Quickshell.env("HOME") + "/.local/state/omarchy/toggles/bar-off"
+
+    // Quattro already owns hidden-state parking and exclusion. This adapter
+    // only provides a bounded edge reveal and inactivity timer for a themed
+    // profile; widget input and popouts remain native.
+    Process {
+        id: showBarProcess
+        command: ["rm", "-f", root.barTogglePath]
+    }
+    Process {
+        id: hideBarProcess
+        command: ["touch", root.barTogglePath]
+    }
+
+    function showAutoHideBar() {
+        if (!root.autoHideOwnsToggle)
+            return
+        root.autoHideOwnsToggle = false
+        showBarProcess.running = true
+    }
+
+    function hideAutoHideBar() {
+        if (!root.themedAutoHide || !root.bar || root.bar.barHidden === true || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined))
+            return
+        root.autoHideOwnsToggle = true
+        hideBarProcess.running = true
+    }
+
+    function syncAutoHide() {
+        if (!root.themedAutoHide) {
+            autoHideTimer.stop()
+            root.showAutoHideBar()
+            return
+        }
+        if (!root.bar || root.bar.barHidden === true || root.bar.barHovered === true || root.revealHovered || (root.bar.activePopout !== null && root.bar.activePopout !== undefined)) {
+            autoHideTimer.stop()
+            return
+        }
+        autoHideTimer.restart()
+    }
+
+    onThemedAutoHideChanged: root.syncAutoHide()
+    Component.onCompleted: root.syncAutoHide()
+
+    Timer {
+        id: autoHideTimer
+        interval: root.autoHideDelayMs
+        repeat: false
+        onTriggered: root.hideAutoHideBar()
+    }
+
+    Connections {
+        target: root.bar
+        function onBarHoveredChanged() {
+            root.syncAutoHide()
+            if (root.themedAutoHide && root.bar.barHovered === true)
+                root.showAutoHideBar()
+        }
+        function onBarHiddenChanged() { root.syncAutoHide() }
+        function onActivePopoutChanged() { root.syncAutoHide() }
+    }
+
+    PanelWindow {
+        id: revealEdge
+        visible: root.themedAutoHide && root.bar && root.bar.barHidden === true && dockedSurface.profileReveal === "edge"
+        screen: root.bar && root.bar.targetWindow ? root.bar.targetWindow(root) ? root.bar.targetWindow(root).screen : null : null
+        color: "transparent"
+        exclusionMode: ExclusionMode.Ignore
+        WlrLayershell.namespace: "pretty-omagen-bar-reveal"
+        WlrLayershell.layer: WlrLayer.Overlay
+        WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+        anchors {
+            top: root.bar && (root.bar.position === "top" || root.bar.vertical)
+            bottom: root.bar && (root.bar.position === "bottom" || root.bar.vertical)
+            left: root.bar && (root.bar.position === "left" || !root.bar.vertical)
+            right: root.bar && (root.bar.position === "right" || !root.bar.vertical)
+        }
+        implicitWidth: root.bar && root.bar.vertical ? root.bar.barSize : 0
+        implicitHeight: root.bar && !root.bar.vertical ? Style.space(4) : 0
+        HoverHandler {
+            onHoveredChanged: {
+                root.revealHovered = hovered
+                if (hovered) {
+                    autoHideTimer.stop()
+                    root.showAutoHideBar()
+                } else {
+                    root.syncAutoHide()
+                }
+            }
+        }
     }
 
     Timer {

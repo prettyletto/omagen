@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"golang.org/x/sys/unix"
 )
 
 func AtomicWriteFile(path string, data []byte, mode fs.FileMode) error {
@@ -64,12 +66,14 @@ func AtomicWrite(path string, mode fs.FileMode, write func(io.Writer) error) err
 }
 
 func RenameAndSyncNoReplace(source, destination string) (bool, error) {
-	if _, err := os.Lstat(destination); err == nil {
-		return false, fmt.Errorf("destination already exists: %w", fs.ErrExist)
-	} else if !os.IsNotExist(err) {
-		return false, fmt.Errorf("inspect destination: %w", err)
-	}
-	if err := os.Rename(source, destination); err != nil {
+	// The existence check plus os.Rename is racy: a concurrent creator could
+	// appear between the two calls and be overwritten. Linux's no-replace
+	// rename is the commit primitive used by Apply, Preview, and Generation.
+	err := unix.Renameat2(unix.AT_FDCWD, source, unix.AT_FDCWD, destination, unix.RENAME_NOREPLACE)
+	if err != nil {
+		if errors.Is(err, unix.EEXIST) {
+			return false, fmt.Errorf("destination already exists: %w", fs.ErrExist)
+		}
 		return false, fmt.Errorf("rename %s to %s: %w", source, destination, err)
 	}
 	if err := SyncDir(filepath.Dir(destination)); err != nil {

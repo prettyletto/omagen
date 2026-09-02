@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+MAP="$ROOT/docs/agents/context-map.yaml"
+
+"$ROOT/scripts/check-context-integrity.py" >/dev/null
+
+usage() {
+    printf 'Usage: %s <domain>\n\n' "${0##*/}"
+    printf 'Available domains:\n'
+    awk '/^  [a-z0-9-]+:$/ { name=$0; sub(/^  /, "", name); sub(/:$/, "", name); print "  " name }' "$MAP"
+}
+
+if (($# != 1)) || [[ "${1:-}" == "-h" || "${1:-}" == "--help" || "${1:-}" == "--list" ]]; then
+    usage
+    if (($# == 1)) && [[ "$1" == "-h" || "$1" == "--help" || "$1" == "--list" ]]; then
+        exit 0
+    fi
+    exit 2
+fi
+
+domain="$1"
+if ! output="$({
+    awk -v wanted="$domain" '
+        $0 ~ "^  " wanted ":$" { active=1; found=1 }
+        active && $0 ~ /^  [^ ]/ && $0 !~ "^  " wanted ":$" { active=0 }
+        active { print }
+        END { if (!found) exit 1 }
+    ' "$MAP"
+} 2>/dev/null)"; then
+    printf 'Unknown domain: %s\n\n' "$domain" >&2
+    usage >&2
+    exit 2
+fi
+
+printf 'Context: %s\n' "$domain"
+printf '%s\n' "$output" | awk '
+    /^    (docs|source|tests|dependencies|avoid):$/ {
+        section=$0
+        sub(/^    /, "", section)
+        sub(/:$/, "", section)
+        printf "\n%s:\n", section
+        next
+    }
+    /^      - / {
+        item=$0
+        sub(/^      - /, "", item)
+        printf "  - %s\n", item
+    }
+'

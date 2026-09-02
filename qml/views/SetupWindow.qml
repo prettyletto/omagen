@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components" as Components
+import "../components/Contrast.js" as Contrast
 
 PanelWindow {
     id: root
@@ -13,21 +15,35 @@ PanelWindow {
     property bool sessionActive: false
     property bool cancelBusy: false
     property string sourceImage: ""
-    property bool extraConfigsEnabled: false
+    // Retained for the root handoff contract. The choice itself is rendered
+    // and made on the first Live Canvas wizard page now.
+    property string workflowMode: "fast"
     property string errorMessage: ""
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
     property int cursorIndex: 0
+    // Setup exposes image selection/editing, then a fixed forward action once
+    // an image is selected. Session Cancel remains the final action when a
+    // session is already active.
     readonly property int actionCount: sourceImage === ""
-        ? (sessionActive ? 2 : 1)
-        : (sessionActive ? 4 : 3)
+        ? (sessionActive ? 3 : 3)
+        : (sessionActive ? 4 : 4)
 
     signal chooseImageRequested()
-    signal extraConfigsToggled(bool enabled)
+    signal editThemeRequested()
+    signal advancedRuntimeRequested()
+    signal workflowModeSelected(string mode)
     signal continueRequested()
     signal cancelRequested()
     signal hideRequested()
 
     visible: active
     color: "transparent"
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.active
+        onActivated: root.hideRequested()
+    }
     WlrLayershell.namespace: "omagen-setup"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
@@ -43,9 +59,11 @@ PanelWindow {
             return;
         if (cursorIndex === 0)
             chooseImageRequested();
-        else if (sourceImage !== "" && cursorIndex === 1)
-            extraConfigsToggled(!extraConfigsEnabled);
-        else if (sourceImage !== "" && cursorIndex === 2)
+        else if (cursorIndex === 1)
+            editThemeRequested();
+        else if (!sessionActive && cursorIndex === 2)
+            advancedRuntimeRequested();
+        else if (sourceImage !== "" && cursorIndex === (sessionActive ? 2 : 3))
             continueRequested();
         else if (sessionActive && cursorIndex === actionCount - 1)
             cancelRequested();
@@ -65,16 +83,25 @@ PanelWindow {
     Rectangle {
         id: card
         anchors.centerIn: parent
-        width: Math.min(Style.space(560), parent.width - Style.space(48))
-        // The image-selected state needs room for the preview, path, Change
-        // image, Continue, and footer controls.  Keep the empty state compact
-        // while letting the full state keep every action inside the card.
-        height: Math.min(root.sourceImage === "" ? 270 : 680, parent.height - 48)
+        width: Math.min(Style.space(620), parent.width - Style.space(48))
+        // The content scrolls independently, while the action footer remains
+        // visible. This prevents the image-selected state from clipping its
+        // only forward action on short or scaled displays.
+        height: Math.min(root.sourceImage === "" ? Style.space(350) : (root.sessionActive ? Style.space(640) : Style.space(600)), parent.height - Style.space(48))
         radius: Style.cornerRadius
         color: Color.popups.background
         border.width: Math.max(1, Style.space(1))
         border.color: Color.popups.border
         z: 1
+
+        Components.SignalGlitch {
+            anchors.fill: parent
+            z: 10
+            enabled: root.glitchEnabled
+            triggerEpoch: root.glitchEpoch
+            accentColor: Color.accent
+            secondaryColor: Color.foreground
+        }
 
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
 
@@ -89,8 +116,8 @@ PanelWindow {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: Style.space(28)
-                spacing: Style.space(14)
+                anchors.margins: Style.space(24)
+                spacing: Style.space(10)
 
                 Item {
                     Layout.fillWidth: true
@@ -100,6 +127,7 @@ PanelWindow {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: Style.space(2)
+
                         Text {
                             text: "Omagen"
                             color: Color.popups.text
@@ -131,97 +159,170 @@ PanelWindow {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "Create a theme from a PNG or JPEG image"
+                    text: root.sourceImage === ""
+                        ? "Create a theme from a PNG or JPEG image"
+                        : "Image ready — continue to choose your workflow"
                     color: Color.popups.text
                     opacity: 0.7
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
+                    wrapMode: Text.WordWrap
+                }
+
+                Flickable {
+                    id: contentScroller
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    clip: true
+                    contentWidth: width
+                    contentHeight: contentColumn.implicitHeight + Style.space(4)
+                    flickableDirection: Flickable.VerticalFlick
+                    boundsBehavior: Flickable.StopAtBounds
+                    interactive: contentHeight > height
+
+                    WheelHandler {
+                        onWheel: function(event) {
+                            if (!contentScroller.interactive || event.angleDelta.y === 0)
+                                return;
+                            contentScroller.cancelFlick();
+                            const maximum = Math.max(0, contentScroller.contentHeight - contentScroller.height);
+                            contentScroller.contentY = Math.max(0, Math.min(maximum, contentScroller.contentY - event.angleDelta.y / 2));
+                            event.accepted = true;
+                        }
+                    }
+
+                    ColumnLayout {
+                        id: contentColumn
+                        width: contentScroller.width
+                        spacing: Style.space(10)
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Style.space(190)
+                            visible: root.sourceImage !== ""
+                            radius: Style.cornerRadius
+                            color: Util.alpha(Color.background, 0.45)
+                            border.width: 1
+                            border.color: Util.alpha(Color.popups.border, 0.55)
+                            clip: true
+
+                            Image {
+                                anchors.fill: parent
+                                source: root.sourceImage !== "" ? Util.fileUrl(root.sourceImage) : ""
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                sourceSize.width: 620
+                                sourceSize.height: 190
+                            }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            visible: root.sourceImage !== ""
+                            text: root.sourceImage
+                            textFormat: Text.PlainText
+                            color: Color.popups.text
+                            opacity: 0.58
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                            elide: Text.ElideMiddle
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            text: root.sourceImage === "" ? "Choose image" : "Change image"
+                            iconText: "󰉋"
+                            leftAlign: true
+                            foreground: Color.popups.text
+                            hasCursor: root.cursorIndex === 0
+                            enabled: !root.busy
+                            onClicked: root.chooseImageRequested()
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            text: "Edit installed theme"
+                            iconText: "󰏢"
+                            leftAlign: true
+                            foreground: Color.popups.text
+                            accent: Color.accent
+                            hasCursor: root.cursorIndex === 1
+                            enabled: !root.busy
+                            onClicked: root.editThemeRequested()
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            visible: !root.sessionActive
+                            text: "Advanced runtime setup"
+                            iconText: "󰒓"
+                            leftAlign: true
+                            foreground: Color.popups.text
+                            hasCursor: root.cursorIndex === 2
+                            enabled: !root.busy
+                            tooltipText: "Review or enable the optional advanced theme bridge"
+                            onClicked: root.advancedRuntimeRequested()
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
+                            visible: root.sourceImage === ""
+                        }
+                    }
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Style.space(230)
+                    Layout.preferredHeight: Style.space(60)
                     visible: root.sourceImage !== ""
-                    radius: Style.cornerRadius
-                    color: Util.alpha(Color.background, 0.45)
+                    color: Util.alpha(Color.accent, 0.06)
                     border.width: 1
-                    border.color: Util.alpha(Color.popups.border, 0.55)
-                    clip: true
+                    border.color: Util.alpha(Color.accent, 0.28)
+                    radius: Style.space(6)
 
-                    Image {
+                    RowLayout {
                         anchors.fill: parent
-                        source: root.sourceImage !== "" ? Util.fileUrl(root.sourceImage) : ""
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        sourceSize.width: 560
-                        sourceSize.height: 230
+                        anchors.leftMargin: Style.space(12)
+                        anchors.rightMargin: Style.space(12)
+                        spacing: Style.space(10)
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: "Next: choose your workflow"
+                            color: Color.popups.text
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.bodySmall
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+
+                        Button {
+                            Layout.preferredWidth: Style.space(190)
+                            Layout.preferredHeight: Style.space(40)
+                            text: "Continue to Workflow  →"
+                            foreground: Contrast.textFor(Color.accent, Color.popups.background, Color.popups.text)
+                            accent: Color.accent
+                            background: Color.accent
+                            bordered: true
+                            hasCursor: root.cursorIndex === (root.sessionActive ? 2 : 3)
+                            enabled: !root.busy && !root.cancelBusy
+                            onClicked: root.continueRequested()
+                        }
                     }
                 }
 
-                Text {
+                Button {
                     Layout.fillWidth: true
-                    visible: root.sourceImage !== ""
-                    text: root.sourceImage
-                    textFormat: Text.PlainText
-                    color: Color.popups.text
-                    opacity: 0.58
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    elide: Text.ElideMiddle
-                    horizontalAlignment: Text.AlignHCenter
-                }
-
-                Toggle {
-                    Layout.fillWidth: true
-                    visible: root.sourceImage !== ""
-                    label: "Enable extra configs on preview"
-                    description: "Choose window, shell, and bar styling before generating."
-                    checked: root.extraConfigsEnabled
-                    hasCursor: root.sourceImage !== "" && root.cursorIndex === 1
+                    visible: root.sessionActive
+                    text: root.cancelBusy ? "Restoring original desktop…" : "Cancel session"
+                    leftAlign: true
                     foreground: Color.popups.text
-                    accent: Color.accent
-                    onClicked: root.extraConfigsToggled(!root.extraConfigsEnabled)
+                    bordered: true
+                    hasCursor: root.sessionActive && root.cursorIndex === root.actionCount - 1
+                    enabled: !root.busy && !root.cancelBusy
+                    onClicked: root.cancelRequested()
                 }
-
-                ColumnLayout {
-                    Layout.fillWidth: true
-                    spacing: Style.space(6)
-
-                    Button {
-                        Layout.fillWidth: true
-                        text: root.sourceImage === "" ? "Choose image" : "Change image"
-                        iconText: "󰉋"
-                        leftAlign: true
-                        foreground: Color.popups.text
-                        hasCursor: root.cursorIndex === 0
-                        enabled: !root.busy
-                        onClicked: root.chooseImageRequested()
-                    }
-                    Button {
-                        Layout.fillWidth: true
-                        visible: root.sourceImage !== ""
-                        text: root.busy ? "Starting…" : "> Continue"
-                        leftAlign: true
-                        foreground: Color.popups.text
-                        accent: Color.accent
-                        hasCursor: root.sourceImage !== "" && root.cursorIndex === 2
-                        enabled: !root.busy
-                        onClicked: root.continueRequested()
-                    }
-                    Button {
-                        Layout.fillWidth: true
-                        visible: root.sessionActive
-                        text: root.cancelBusy ? "Restoring original desktop…" : "Cancel session"
-                        leftAlign: true
-                        foreground: Color.popups.text
-                        bordered: true
-                        hasCursor: root.sessionActive && root.cursorIndex === root.actionCount - 1
-                        enabled: !root.busy && !root.cancelBusy
-                        onClicked: root.cancelRequested()
-                    }
-                }
-
-                Item { Layout.fillHeight: true }
 
                 Text {
                     Layout.fillWidth: true

@@ -1,0 +1,19 @@
+name: Feature request
+description: Suggest an improvement to Omagen
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and motivation
+      description: What user problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the desired behavior and any alternatives considered.
+    validations:
+      required: true

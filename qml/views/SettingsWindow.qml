@@ -4,6 +4,8 @@ import Quickshell
 import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
+import "../components/Contrast.js" as Contrast
+import "../components" as Components
 
 PanelWindow {
     id: root
@@ -19,6 +21,8 @@ PanelWindow {
     property string ansi: "3.0"
     property string brightAnsi: "4.5"
     property string errorMessage: ""
+    property bool glitchEnabled: false
+    property int glitchEpoch: 0
     property int cursorIndex: 0
     property bool inputFocused: false
     property var harmonyOptions: [
@@ -58,6 +62,11 @@ PanelWindow {
 
     visible: active
     color: "transparent"
+    Shortcut {
+        sequence: "Escape"
+        enabled: root.active
+        onActivated: root.closeRequested()
+    }
     WlrLayershell.namespace: "omagen-settings"
     WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: visible ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
@@ -77,6 +86,15 @@ PanelWindow {
         radius: Style.cornerRadius
         border.width: 1
         border.color: Color.popups.border
+
+        Components.SignalGlitch {
+            anchors.fill: parent
+            z: 10
+            enabled: root.glitchEnabled
+            triggerEpoch: root.glitchEpoch
+            accentColor: Color.accent
+            secondaryColor: Color.foreground
+        }
 
         MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; onClicked: {} }
 
@@ -262,7 +280,7 @@ PanelWindow {
                     color: Color.accent
                     opacity: root.busy ? 0.5 : 1
 
-                    Text { anchors.centerIn: parent; text: root.busy ? "Saving…" : "Save"; color: Color.background; font.family: Style.font.family; font.pixelSize: Style.font.body; font.bold: true }
+                    Text { anchors.centerIn: parent; text: root.busy ? "Saving…" : "Save"; color: Contrast.textFor(Color.accent, Color.background, Color.foreground); font.family: Style.font.family; font.pixelSize: Style.font.body; font.bold: true }
                     MouseArea {
                         anchors.fill: parent
                         enabled: !root.busy

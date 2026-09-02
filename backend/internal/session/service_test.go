@@ -1,8 +1,12 @@
 package session
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/prettyletto/omagen/backend/internal/barprofile"
 )
 
 type fakeOmarchy struct {
@@ -54,6 +58,96 @@ func TestServiceBeginAndCancel(t *testing.T) {
 	}
 	if _, err := s.Load(begin.SessionID); err == nil {
 		t.Fatal("session was not deleted")
+	}
+}
+
+func TestServiceBeginPersistsLookFeelAndTerminalIntent(t *testing.T) {
+	s := testStore(t)
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	lookFeel := LookFeelDocument{SchemaVersion: 1, Preset: "glass-blur", PresetRevision: 1, Customized: map[string]bool{"window": false, "shell": false, "bar": true, "animations": false, "terminal": false}}
+	terminal := TerminalTranslucency{SchemaVersion: 1, Mode: "preset", Opacity: 0.82, CellMode: "background"}
+	begin, err := NewService(s, fake).Begin(DefaultShellStyle(), DefaultDesktopStyle(), DefaultBarStyle(), DefaultAnimationsStyle(), lookFeel, terminal)
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, err := s.Load(begin.SessionID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.LookFeel.Preset != "glass-blur" || !record.LookFeel.Customized["bar"] {
+		t.Fatalf("Look & Feel metadata was not persisted: %#v", record.LookFeel)
+	}
+	if record.TerminalTranslucency.Mode != "preset" || record.TerminalTranslucency.Opacity != 0.82 {
+		t.Fatalf("terminal intent was not persisted: %#v", record.TerminalTranslucency)
+	}
+	if err := NewService(s, fake).Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServiceRestoresThemeBoundBarSnapshot(t *testing.T) {
+	root := t.TempDir()
+	config := filepath.Join(root, "shell.json")
+	original := []byte("{\n  \"version\": 1,\n  \"bar\": {\"layout\": {\"left\": [{\"id\": \"user.widget\", \"future\": true}]}}\n}\n")
+	if err := os.WriteFile(config, original, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	barStore := barprofile.NewStoreAt(config, filepath.Join(root, "bar-state"))
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	service := NewService(testStore(t), fake, barStore)
+	begin, err := service.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if begin.BarSnapshot == nil || begin.BarSnapshot.ConfigSHA256 == "" {
+		t.Fatalf("bar snapshot missing: %#v", begin.BarSnapshot)
+	}
+	if err := os.WriteFile(config, []byte("{\"bar\":{\"id\":\"pretty.theme.bar\"}}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := service.Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+	restored, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(restored) != string(original) {
+		t.Fatalf("bar snapshot was not restored:\nwant %q\ngot  %q", original, restored)
+	}
+}
+
+func TestServiceBeginNormalizesDesktopStyleDefaultsBeforeValidation(t *testing.T) {
+	s := testStore(t)
+	fake := &fakeOmarchy{theme: "theme", background: BackgroundRef{Kind: "theme", Path: "bg.png"}}
+	svc := NewService(s, fake)
+
+	begin, err := svc.Begin(
+		DefaultShellStyle(),
+		DesktopStyle{BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", Shape: "native", Spacing: "native", Depth: "native", Inactive: "native"},
+		DefaultBarStyle(),
+	)
+	if err != nil {
+		t.Fatalf("default desktop style was rejected: %v", err)
+	}
+	if begin.DesktopStyle.BorderSpeed != 36 || begin.DesktopStyle.BorderSize != -1 || begin.DesktopStyle.BorderSizeMode != "default" {
+		t.Fatalf("desktop speed was not normalized: %#v", begin.DesktopStyle)
+	}
+	if err := svc.Cancel(begin.SessionID); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNormalizeDesktopStyleMigratesLegacyBackdropBlur(t *testing.T) {
+	style := NormalizeDesktopStyle(DesktopStyle{
+		BorderStyle: "solid", BorderSize: -1, BorderSizeMode: "default", BorderSpeed: 36,
+		Shape: "native", Spacing: "native", Depth: "native", Inactive: "blur",
+	})
+	if style.Inactive != "frosted_balanced" {
+		t.Fatalf("legacy blur was not migrated to the balanced frosted profile: %#v", style)
+	}
+	if !style.Valid() {
+		t.Fatalf("migrated frosted profile is not valid: %#v", style)
 	}
 }
 

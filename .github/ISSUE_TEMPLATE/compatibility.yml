@@ -1,0 +1,19 @@
+name: Compatibility report
+description: Report behavior tied to Omarchy, Quickshell, Hyprland, or an application
+title: "[Compatibility]: "
+labels: ["compatibility"]
+body:
+  - type: input
+    id: versions
+    attributes:
+      label: Environment versions
+      description: Include Omarchy, Quickshell, Hyprland, and the affected application.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Behavior
+      description: Describe the affected surface and expected behavior.
+    validations:
+      required: true

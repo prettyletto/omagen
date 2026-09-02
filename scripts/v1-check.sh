@@ -5,6 +5,7 @@ ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="$ROOT/backend"
 BIN="$ROOT/bin/omagen"
 MANIFEST="$ROOT/manifest.json"
+BAR_MANIFEST="$ROOT/bar-manifest.json"
 
 fail() {
     printf '\nFAIL: %s\n' "$*" >&2
@@ -26,6 +27,18 @@ section "Repository"
 [[ -d "$BACKEND" ]] || fail "backend directory missing"
 [[ -f "$BACKEND/go.mod" ]] || fail "backend/go.mod missing"
 
+section "Architecture routing"
+"$ROOT/scripts/architecture-check.sh"
+
+section "Product documentation projection"
+python3 "$ROOT/scripts/test-product-docs-promotion.py"
+branch="$(git -C "$ROOT" branch --show-current 2>/dev/null || true)"
+if [[ "$branch" == "main" || "${GITHUB_BASE_REF:-}" == "main" || "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+    python3 "$ROOT/scripts/promote-product-docs.py" --check
+else
+    python3 "$ROOT/scripts/promote-product-docs.py" --check-source
+fi
+
 section "Go tests"
 (cd "$BACKEND" && go test ./...)
 
@@ -45,22 +58,47 @@ section "CLI smoke tests"
 "$BIN" --help >/dev/null || fail "omagen --help failed"
 "$BIN" help >/dev/null || fail "omagen help failed"
 "$BIN" demo capabilities | python3 -m json.tool >/dev/null
+"$BIN" look-feel list | python3 -m json.tool >/dev/null || fail "look-feel catalog failed"
+"$ROOT/bin/omagen-studio" --help >/dev/null
+"$ROOT/scripts/test-omagen-theme-set.sh" || fail "theme-set dispatch tests failed"
+"$ROOT/scripts/test-install-command.sh" || fail "installer command ownership tests failed"
+"$ROOT/scripts/test-lazy-studio-contract.sh" || fail "lazy Studio lifecycle contract failed"
+
+section "Marketplace preflight"
+marketplace_report="$(mktemp "${TMPDIR:-/tmp}/omagen-marketplace-report.XXXXXX.json")"
+trap 'rm -f -- "$marketplace_report"' EXIT
+python3 "$ROOT/scripts/marketplace-preflight.py" \
+    --commit "$(git -C "$ROOT" rev-parse HEAD)" \
+    --report "$marketplace_report" || fail "marketplace preflight failed"
+
+section "Shader source/QSB provenance"
+python3 "$ROOT/scripts/verify-shader-provenance.py" || fail "shader provenance check failed"
+
+section "Fresh package validation"
+"$ROOT/scripts/test-fresh-package.sh" || fail "fresh package validation failed"
 
 capabilities="$($BIN demo capabilities)" || fail "demo capabilities failed"
-python3 - "$capabilities" <<'PY'
+OMAGEN_CAPABILITIES_JSON="$capabilities" python3 - <<'PY'
 import json
+import os
 import sys
 
-data = json.loads(sys.argv[1])
+data = json.loads(os.environ["OMAGEN_CAPABILITIES_JSON"])
 for key in ("terminal", "editor", "monitor", "file_manager"):
     if key not in data:
         raise SystemExit(f"missing capability: {key}")
-if not isinstance(data["terminal"], dict) or not data["terminal"].get("command"):
-    raise SystemExit("no terminal capability available")
+if not isinstance(data["terminal"], dict):
+    raise SystemExit("invalid terminal capability")
+if not data["terminal"].get("command"):
+    if os.environ.get("OMAGEN_HEADLESS_CI") == "1":
+        print("WARNING: no terminal capability available in headless CI; resolver contract was validated", file=sys.stderr)
+    else:
+        raise SystemExit("no terminal capability available")
 PY
 
 section "Manifest"
 [[ -f "$MANIFEST" ]] || fail "manifest.json missing"
+[[ -f "$BAR_MANIFEST" ]] || fail "bar-manifest.json missing"
 python3 - "$MANIFEST" "$BIN" <<'PY'
 import json
 import subprocess
@@ -78,6 +116,24 @@ binary = json.loads(subprocess.check_output([sys.argv[2], "ping"], text=True))
 if manifest.get("version") != binary.get("version"):
     raise SystemExit(f"manifest version {manifest.get('version')!r} does not match binary version {binary.get('version')!r}")
 PY
+python3 - "$MANIFEST" "$BAR_MANIFEST" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    overlay = json.load(stream)
+with open(sys.argv[2], encoding="utf-8") as stream:
+    bar = json.load(stream)
+
+if bar.get("id") != "pretty.omagen.bar":
+    raise SystemExit(f"unexpected bar plugin id: {bar.get('id')!r}")
+if bar.get("version") != overlay.get("version"):
+    raise SystemExit(f"bar manifest version {bar.get('version')!r} does not match overlay version {overlay.get('version')!r}")
+if bar.get("kinds") != ["bar"]:
+    raise SystemExit(f"bar manifest kinds must be ['bar']: {bar.get('kinds')!r}")
+if bar.get("entryPoints", {}).get("bar") != "OmagenBar.qml":
+    raise SystemExit("bar manifest must point at OmagenBar.qml")
+PY
 
 section "Omarchy plugin validator"
 if command -v omarchy >/dev/null 2>&1; then
@@ -90,12 +146,54 @@ section "Required plugin files"
 required=(
     "Omagen.qml"
     "OmagenBarWidget.qml"
+    "OmagenBar.qml"
+    "NativeBarClone.qml"
+    "WorkspacePresentation.qml"
+    "BarModel.js"
     "manifest.json"
+    "bar-manifest.json"
     "bin/omagen"
+    "bin/omagen-theme-set"
+    "bin/omagen-studio"
+    "scripts/marketplace-preflight.py"
+    "scripts/test-marketplace-preflight.py"
+    "scripts/promote-product-docs.py"
+    "scripts/test-product-docs-promotion.py"
+    "scripts/verify-main-promotion.py"
+    "scripts/verify-shader-provenance.py"
+    "scripts/test-fresh-package.sh"
+    "docs/shader-provenance.json"
+    "docs/product/README.md"
+    "docs/product/README.authoring.md"
+    "docs/product/assets/README.md"
+    "docs/product/assets/branding/omagen-icon.png"
+    "docs/product/assets/branding/omagen-wordmark.png"
+    "docs/product/assets/demos/omagen-demo-v2.gif"
+    "docs/product/assets/social/omagen-social-preview-v2.png"
+    "docs/product/demos/README.md"
+    "docs/product/examples/README.md"
+    "docs/product/release-notes/README.md"
+    "NOTICE.md"
     "qml/services/BackendService.qml"
+    "qml/gateways/BackendCommand.qml"
+    "qml/gateways/SessionGateway.qml"
+    "qml/gateways/GenerationGateway.qml"
+    "qml/gateways/PreviewGateway.qml"
+    "qml/gateways/ApplyGateway.qml"
+    "qml/gateways/DemoGateway.qml"
+    "qml/gateways/LookFeelGateway.qml"
+    "qml/gateways/RuntimeGateway.qml"
+    "qml/gateways/ConfigurationArgs.js"
     "qml/state/SessionState.qml"
     "qml/views/SetupWindow.qml"
-    "qml/views/WorkspaceWindow.qml"
+    "qml/views/AdvancedRuntimeSetupWindow.qml"
+    "qml/views/LiveCanvasPanel.qml"
+    "qml/views/ShellDemoPanel.qml"
+    "qml/views/BarDemoPanel.qml"
+    "qml/components/ShellLab.qml"
+    "qml/components/ShellRangeField.qml"
+    "qml/components/BarDockControls.qml"
+    "qml/components/BarWorkspaceControls.qml"
 )
 for relative in "${required[@]}"; do
     [[ -e "$ROOT/$relative" ]] || fail "missing required file: $relative"

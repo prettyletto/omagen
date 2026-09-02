@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -82,15 +83,28 @@ func writeUnlockPreview(destination, unlockPath string) error {
 }
 
 func writeNormalizedPNG(destination, sourcePath string, width, height int) error {
-	file, err := os.Open(sourcePath)
+	file, err := fsutil.OpenRegularFile(sourcePath, fsutil.MaxFileBytes)
 	if err != nil {
 		return fmt.Errorf("open image: %w", err)
 	}
 	defer file.Close()
 
-	source, _, err := image.Decode(file)
+	config, format, err := image.DecodeConfig(file)
+	if err != nil {
+		return fmt.Errorf("decode image config: %w", err)
+	}
+	if err := validateImageDimensions(config.Width, config.Height); err != nil {
+		return err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return fmt.Errorf("rewind image: %w", err)
+	}
+	source, decodedFormat, err := image.Decode(file)
 	if err != nil {
 		return fmt.Errorf("decode image: %w", err)
+	}
+	if decodedFormat != format {
+		return fmt.Errorf("image format changed during decode: %s -> %s", format, decodedFormat)
 	}
 	cropped, err := centerCrop16x9(source)
 	if err != nil {
@@ -106,6 +120,18 @@ func writeNormalizedPNG(destination, sourcePath string, width, height int) error
 	}
 	if err := fsutil.AtomicWriteFile(destination, encoded.Bytes(), 0o644); err != nil {
 		return fmt.Errorf("write %s: %w", destination, err)
+	}
+	return nil
+}
+
+const maxNormalizedImagePixels int64 = 40_000_000
+
+func validateImageDimensions(width, height int) error {
+	if width <= 0 || height <= 0 {
+		return fmt.Errorf("image has invalid dimensions %dx%d", width, height)
+	}
+	if int64(width) > maxNormalizedImagePixels/int64(height) {
+		return fmt.Errorf("image is too large: %dx%d (maximum %d pixels)", width, height, maxNormalizedImagePixels)
 	}
 	return nil
 }

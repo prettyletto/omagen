@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "pretty.omagen.bar",
+  "name": "Omagen Bar",
+  "version": "2.0.0",
+  "author": "Prettyletto",
+  "license": "MIT",
+  "description": "A Quattro-compatible full bar host for Omagen BarSpecs",
+  "kinds": ["bar"],
+  "entryPoints": {
+    "bar": "OmagenBar.qml"
+  }
+}

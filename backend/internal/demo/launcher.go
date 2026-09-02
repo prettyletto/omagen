@@ -37,6 +37,29 @@ func launchDemoSlots(demoDir, ownerToken string, slots []Slot, capabilities Capa
 	if err != nil {
 		return nil, err
 	}
+	return launchDemoCommands(launches, hints, slots, before, logger)
+}
+
+func launchWindowDemoSlot(demoDir, ownerToken string, slots []Slot, capabilities Capabilities, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
+	if capabilities.Terminal.Command == "" {
+		return nil, fmt.Errorf("window demo requires a terminal capability")
+	}
+	if len(slots) == 0 {
+		slots = []Slot{SlotEditor, SlotBtop}
+	}
+	launches := make([]slotLaunch, 0, len(slots))
+	for _, slot := range slots {
+		switch slot {
+		case SlotEditor, SlotBtop:
+			launches = append(launches, slotLaunch{Slot: slot, Cmd: buildWindowCommandFor(demoDir, ownerToken, slot, capabilities)})
+		default:
+			return nil, fmt.Errorf("window demo does not support slot %s", slot)
+		}
+	}
+	return launchDemoCommands(launches, launchHints{PIDs: map[Slot]int{}, OwnerToken: ownerToken}, slots, before, logger)
+}
+
+func launchDemoCommands(launches []slotLaunch, hints launchHints, slots []Slot, before map[string]clientInfo, logger *launchLogger) (map[Slot]string, error) {
 	terminalExits := make(chan processExit, 4)
 	hints.terminalExits = terminalExits
 	for _, launch := range launches {
@@ -140,6 +163,29 @@ func buildEditorCommandFor(demoDir, token string, capabilities Capabilities) (*e
 	cmd.Dir = demoDir
 	return cmd, capabilities.Editor.Command
 }
+
+func buildWindowCommandFor(demoDir, token string, slot Slot, capabilities Capabilities) *exec.Cmd {
+	studioBinary := "omagen-studio"
+	if executable, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(executable), "omagen-studio")
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			studioBinary = candidate
+		}
+	}
+	return withColorTerminal(terminalCommand(capabilities.Terminal, demoAppID(token, slot), demoDir, studioBinary))
+}
+
+func withColorTerminal(cmd *exec.Cmd) *exec.Cmd {
+	filtered := make([]string, 0, len(cmd.Env)+2)
+	for _, entry := range cmd.Env {
+		if strings.HasPrefix(entry, "NO_COLOR=") || strings.HasPrefix(entry, "TERM=") || strings.HasPrefix(entry, "COLORTERM=") {
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	cmd.Env = append(filtered, "TERM=xterm-256color", "COLORTERM=truecolor")
+	return cmd
+}
 func buildMonitorCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.Monitor.Command != "" {
 		return terminalCommand(capabilities.Terminal, demoAppID(token, SlotBtop), dir, capabilities.Monitor.Command)
@@ -161,13 +207,32 @@ func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cm
 		if capabilities.FileManager.Command == "xdg-open" {
 			cmd := exec.Command(capabilities.FileManager.Command, dir)
 			cmd.Dir = dir
-			return cmd
+			return detachGUICommand(cmd)
+		}
+		// Omarchy launches GUI applications through uwsm so they remain in the
+		// user graphical scope and inherit the compositor/session startup
+		// context. A direct Nautilus process can map briefly and then disappear
+		// or be handed back to another workspace when its GApplication instance
+		// is not launched through that native boundary.
+		if uwsm, err := exec.LookPath("uwsm-app"); err == nil {
+			cmd := exec.Command(uwsm, "--", capabilities.FileManager.Command, "--new-window", dir)
+			cmd.Dir = dir
+			return detachGUICommand(cmd)
 		}
 		cmd := exec.Command(capabilities.FileManager.Command, "--new-window", dir)
 		cmd.Dir = dir
-		return cmd
+		return detachGUICommand(cmd)
 	}
 	return terminalCommand(capabilities.Terminal, demoAppID(token, SlotFiles), dir, "/bin/bash", "-lc", fileListingScript())
+}
+
+func detachGUICommand(cmd *exec.Cmd) *exec.Cmd {
+	// The CLI may be invoked from a short-lived shell (for example from the
+	// panel's backend call). GUI launchers such as uwsm-app otherwise inherit
+	// that process group and can receive its terminal hangup when `demo open`
+	// returns, taking the Nautilus client with them.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd
 }
 
 func terminalCommand(capability ApplicationCapability, appID, dir string, command string, args ...string) *exec.Cmd {
@@ -186,8 +251,17 @@ func terminalCommand(capability ApplicationCapability, appID, dir string, comman
 }
 
 func sourceViewerScript(sample string) string {
-	return fmt.Sprintf("if command -v bat >/dev/null 2>&1; then bat --style=numbers %q; elif command -v less >/dev/null 2>&1; then sed -n '1,120p' %q | less; else sed -n '1,120p' %q; fi\nprintf '\\n'\nexec \"${SHELL:-/bin/bash}\" -l", sample, sample, sample)
+	quotedSample := shellQuote(sample)
+	return fmt.Sprintf("if command -v bat >/dev/null 2>&1; then bat --style=numbers %s; elif command -v less >/dev/null 2>&1; then sed -n '1,120p' %s | less; else sed -n '1,120p' %s; fi\nprintf '\\n'\nexec \"${SHELL:-/bin/bash}\" -l", quotedSample, quotedSample, quotedSample)
 }
+
+// shellQuote returns a single-quoted POSIX shell word. Go's %q is a Go
+// string literal, not a shell literal: characters such as $ and ` retain
+// expansion semantics inside its double quotes.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\\''") + "'"
+}
+
 func systemInfoScript() string {
 	return "printf 'SYSTEM\\n\\n'; uptime; printf '\\nMEMORY\\n'; free -h; printf '\\nDISK\\n'; df -h /; printf '\\nPROCESSES\\n'; ps -eo pid,comm,%cpu,%mem --sort=-%cpu | head -12; exec \"${SHELL:-/bin/bash}\" -l"
 }
