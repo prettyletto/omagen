@@ -87,7 +87,7 @@ func (c Composition) LookFeelDocument() session.LookFeelDocument {
 func Catalog() []CatalogEntry {
 	return []CatalogEntry{
 		{ID: PresetNative, Name: "Omarchy Native", Description: "Preserve native Omarchy surfaces and terminal opacity", Revision: 1},
-		{ID: PresetGlassBlur, Name: "Glass Blur", Description: "Soft frosted depth, floating glass, an LCD clock, dot workspaces, and gliding motion", Revision: 8},
+		{ID: PresetGlassBlur, Name: "Glass Blur", Description: "Soft frosted depth, floating glass, an LCD clock, dot workspaces, and gliding motion", Revision: 9},
 		{ID: PresetFocused, Name: "Focused", Description: "Grounded windows, a practical clock dock, numbered workspaces, and immediate motion", Revision: 3},
 		{ID: PresetCyberpunk, Name: "Cyberpunk Glitch", Description: "Readable dark glass, orbital bar geometry, Roman workspaces, digital motion, and event-bound RGB tearing", Revision: 7},
 		{ID: PresetSpectral, Name: "Spectral Shift", Description: "Prismatic shell signals, a segmented ribbon, lettered workspaces, an LCD instrument face, and cinematic refraction", Revision: 2},
@@ -121,7 +121,7 @@ func Resolve(preset string) (Composition, error) {
 	case PresetNative:
 		// The defaults above are intentionally a no-op for native Omarchy.
 	case PresetGlassBlur:
-		composition.PresetRevision = 8
+		composition.PresetRevision = 9
 		composition.Window = glassWindow()
 		composition.Shell = glassShell()
 		composition.Bar = glassBar()
@@ -271,7 +271,7 @@ func (c Composition) Validate() error {
 
 func glassWindow() session.DesktopStyle {
 	style := session.DefaultDesktopStyle()
-	opacity := 72
+	opacity := 82
 	style.WindowOpacity = &opacity
 	style.BorderStyle = "blend"
 	style.Shape = "rounded"

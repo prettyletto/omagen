@@ -24,6 +24,19 @@ prepared. The stable promotion may copy the approved exact asset to the
 repository-root `preview.png` used by marketplace tooling; do not change the
 image after the stable commit is submitted for verification.
 
+## Hero demo
+
+The current v2 hero workflow recording is
+`demos/omagen-demo-v2.gif`. It preserves the full 51.9-second capture at
+30 fps and 960×540, with audio removed for silent README playback. Keep the
+original MP4 as the source of truth and do not speed up the workflow merely to
+make the GIF shorter.
+
+Because this full-fidelity GIF is approximately 19 MB, it is intentionally
+kept as a product asset for now. After the stable release, a GitHub Release
+asset can become the canonical hosted copy if the repository would benefit
+from a smaller clone and checkout footprint.
+
 The [asset generation checklist](../ASSET-CHECKLIST.md) defines the filenames,
 capture goals, dimensions, and provenance required before the stable release.
 

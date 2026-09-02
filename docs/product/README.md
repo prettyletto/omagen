@@ -24,7 +24,7 @@ without committing to it, and apply it safely when it feels right.
 > workflow projects this document to the repository root for `main`.
 <!-- omagen-product-source-only:end -->
 
-![Omagen workflow preview](../../assets/omagen-demo.gif)
+![Omagen workflow preview](assets/demos/omagen-demo-v2.gif)
 
 ## What is Omagen?
 
