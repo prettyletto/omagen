@@ -703,7 +703,7 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	}
 	writeCommand("omarchy-theme-set-templates", "exit 0")
 	writeCommand("omarchy-shell", "printf '%s\\n' \"$@\" >> \"$HOME/commands.log\"")
-	writeCommand("omarchy-restart-terminal", "printf terminal >> \"$HOME/allowlist.log\"; (sleep 0.50; printf finished > \"$HOME/post-commit-finished\") & exit 1")
+	writeCommand("omarchy-restart-terminal", "printf terminal >> \"$HOME/allowlist.log\"; (sleep 1.00; printf finished > \"$HOME/post-commit-finished\") & exit 1")
 	writeCommand("omarchy-theme-set-browser", "printf browser >> \"$HOME/allowlist.log\"")
 	writeCommand("omarchy-hook", "printf hook >> \"$HOME/disallowed.log\"")
 	writeCommand("omarchy-restart-hyprctl", "printf hyprctl >> \"$HOME/disallowed.log\"")
@@ -720,7 +720,7 @@ func TestStudioThemeSetPreviewUsesAllowlistWithoutHooks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("studio-theme-set preview: %v: %s", err, output)
 	}
-	if elapsed := time.Since(started); elapsed >= 400*time.Millisecond {
+	if elapsed := time.Since(started); elapsed >= 750*time.Millisecond {
 		t.Fatalf("critical preview waited for detached post-commit work: %v", elapsed)
 	}
 
