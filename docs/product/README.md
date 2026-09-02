@@ -140,9 +140,9 @@ Omagen's recovery or uninstall path first.
 
 ## See it in action
 
-[![Watch the Omagen walkthrough](https://img.youtube.com/vi/Af06-XsdBHA/maxresdefault.jpg)](https://youtu.be/Af06-XsdBHA)
+[![Watch the Omagen walkthrough](assets/social/omagen-walkthrough-thumbnail-v2.png)](https://youtu.be/juDJe0zWwZI)
 
-Watch the [full Omagen walkthrough on YouTube](https://youtu.be/Af06-XsdBHA)
+Watch the [full Omagen walkthrough on YouTube](https://youtu.be/juDJe0zWwZI)
 for the image-to-theme flow, preview paths, Demo, and Apply experience.
 
 ## Bar examples

@@ -24,6 +24,12 @@ prepared. The stable promotion may copy the approved exact asset to the
 repository-root `preview.png` used by marketplace tooling; do not change the
 image after the stable commit is submitted for verification.
 
+The v2 YouTube walkthrough thumbnail is
+`social/omagen-walkthrough-thumbnail-v2.png`. It is a 1920×1080 product
+thumbnail linked from the canonical product README to the complete walkthrough
+video. Keep the thumbnail and video URL together when the product README is
+promoted to `main`.
+
 ## Hero demo
 
 The current v2 hero workflow recording is
