@@ -385,6 +385,7 @@ Item {
             root.cancelPreSessionWorkflow()
             return
         }
+        imagePicker.cancel();
         opened = false;
         settingsOpen = false;
         runtimeSetupOpen = false;
@@ -967,6 +968,7 @@ Item {
     function cancelPreSessionWorkflow() {
         if (!wizardController.workflowStepActive)
             return false
+        imagePicker.cancel()
         wizardController.cancelWorkflow()
         sourceImage = ""
         workflowMode = "fast"

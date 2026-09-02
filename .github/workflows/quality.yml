@@ -31,7 +31,11 @@ jobs:
           runner="$(command -v qmltestrunner || true)"
           test -n "$runner" || runner=/usr/lib/qt6/bin/qmltestrunner
           test -x "$runner"
-          xvfb-run --auto-servernum env QT_QUICK_BACKEND=software "$runner" -input qml/tests
+          # The service test exercises cancellation through a small CI-only
+          # Quickshell.Io double; the production plugin still uses Quickshell.
+          xvfb-run --auto-servernum env \
+            QML2_IMPORT_PATH="$GITHUB_WORKSPACE/.github/qml-test-fixtures" \
+            QT_QUICK_BACKEND=software "$runner" -input qml/tests
 
   documentation:
     name: Documentation checks

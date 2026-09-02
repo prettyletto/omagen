@@ -8,7 +8,7 @@ image → palette directions → live preview or Demo → permanent theme
 ~~~
 
 For a visual tour of the complete workflow, watch the [Omagen video
-walkthrough on YouTube](https://youtu.be/Af06-XsdBHA).
+walkthrough on YouTube](https://youtu.be/juDJe0zWwZI).
 
 ## Open Omagen
 
