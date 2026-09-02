@@ -4,7 +4,11 @@ set -Eeuo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 TEMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/omagen-fresh-package.XXXXXXXX")"
 cleanup() {
-    rm -rf -- "$TEMP_ROOT"
+    if ! rm -rf -- "$TEMP_ROOT"; then
+        # The fixture has already passed its checks. Do not turn a runner
+        # cleanup race into a false validation failure or hide the real result.
+        printf 'fresh package: cleanup warning: could not remove %s\n' "$TEMP_ROOT" >&2
+    fi
 }
 trap cleanup EXIT
 
