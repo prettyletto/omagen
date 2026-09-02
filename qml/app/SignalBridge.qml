@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import "../services" as Services
 
 Item {
     id: root
@@ -25,6 +26,7 @@ Item {
     property string observedBackgroundPath: ""
     property bool backgroundSignalVisible: false
     property int backgroundSignalEpoch: 0
+    property bool ignoreBackgroundResolveExit: false
 
     function triggerShellGlitch(eventName) {
         if (!root.glitchEnabled)
@@ -143,9 +145,32 @@ Item {
     Process {
         id: backgroundResolveProcess
         command: ["readlink", "-f", root.currentBackgroundLink]
-        stdout: StdioCollector {
-            waitForEnd: true
-            onStreamFinished: root.observeCurrentBackground(text)
+        stdout: Services.BoundedOutputParser { id: backgroundResolveOutput }
+        stderr: Services.BoundedOutputParser { id: backgroundResolveError }
+
+        onStarted: {
+            backgroundResolveOutput.reset()
+            backgroundResolveError.reset()
+            backgroundResolveWatchdog.restart()
+        }
+
+        onExited: {
+            backgroundResolveWatchdog.stop()
+            if (!root.ignoreBackgroundResolveExit)
+                root.observeCurrentBackground(backgroundResolveOutput.text)
+            root.ignoreBackgroundResolveExit = false
+        }
+    }
+
+    Timer {
+        id: backgroundResolveWatchdog
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            if (!backgroundResolveProcess.running)
+                return
+            root.ignoreBackgroundResolveExit = true
+            backgroundResolveProcess.running = false
         }
     }
 
