@@ -1,7 +1,7 @@
 package omarchy
 
 import (
-	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/prettyletto/omagen/backend/internal/fsutil"
+	"github.com/prettyletto/omagen/backend/internal/processutil"
 	"github.com/prettyletto/omagen/backend/internal/session"
 	"golang.org/x/sys/unix"
 )
@@ -30,6 +31,7 @@ type ThemeInfo struct {
 const (
 	maxStudioLogBytes        int64 = 1 << 20
 	omagenPreviewThemePrefix       = "omagen-preview-"
+	omarchyQueryTimeout            = 5 * time.Second
 )
 
 type Client struct {
@@ -79,15 +81,11 @@ func (c *Client) CurrentTheme() (string, error) {
 // ListThemes delegates discovery to Omarchy so stock and user-installed
 // themes follow the same precedence rules as the native switcher.
 func (c *Client) ListThemes() ([]ThemeInfo, error) {
-	command := exec.Command("omarchy", "theme", "list")
-	var output bytes.Buffer
-	command.Stdout = &output
-	command.Stderr = c.stderr
-	command.Env = appendOmarchyEnvironment(os.Environ())
-	if err := command.Run(); err != nil {
+	output, err := c.runOmarchyQuery("theme", "list")
+	if err != nil {
 		return nil, fmt.Errorf("list Omarchy themes: %w", err)
 	}
-	lines := strings.Split(strings.ReplaceAll(output.String(), "\r\n", "\n"), "\n")
+	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
 	result := make([]ThemeInfo, 0, len(lines))
 	seen := make(map[string]struct{})
 	for _, line := range lines {
@@ -146,19 +144,15 @@ func (c *Client) ThemeDir(name string) (string, error) {
 	if name == "" || strings.ContainsAny(name, "\r\n") {
 		return "", fmt.Errorf("invalid theme name")
 	}
-	command := exec.Command("omarchy", "theme", "dir", name)
-	var output bytes.Buffer
-	command.Stdout = &output
-	command.Stderr = c.stderr
-	command.Env = appendOmarchyEnvironment(os.Environ())
-	if err := command.Run(); err != nil {
+	output, err := c.runOmarchyQuery("theme", "dir", name)
+	if err != nil {
 		return "", fmt.Errorf("resolve Omarchy theme directory: %w", err)
 	}
-	path := strings.TrimSpace(output.String())
+	path := strings.TrimSpace(output)
 	if !filepath.IsAbs(path) || path == "/" {
 		return "", fmt.Errorf("Omarchy returned an invalid theme directory")
 	}
-	path, err := filepath.Abs(path)
+	path, err = filepath.Abs(path)
 	if err != nil {
 		return "", err
 	}
@@ -170,6 +164,16 @@ func (c *Client) ThemeDir(name string) (string, error) {
 		return "", fmt.Errorf("theme directory is not a directory")
 	}
 	return path, nil
+}
+
+func (c *Client) runOmarchyQuery(args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), omarchyQueryTimeout)
+	defer cancel()
+	stdout, stderr, err := processutil.RunWithEnv(ctx, appendOmarchyEnvironment(os.Environ()), "omarchy", args...)
+	if c.stderr != nil && strings.TrimSpace(stderr) != "" {
+		_, _ = io.WriteString(c.stderr, stderr)
+	}
+	return stdout, err
 }
 
 func themeSlug(name string) string {
@@ -534,6 +538,13 @@ func (c *Client) runThemeSet(theme, logPath string, environment []string, timeou
 			}
 		}
 	}
+	if studioMode == "" {
+		resolved, err := processutil.Resolve(command)
+		if err != nil {
+			return 0, false, fmt.Errorf("resolve Omarchy theme command: %w", err)
+		}
+		command = resolved
+	}
 	cmd := exec.Command(command, arguments...)
 	cmd.Env = replaceEnvironment(appendOmarchyEnvironment(os.Environ()), environment...)
 	cmd.Stdout = logWriter
@@ -679,7 +690,11 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 			forceRefresh = filepath.Clean(currentPath) == filepath.Clean(path)
 		}
 	}
-	cmd := exec.Command("omarchy", "theme", "bg", "set", path)
+	omarchyCommand, err := processutil.Resolve("omarchy")
+	if err != nil {
+		return fmt.Errorf("resolve Omarchy theme command: %w", err)
+	}
+	cmd := exec.Command(omarchyCommand, "theme", "bg", "set", path)
 	cmd.Env = appendOmarchyEnvironment(os.Environ())
 	cmd.Stdout = c.stderr
 	cmd.Stderr = c.stderr
@@ -691,7 +706,7 @@ func (c *Client) RestoreBackground(background session.BackgroundRef) error {
 	// paths compare the path string, so they can ignore a changed file behind
 	// that pathname. When that happens, the detour below gives setInstant a
 	// distinct pathname before handing it the restored target.
-	shell, err := exec.LookPath("omarchy-shell")
+	shell, err := processutil.Resolve("omarchy-shell")
 	if err != nil {
 		return nil
 	}

@@ -7,6 +7,7 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "BarModel.js" as BarModel
+import "qml/services" as Services
 
 Item {
   id: root
@@ -1987,9 +1988,34 @@ Item {
     Process {
       id: customProc
       command: ["bash", "-lc", String(customRoot.setting("exec", ""))]
-      stdout: StdioCollector {
-        waitForEnd: true
-        onStreamFinished: customRoot.update(text)
+      stdout: Services.BoundedOutputParser { id: customOutputBuffer }
+      stderr: Services.BoundedOutputParser { id: customErrorBuffer }
+
+      onStarted: {
+        customOutputBuffer.reset()
+        customErrorBuffer.reset()
+        customWatchdog.restart()
+      }
+
+      onExited: {
+        customWatchdog.stop()
+        if (!customProc.ignoreNextExit)
+          customRoot.update(customOutputBuffer.text)
+        customProc.ignoreNextExit = false
+      }
+
+      property bool ignoreNextExit: false
+    }
+
+    Timer {
+      id: customWatchdog
+      interval: 2500
+      repeat: false
+      onTriggered: {
+        if (!customProc.running)
+          return
+        customProc.ignoreNextExit = true
+        customProc.running = false
       }
     }
 

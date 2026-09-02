@@ -1,14 +1,18 @@
 package demo
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prettyletto/omagen/backend/internal/processutil"
 )
+
+const hyprlandCommandTimeout = 5 * time.Second
 
 type workspaceRef struct {
 	ID   int    `json:"id"`
@@ -37,11 +41,17 @@ type clientInfo struct {
 }
 
 func hyprJSON(dst any, args ...string) error {
-	data, err := exec.Command("hyprctl", append([]string{"-j"}, args...)...).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), hyprlandCommandTimeout)
+	defer cancel()
+	data, stderr, err := processutil.Run(ctx, "hyprctl", append([]string{"-j"}, args...)...)
 	if err != nil {
+		message := strings.TrimSpace(stderr)
+		if message != "" {
+			return fmt.Errorf("hyprctl %s: %w: %s", strings.Join(args, " "), err, message)
+		}
 		return fmt.Errorf("hyprctl %s: %w", strings.Join(args, " "), err)
 	}
-	if err := json.Unmarshal(data, dst); err != nil {
+	if err := json.Unmarshal([]byte(data), dst); err != nil {
 		return fmt.Errorf("decode hyprctl %s: %w", strings.Join(args, " "), err)
 	}
 	return nil
@@ -77,9 +87,12 @@ func luaString(value string) string {
 }
 
 func hyprLuaDispatch(expression string) error {
-	data, err := exec.Command("hyprctl", "dispatch", expression).CombinedOutput()
+	ctx, cancel := context.WithTimeout(context.Background(), hyprlandCommandTimeout)
+	defer cancel()
+	data, stderr, err := processutil.Run(ctx, "hyprctl", "dispatch", expression)
 	if err != nil {
-		return fmt.Errorf("hyprctl dispatch %s: %w: %s", expression, err, strings.TrimSpace(string(data)))
+		message := strings.TrimSpace(strings.TrimSpace(stderr) + "\n" + strings.TrimSpace(data))
+		return fmt.Errorf("hyprctl dispatch %s: %w: %s", expression, err, message)
 	}
 	return nil
 }
