@@ -85,7 +85,7 @@ window. Shadow · Preserve transparency adds only a lower-alpha compositor
 shadow and leaves Omarchy/application opacity untouched. Frosted backdrop uses
 the existing translucent surface and inherits the current application/Omarchy
 opacity policy when selected as a standalone Window style; the Glass Blur
-preset explicitly adds `0.72` active and inactive window opacity so the full
+preset explicitly adds `0.82` active and inactive window opacity so the full
 desktop treatment remains visibly translucent.
 background blur. The generated profiles use `ignore_opacity = true` so the
 inactive opacity does not collapse the backdrop sample into a dark shadow.

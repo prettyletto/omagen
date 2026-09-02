@@ -83,12 +83,12 @@
       "id": "glass-blur",
       "name": "Glass Blur",
       "author": "Omagen",
-      "version": 8,
+      "version": 9,
       "description": "Soft frosted depth, floating glass, an LCD clock, dot workspaces, and gliding motion",
       "recipe": {
         "schema_version": 1,
         "preset": "glass-blur",
-        "preset_revision": 8,
+        "preset_revision": 9,
         "customized": {
           "animations": false,
           "bar": false,
@@ -101,7 +101,7 @@
           "border_size": -1,
           "border_size_mode": "default",
           "border_speed": 36,
-          "window_opacity": 72,
+          "window_opacity": 82,
           "shape": "rounded",
           "spacing": "airy",
           "depth": "shadow",

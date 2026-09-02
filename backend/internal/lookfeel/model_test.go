@@ -24,7 +24,7 @@ func TestCatalogContainsStableInitialPresets(t *testing.T) {
 			t.Fatalf("catalog[%d] = %q, want %q", index, entries[index].ID, id)
 		}
 	}
-	if entries[1].Revision != 8 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 1 || entries[7].Revision != 4 || entries[8].Revision != 2 || entries[9].Revision != 4 || entries[10].Revision != 6 || entries[11].Revision != 3 || entries[12].Revision != 2 {
+	if entries[1].Revision != 9 || entries[2].Revision != 3 || entries[3].Revision != 7 || entries[4].Revision != 2 || entries[5].Revision != 3 || entries[6].Revision != 1 || entries[7].Revision != 4 || entries[8].Revision != 2 || entries[9].Revision != 4 || entries[10].Revision != 6 || entries[11].Revision != 3 || entries[12].Revision != 2 {
 		t.Fatalf("catalog order = %#v", entries)
 	}
 }
@@ -173,7 +173,7 @@ func TestResolveGlassBlurComposesFourEnginesAndTerminalIntent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if composition.PresetRevision != 8 || composition.Window.Active != "frosted_light" || composition.Window.Inactive != "frosted_light" {
+	if composition.PresetRevision != 9 || composition.Window.WindowOpacity == nil || *composition.Window.WindowOpacity != 82 || composition.Window.Active != "frosted_light" || composition.Window.Inactive != "frosted_light" {
 		t.Fatalf("window glass recipe = %#v", composition.Window)
 	}
 	if composition.Shell.Preset != "glass" || composition.Shell.Detail != "edge" {

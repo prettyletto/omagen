@@ -9,7 +9,7 @@ assets have been selected and all links have been updated.
 
 | Item | Suggested location | What to produce | Status |
 | --- | --- | --- | --- |
-| Hero workflow animation | `assets/omagen-demo.gif` or a new v2 filename | A short image → directions → Preview/Demo → Apply sequence | Existing baseline; recapture for v2 |
+| Hero workflow animation | `docs/product/assets/demos/omagen-demo-v2.gif` | Full image → directions → Preview/Demo → Apply sequence at readable quality | Captured at 30 fps and 960×540; keep local until release hosting is available |
 | Walkthrough thumbnail | `docs/product/assets/` | A clean 16:9 thumbnail for the YouTube walkthrough | Needs v2 capture |
 | Setup screenshots | `assets/screenshots/` or `docs/product/assets/` | Choose image, first launch, and settings | Existing baseline; review for v2 |
 | Palette screenshots | Same | Gallery with all six directions and one selected direction | Existing baseline; review for v2 |

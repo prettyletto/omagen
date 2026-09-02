@@ -218,7 +218,7 @@ Item {
         Components.ShellRangeField {
             Layout.fillWidth: true
             label: "All windows"
-            description: "Shared steady-state opacity for active and inactive windows. The selected preset or reopened theme supplies the starting and Reset value; Glass Blur is 72%."
+            description: "Shared steady-state opacity for active and inactive windows. The selected preset or reopened theme supplies the starting and Reset value; Glass Blur is 82%."
             value: String(root.desktopStyle.windowOpacity !== undefined ? root.desktopStyle.windowOpacity : root.windowOpacityDefault)
             fallback: root.windowOpacityDefault
             minimum: 0
