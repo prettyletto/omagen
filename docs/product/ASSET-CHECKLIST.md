@@ -5,7 +5,7 @@ kept as a useful baseline; replace or supplement it deliberately after each
 new capture is reviewed. Do not delete the current gallery until replacement
 assets have been selected and all links have been updated.
 
-## Required before the stable `main` promotion
+## Stable snapshot status
 
 | Item | Suggested location | What to produce | Status |
 | --- | --- | --- | --- |
@@ -31,18 +31,22 @@ assets have been selected and all links have been updated.
 5. An interrupted Apply/recovery clip or still sequence.
 6. A before/after desktop pair using the same source wallpaper.
 
-## Remaining evidence before stable release
+## Remaining evidence before marketplace submission
 
-The maintainer considers the current live-desktop evidence sufficient for the
-v2 product presentation. The following release records still need to be
-attached to the exact stable commit:
+The stable v2 product snapshot is now in `main` at
+`92ff73ac17211755dd6790a89519371717eaeacf`, tagged `v2.0.0`. The maintainer
+considers the current live-desktop evidence sufficient for the v2 product
+presentation. The following records still need to be attached before
+marketplace submission:
 
 - At least five independent installations, two upgrades, and one interrupted
   session recovery run across the supported Omarchy versions.
 - Asset-license and redistribution confirmation recorded in
   [`assets/PROVENANCE.md`](assets/PROVENANCE.md).
-- Final marketplace preview and preflight report bound to the immutable stable
-  `main` SHA.
+- Final marketplace preview and the `review-required`, zero-finding preflight
+  report bound to the immutable stable `main` SHA. The report is uploaded as
+  the `marketplace-preflight-92ff73ac17211755dd6790a89519371717eaeacf` artifact
+  on the [exact-main CI run](https://github.com/prettyletto/omagen/actions/runs/33668731439).
 
 ## Capture rules
 

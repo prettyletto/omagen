@@ -52,9 +52,10 @@ capture goals, dimensions, and provenance required before the stable release.
 The [provenance ledger](PROVENANCE.md) records the source and release status
 of the current branding, screenshots, recordings, and example pairs.
 
-Before promotion, every referenced asset must be present in the exact commit,
-have a reviewable license/provenance, and stay within the marketplace preview
-limits when used as a listing preview.
+Before marketplace submission or any later stable asset update, every
+referenced asset must be present in the exact commit, have reviewable
+license/provenance, and stay within the marketplace preview limits when used as
+a listing preview.
 
 ## Setup walkthrough screenshots
 
