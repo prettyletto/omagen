@@ -11,10 +11,10 @@ assets have been selected and all links have been updated.
 | --- | --- | --- | --- |
 | Hero workflow animation | `docs/product/assets/demos/omagen-demo-v2.gif` | Full image → directions → Preview/Demo → Apply sequence at readable quality | Captured at 30 fps and 960×540; keep local until release hosting is available |
 | Walkthrough thumbnail | `docs/product/assets/` | A clean 16:9 thumbnail for the YouTube walkthrough | Needs v2 capture |
-| Setup screenshots | `assets/screenshots/` or `docs/product/assets/` | Choose image, first launch, and settings | Existing baseline; review for v2 |
-| Palette screenshots | Same | Gallery with all six directions and one selected direction | Existing baseline; review for v2 |
-| Live Canvas screenshots | Same | Fast path, In-depth path, and Preview/Test live | Needs v2 capture |
-| Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Needs v2 capture |
+| Setup screenshots | `assets/screenshots/` or `docs/product/assets/` | Choose image, first launch, and settings | v2 sequence captured in `assets/screenshots/setup-v2/` |
+| Palette screenshots | Same | Gallery with all six directions and one selected direction | v2 generated gallery and Balanced selection captured |
+| Live Canvas screenshots | Same | Fast path, In-depth path, and Preview/Test live | In-depth path captured; Fast path and Test live still needed |
+| Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Demo Studio and focused Window Demo captured; Full Demo still needed |
 | Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Needs v2 capture |
 | Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Existing baseline; review for v2 |
 | Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Existing baseline; curate v2 set |

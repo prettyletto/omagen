@@ -43,3 +43,18 @@ capture goals, dimensions, and provenance required before the stable release.
 Before promotion, every referenced asset must be present in the exact commit,
 have a reviewable license/provenance, and stay within the marketplace preview
 limits when used as a listing preview.
+
+## Setup walkthrough screenshots
+
+The curated v2 setup walkthrough is in
+[`screenshots/setup-v2/`](screenshots/setup-v2/). It was captured on workspace
+5 from a reversible live session using one source image, then restored to the
+original desktop before the capture was accepted. The sequence covers image
+selection, workflow choice, palette generation, Balanced selection, Look &
+Feel, Glass Blur, Advanced, Demo, final review, and restoration.
+
+The public copies are resized to 1600×1000 for documentation and redact the
+local home-directory path visible in the file chooser. The original captures
+remain outside the product asset tree under the ignored UI-test workspace.
+These screenshots document the product flow; they are not evidence of a
+stable release or a marketplace security certification.
