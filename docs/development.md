@@ -47,8 +47,10 @@ bin/omagen                Bundled runtime backend binary
 demo/                     Deterministic Demo workspace assets
 assets/                   README and documentation media
 docs/                     User and contributor guides
+docs/product/             Canonical product README, assets, demos, and release docs
 docs/development/         Focused developer runbooks and health notes
 scripts/v1-check.sh       Full validation gate
+scripts/promote-product-docs.py  Stable README projection and link validation
 dev-install.sh            Local development installer
 uninstall.sh              Complete local/plugin-state uninstaller
 ~~~

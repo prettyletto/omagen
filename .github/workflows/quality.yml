@@ -49,5 +49,13 @@ jobs:
       - name: Validate relative links
         run: python3 scripts/check-doc-links.py
 
+      - name: Validate canonical product documentation source
+        if: github.base_ref == 'dev' || github.ref == 'refs/heads/dev'
+        run: python3 scripts/promote-product-docs.py --check-source
+
+      - name: Validate stable README projection
+        if: github.base_ref == 'main' || github.ref == 'refs/heads/main'
+        run: python3 scripts/promote-product-docs.py --check
+
       - name: Build documentation
         run: mdbook build
