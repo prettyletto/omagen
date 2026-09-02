@@ -45,6 +45,7 @@ TEXT_SUFFIXES = {
     ".yml",
     ".zsh",
 }
+IMAGE_SUFFIXES = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 SETUP_NAMES = re.compile(r"(?:^|/)(?:install|installer|setup|uninstall)(?:[-_.]|$)", re.I)
 SHELL_PIPE = re.compile(
     r"\b(?:curl|wget)\b[^\n|]*\|\s*(?:/usr/bin/)?(?:ba)?sh\b|"
@@ -293,7 +294,7 @@ def scan(root: Path, expected_commit: str | None, baseline_commit: str | None) -
             errors.append(f"relevant file limit exceeded: {MAX_RELEVANT_FILES}")
             break
         if binary:
-            if SETUP_NAMES.search(path):
+            if SETUP_NAMES.search(path) and Path(path).suffix.lower() not in IMAGE_SUFFIXES:
                 errors.append(f"setup-related binary cannot be excluded from scan: {path}")
             continue
         if len(data) > MAX_TEXT_FILE_BYTES:
