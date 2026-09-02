@@ -16,6 +16,12 @@ nightly → dev → release candidate → main → marketplace verification
 - `main` is the stable product branch. It contains the user-facing product
   README, demos, installation, usage, recovery, and release notes.
 
+The root README is intentionally different by branch. `nightly` and `dev` keep
+their developer README. Product-facing material is authored canonically under
+[`docs/product/`](../product/README.md), then projected to the root during a
+controlled release promotion. This keeps developer navigation stable while
+making the stable branch present one coherent product.
+
 Never promote `nightly` directly to `main`. A promotion pull request is the
 audit boundary between each branch.
 
@@ -27,14 +33,36 @@ The `v2.0.0` release uses these immutable states:
 2. The validated `dev` head receives a candidate tag such as `v2.0.0-rc.1`.
 3. Candidate testing is repeated with a new tag whenever the source commit
    changes.
-4. The final reviewed `dev` head is promoted to `main`.
-5. The exact stable `main` commit receives the `v2.0.0` tag.
-6. Only that exact full SHA is submitted to or updated in the Omarchy plugin
+4. The release workflow creates a `release/*` branch from that exact `dev`
+   head, projects the canonical product README to the repository root, and
+   opens one reviewed pull request into `main`.
+5. The complete generated release branch, including all product code and
+   product documentation, is merged into `main`.
+6. The exact stable `main` commit receives the `v2.0.0` tag.
+7. Only that exact full SHA is submitted to or updated in the Omarchy plugin
    marketplace.
 
 Both `manifest.json` and `bar-manifest.json` are one source-wide plugin set.
 Their IDs, entry points, ownership, and synchronized versions must remain
 unchanged during candidate approval unless the release is restarted.
+
+## Product documentation promotion
+
+Product documentation is prepared in `docs/product/` on `nightly`, reviewed
+and validated on `dev`, and is not copied into the developer README. When the
+validated `dev` head is ready, run the **Product documentation promotion**
+workflow from the repository's Actions page with:
+
+- the exact full SHA of the current `dev` head;
+- the release version, such as `v2.0.0`; and
+- a new `release/<version>` branch name.
+
+The workflow refuses a moved or mutable `dev` source, validates product links,
+projects the canonical README to the repository root, records
+`.github/release-provenance.json`, and opens a pull request into `main`. It does
+not write directly to or merge the protected stable branch. The resulting
+release pull request is the single review boundary for the complete product
+code and the stable product presentation.
 
 ## Required gates
 
@@ -97,9 +125,12 @@ Users must still inspect the source and decide whether to trust the plugin.
 - [ ] Fresh-package validation passes from a clean Git-backed package fixture.
 - [ ] Marketplace preflight is `passed` or has exact maintainer-approved
   `review-required` evidence.
-- [ ] The developer README has been replaced by the stable product README on
-  `main`, with demos, screenshots, installation, upgrade, recovery, and
-  release notes visible at the repository root.
+- [ ] The canonical `docs/product/` source is complete and reviewed.
+- [ ] The generated release branch records the exact `dev` SHA in
+  `.github/release-provenance.json`.
+- [ ] The developer README remains on `nightly` and `dev`; the projected stable
+  product README is present at the root of `main`, with demos, screenshots,
+  installation, upgrade, recovery, and release notes visible.
 - [ ] Release notes describe capabilities, trust boundaries, limitations, and
   recovery.
 
@@ -109,7 +140,8 @@ Configure GitHub repository rules so that:
 
 - `dev` and `main` require pull requests and passing required checks.
 - `dev` and `main` reject force-pushes and branch deletion.
-- `main` promotion pull requests must originate from `dev`.
+- `main` promotion pull requests must use a generated `release/*` branch whose
+  provenance points to the current exact `dev` head.
 - Stable release tags can only be created from protected `main` heads.
 - Required checks are dismissed when new commits are pushed.
 - At least one maintainer approval is required for promotion.

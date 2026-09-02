@@ -71,15 +71,28 @@ jobs:
       - name: Verify the bundled package
         run: PATH="$RUNNER_TEMP/omagen-ci-bin:$PATH" OMAGEN_HEADLESS_CI=1 GOCACHE=/tmp/omagen-gocache ./scripts/v1-check.sh
 
-      - name: Enforce stable promotion source
+      - name: Enforce stable promotion provenance
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
         env:
           SOURCE_BRANCH: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
-          test "$SOURCE_BRANCH" = dev || {
-            echo "Stable main promotions must originate from dev (got $SOURCE_BRANCH)." >&2
-            exit 1
-          }
+          case "$SOURCE_BRANCH" in
+            release/*) ;;
+            *)
+              echo "Stable main promotions must use a generated release/* branch (got $SOURCE_BRANCH)." >&2
+              exit 1
+              ;;
+          esac
+          git fetch origin refs/heads/dev:refs/remotes/origin/dev
+          dev_sha="$(git rev-parse refs/remotes/origin/dev)"
+          python3 scripts/verify-main-promotion.py \
+            --expected-dev-sha "$dev_sha" \
+            --head-sha "$HEAD_SHA"
+
+      - name: Verify stable product README projection
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: python3 scripts/promote-product-docs.py --check
 
       - name: Record build provenance
         run: |
