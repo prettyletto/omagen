@@ -141,6 +141,7 @@ native bar.
 <p align="center">
   <img src="assets/screenshots/bar-examples/bar-02-split-wide.png" width="850" alt="Wide split bar layout">
 </p>
+
 See the [full bar example gallery](assets/screenshots/bar-examples/README.md)
 for all seven layouts, placement variants, and capture notes.
 
