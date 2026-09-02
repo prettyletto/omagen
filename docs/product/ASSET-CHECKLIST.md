@@ -33,20 +33,18 @@ assets have been selected and all links have been updated.
 
 ## Remaining evidence before marketplace submission
 
-The stable v2 product snapshot is now in `main` at
-`92ff73ac17211755dd6790a89519371717eaeacf`, tagged `v2.0.0`. The maintainer
-considers the current live-desktop evidence sufficient for the v2 product
-presentation. The following records still need to be attached before
-marketplace submission:
+The stable v2 product snapshot is identified only by the exact final `main`
+SHA after promotion. The maintainer considers the current live-desktop
+evidence sufficient for the v2 product presentation. The following records
+remain release evidence to attach before marketplace submission:
 
 - At least five independent installations, two upgrades, and one interrupted
   session recovery run across the supported Omarchy versions.
 - Asset-license and redistribution confirmation recorded in
   [`assets/PROVENANCE.md`](assets/PROVENANCE.md).
-- Final marketplace preview and the `review-required`, zero-finding preflight
-  report bound to the immutable stable `main` SHA. The report is uploaded as
-  the `marketplace-preflight-92ff73ac17211755dd6790a89519371717eaeacf` artifact
-  on the [exact-main CI run](https://github.com/prettyletto/omagen/actions/runs/33668731439).
+- Final marketplace preview and the zero-finding preflight report bound to the
+  immutable stable `main` SHA. Record the generated artifact name and exact
+  CI run here after promotion; never reuse an earlier snapshot's evidence.
 
 ## Capture rules
 
