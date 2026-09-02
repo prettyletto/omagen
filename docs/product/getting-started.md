@@ -47,8 +47,6 @@ open optional styling and Demo surfaces, then finish or restore the session.
 
 ### 1. Open setup and choose an image
 
-![Omagen opened on workspace 5](assets/screenshots/setup-v2/setup-01-workspace-5.png)
-
 ![Omagen setup screen](assets/screenshots/setup-v2/setup-02-setup.png)
 
 ![Choose an image](assets/screenshots/setup-v2/setup-03-image-chooser.png)
@@ -78,8 +76,6 @@ open optional styling and Demo surfaces, then finish or restore the session.
 ![Focused Window Demo](assets/screenshots/setup-v2/setup-12-window-demo.png)
 
 ![Finish and review](assets/screenshots/setup-v2/setup-13-finish-review.png)
-
-![Restored desktop after the walkthrough](assets/screenshots/setup-v2/setup-14-restored.png)
 
 For the meaning of Preview, Test live, Demo, Apply, Cancel, and Quit, continue
 with the [product workflow guide](workflow.md). For ownership and interrupted
