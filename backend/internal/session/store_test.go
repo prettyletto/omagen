@@ -15,6 +15,36 @@ func testStore(t *testing.T) *Store {
 	return &Store{root: t.TempDir()}
 }
 
+func TestStoreRejectsOversizedStateFiles(t *testing.T) {
+	s := testStore(t)
+	if err := os.MkdirAll(s.StateRoot(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(s.ActivePath(), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(s.ActivePath(), fsutil.MaxStateFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := s.LoadActive(); !errors.Is(err, fsutil.ErrFileTooLarge) {
+		t.Fatalf("LoadActive() error = %v, want ErrFileTooLarge", err)
+	}
+
+	if err := os.MkdirAll(s.SessionDir("oversized"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	sessionPath := filepath.Join(s.SessionDir("oversized"), "session.json")
+	if err := os.WriteFile(sessionPath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Truncate(sessionPath, fsutil.MaxStateFileBytes+1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Load("oversized"); !errors.Is(err, fsutil.ErrFileTooLarge) {
+		t.Fatalf("Load() error = %v, want ErrFileTooLarge", err)
+	}
+}
+
 func testRecord(id string) Record {
 	return Record{
 		SessionID:          id,
@@ -83,36 +113,6 @@ func TestStoreRejectsInvalidAndMalformedRecords(t *testing.T) {
 		if err := s.Save(record); err == nil {
 			t.Errorf("accepted invalid record: %#v", record)
 		}
-	}
-}
-
-func TestStoreRejectsOversizedStateFiles(t *testing.T) {
-	s := testStore(t)
-	if err := os.MkdirAll(s.StateRoot(), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(s.ActivePath(), []byte("{}"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Truncate(s.ActivePath(), fsutil.MaxStateFileBytes+1); err != nil {
-		t.Fatal(err)
-	}
-	if _, _, err := s.LoadActive(); !errors.Is(err, fsutil.ErrFileTooLarge) {
-		t.Fatalf("LoadActive() error = %v, want ErrFileTooLarge", err)
-	}
-
-	if err := os.MkdirAll(s.SessionDir("oversized"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	sessionPath := filepath.Join(s.SessionDir("oversized"), "session.json")
-	if err := os.WriteFile(sessionPath, []byte("{}"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Truncate(sessionPath, fsutil.MaxStateFileBytes+1); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := s.Load("oversized"); !errors.Is(err, fsutil.ErrFileTooLarge) {
-		t.Fatalf("Load() error = %v, want ErrFileTooLarge", err)
 	}
 }
 
