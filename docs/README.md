@@ -8,6 +8,13 @@ the user workflow, then use the focused guides for styling, Demo, recovery, or
 development. Contributors should start with [the root agent guide](../AGENTS.md)
 and the bounded-context routes in [docs/agents](agents/README.md).
 
+Product-facing README, screenshots, demos, examples, and release material are
+authored in the [canonical product documentation source](product/README.md).
+Use the [product README authoring guide](product/README.authoring.md) while
+writing it.
+The root README remains developer-facing on `nightly` and `dev`; the controlled
+release workflow projects the product README to the root of `main`.
+
 - [Examples](examples.md) — wallpaper and generated-theme pairs.
 - [Usage](usage.md) — choose an image, generate six palette directions, use
   Live Canvas Preview and Test Live, run Demo, and apply a theme.

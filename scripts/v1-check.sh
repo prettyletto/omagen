@@ -30,6 +30,15 @@ section "Repository"
 section "Architecture routing"
 "$ROOT/scripts/architecture-check.sh"
 
+section "Product documentation projection"
+python3 "$ROOT/scripts/test-product-docs-promotion.py"
+branch="$(git -C "$ROOT" branch --show-current 2>/dev/null || true)"
+if [[ "$branch" == "main" || "${GITHUB_BASE_REF:-}" == "main" || "${GITHUB_REF:-}" == "refs/heads/main" ]]; then
+    python3 "$ROOT/scripts/promote-product-docs.py" --check
+else
+    python3 "$ROOT/scripts/promote-product-docs.py" --check-source
+fi
+
 section "Go tests"
 (cd "$BACKEND" && go test ./...)
 
@@ -148,9 +157,18 @@ required=(
     "bin/omagen-studio"
     "scripts/marketplace-preflight.py"
     "scripts/test-marketplace-preflight.py"
+    "scripts/promote-product-docs.py"
+    "scripts/test-product-docs-promotion.py"
+    "scripts/verify-main-promotion.py"
     "scripts/verify-shader-provenance.py"
     "scripts/test-fresh-package.sh"
     "docs/shader-provenance.json"
+    "docs/product/README.md"
+    "docs/product/README.authoring.md"
+    "docs/product/assets/README.md"
+    "docs/product/demos/README.md"
+    "docs/product/examples/README.md"
+    "docs/product/release-notes/README.md"
     "NOTICE.md"
     "qml/services/BackendService.qml"
     "qml/gateways/BackendCommand.qml"
