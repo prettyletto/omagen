@@ -66,22 +66,30 @@ Item {
         }
     }
 
-    Bar.WidgetGroup {
-        id: rightGroup
-        bar: root.bar
-        region: "right"
-        entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
-        anchors.right: parent.right
-        anchors.rightMargin: Style.space(18)
-        anchors.verticalCenter: parent.verticalCenter
-    }
-
-    Bar.WidgetSlot {
-        bar: root.bar
-        entry: root.bar ? (root.bar.trayEntry(root.bar.layoutConfig.right) || ({ id: "omarchy.tray" })) : ({ id: "omarchy.tray" })
-        region: "right"
+    Row {
+        id: rightCluster
+        // The native horizontal tray reserves the drawer's full width and
+        // reveals that drawer leftward from the outer-edge chevron. Keep the
+        // other right-region widgets in a separate sibling block so they do
+        // not cover the drawer's hover/click area while it expands.
         anchors.right: parent.right
         anchors.rightMargin: Style.space(2)
         anchors.verticalCenter: parent.verticalCenter
+        spacing: Style.space(2)
+
+        Bar.WidgetGroup {
+            id: rightGroup
+            bar: root.bar
+            region: "right"
+            entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Bar.WidgetSlot {
+            bar: root.bar
+            entry: root.bar ? (root.bar.trayEntry(root.bar.layoutConfig.right) || ({ id: "omarchy.tray" })) : ({ id: "omarchy.tray" })
+            region: "right"
+            anchors.verticalCenter: parent.verticalCenter
+        }
     }
 }
