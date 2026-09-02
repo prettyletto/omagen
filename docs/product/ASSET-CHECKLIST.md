@@ -13,10 +13,10 @@ assets have been selected and all links have been updated.
 | Walkthrough thumbnail | `docs/product/assets/` | A clean 16:9 thumbnail for the YouTube walkthrough | Supplied at `assets/social/omagen-walkthrough-thumbnail-v2.png` |
 | Setup screenshots | `assets/screenshots/` or `docs/product/assets/` | Choose image, first launch, and settings | v2 sequence captured in `assets/screenshots/setup-v2/` |
 | Palette screenshots | Same | Gallery with all six directions and one selected direction | v2 generated gallery and Balanced selection captured |
-| Live Canvas screenshots | Same | Fast path, In-depth path, and Preview/Test live | In-depth path captured; Fast path and Test live still needed |
-| Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Demo Studio and focused Window Demo captured; Full Demo still needed |
-| Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Needs v2 capture |
-| Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Seven v2 bar examples captured; release evidence still needed |
+| Live Canvas screenshots | Same | Fast path, In-depth path, and Preview/Test live | Maintainer-confirmed sufficient for v2; attach exact capture record to the release evidence |
+| Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Maintainer-confirmed sufficient for v2; attach exact capture record to the release evidence |
+| Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Maintainer-confirmed sufficient for v2; attach exact capture record to the release evidence |
+| Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Seven v2 bar examples captured; maintainer-confirmed sufficient; release record still needed |
 | Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Six v2 pairs added; v1 gallery retained and labeled; provenance ledger added; rights review remains |
 | Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; provenance ledger added; confirm redistribution rights and export variants |
 | Marketplace preview | `docs/product/assets/social/omagen-social-preview-v2.png` → root `preview.png` on `main` | Final listing image within marketplace limits | V2 candidate created; approve and promote unchanged for the stable commit |
@@ -33,13 +33,10 @@ assets have been selected and all links have been updated.
 
 ## Remaining evidence before stable release
 
-The repository can be prepared without claiming this evidence is complete.
-The following items still require a maintainer capture and an exact commit
-record:
+The maintainer considers the current live-desktop evidence sufficient for the
+v2 product presentation. The following release records still need to be
+attached to the exact stable commit:
 
-- Fast-path and Test live captures for Live Canvas.
-- Full Demo capture, including the supported fallback behavior.
-- Interrupted-session recovery capture showing Restore & close or Resume.
 - At least five independent installations, two upgrades, and one interrupted
   session recovery run across the supported Omarchy versions.
 - Asset-license and redistribution confirmation recorded in
