@@ -3,9 +3,9 @@
 ## Reporting a vulnerability
 
 Do not disclose credentials, exploit details, private user data, or suspected
-malicious behavior in a public issue. Use GitHub's private vulnerability
-reporting for this repository when available. If it is unavailable, contact
-the maintainer privately through the address listed in the repository's GitHub
+malicious behavior in a public issue. Use this repository's GitHub private
+vulnerability reporting channel. If that channel is unavailable, contact the
+maintainer privately through the address listed in the repository's GitHub
 security settings and include:
 
 - The affected release or exact commit.
