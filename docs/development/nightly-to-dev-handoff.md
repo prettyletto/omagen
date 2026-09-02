@@ -11,7 +11,7 @@ working tree or reuse evidence from another commit.
 - Release target: `v2.0.0`
 - Packages: `pretty.omagen`, `pretty.omagen.bar`
 - Candidate tag: create only after the promotion PR passes the `dev` gate.
-- Promotion commit: `TBD — fill after review and commit`
+- Promotion commit: `f4cb7ea25562386a149358228d1ce64cd5f26b1a`
 
 The product changes include Demo reader and workspace lifecycle behavior,
 Preview stale-work protection, QML controller sequencing, full-bar integration,
@@ -54,7 +54,8 @@ results rather than relying only on commit ancestry.
 - [x] Shader source/QSB provenance.
 - [x] Fresh-package validation.
 - [x] Documentation relative-link validation.
-- [ ] CI run on the actual `nightly → dev` pull request.
+- [x] CI run on the actual `nightly → dev` pull request (`#4`; head
+  `475768f01d5b7ce9dfa4489c7979dd144f2c2f4f`; merged as the commit above).
 
 The local preflight outcome is `review-required` with no findings because the
 package intentionally contains a bundled executable and installer/runtime
