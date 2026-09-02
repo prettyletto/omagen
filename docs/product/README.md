@@ -145,6 +145,38 @@ Omagen's recovery or uninstall path first.
 Watch the [full Omagen walkthrough on YouTube](https://youtu.be/Af06-XsdBHA)
 for the image-to-theme flow, preview paths, Demo, and Apply experience.
 
+## Bar examples
+
+Here are a few examples of the optional Omagen bar direction across different
+placements and information densities. The full bar is an opt-in part of the
+Omagen suite; installing the core Studio does not silently replace Omarchy's
+native bar.
+
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-01-left-wide.png" width="850" alt="Wide bar placed toward the left">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-02-split-wide.png" width="850" alt="Wide split bar layout">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-03-minimal.png" width="650" alt="Minimal bar state">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-04-left-compact.png" width="650" alt="Compact bar placed toward the left">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-05-centered-wide.png" width="850" alt="Wide centered bar layout">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-06-centered-full.png" width="850" alt="Centered full bar layout">
+</p>
+<p align="center">
+  <img src="assets/screenshots/bar-examples/bar-07-centered-compact.png" width="650" alt="Compact centered bar layout">
+</p>
+
+See the [full bar example gallery](assets/screenshots/bar-examples/README.md)
+for the complete set and capture notes.
+
 ## Examples
 
 The [v2 example gallery](examples/README.md) pairs source wallpapers with

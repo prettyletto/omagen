@@ -58,3 +58,11 @@ local home-directory path visible in the file chooser. The original captures
 remain outside the product asset tree under the ignored UI-test workspace.
 These screenshots document the product flow; they are not evidence of a
 stable release or a marketplace security certification.
+
+## Bar examples
+
+The [`bar-examples/`](screenshots/bar-examples/) gallery shows several product
+layouts for the optional full-bar experience: compact and wide variants,
+centered and left placements, and a minimal state. The full bar remains an
+explicit opt-in package; these images are examples of its visual range, not a
+replacement for the native Omarchy bar in the default installation path.
