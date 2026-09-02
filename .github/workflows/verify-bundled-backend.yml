@@ -136,12 +136,30 @@ jobs:
           fetch-depth: 0
 
       - name: Run deterministic static preflight
+        env:
+          PR_BASE_BRANCH: ${{ github.event.pull_request.base.ref }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           mkdir -p artifacts
           python3 scripts/test-marketplace-preflight.py
+          compare_to="$PR_BASE_SHA"
+          if [ "$PR_BASE_BRANCH" = "main" ]; then
+            # A v2 release intentionally adds pretty.omagen.bar compared with
+            # the old v1 main branch. Compare stable candidates with the exact
+            # dev source recorded by the generated release provenance instead.
+            compare_to="$(python3 -c 'import json, pathlib, re; value=json.loads(pathlib.Path(".github/release-provenance.json").read_text(encoding="utf-8")).get("sourceSha"); print(value if isinstance(value, str) and re.fullmatch(r"[0-9a-f]{40}", value) else "")')"
+            test -n "$compare_to" || {
+              echo "stable marketplace preflight requires a valid release provenance sourceSha" >&2
+              exit 1
+            }
+          fi
+          compare_args=()
+          if [ -n "$compare_to" ]; then
+            compare_args+=(--compare-to "$compare_to")
+          fi
           python3 scripts/marketplace-preflight.py \
             --commit "$(git rev-parse HEAD)" \
-            ${{ github.event.pull_request.base.sha && format('--compare-to {0}', github.event.pull_request.base.sha) || '' }} \
+            "${compare_args[@]}" \
             --report artifacts/marketplace-preflight.json
 
       - name: Upload commit-bound security evidence
