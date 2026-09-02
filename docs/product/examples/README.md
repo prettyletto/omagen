@@ -22,6 +22,11 @@ The v2 examples demonstrate the range of source material and generated
 compositions. The bar descriptor is included as context; the full-bar package
 remains optional and is not silently enabled by the core Studio.
 
+Source mapping and redistribution status are recorded in the
+[asset provenance ledger](../assets/PROVENANCE.md). These examples are product
+material only; their inclusion does not by itself establish third-party asset
+permission.
+
 ## Legacy examples — made with Omagen v1
 
 These examples remain useful as historical product references. They were made
@@ -42,6 +47,8 @@ The v2 set should include the source image, the selected palette direction, the
 visible composition options, and a clean generated result. Do not claim a
 specific recipe or capability unless it was used for that capture. Confirm
 redistribution rights for every source background before the stable release.
+Historical examples remain labeled as made with Omagen v1 and should not be
+presented as v2 output.
 
 Implementation fixtures and compatibility snapshots remain in the existing
 developer documentation and test directories.

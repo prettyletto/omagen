@@ -26,6 +26,31 @@ without committing to it, and apply it safely when it feels right.
 
 ![Omagen workflow preview](assets/demos/omagen-demo-v2.gif)
 
+## Get started
+
+Omagen is built for Omarchy Quattro with Hyprland and Quickshell on Linux
+x86_64. Install the stable repository through Omarchy's plugin manager:
+
+```sh
+omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
+```
+
+Then open Omagen from the Omarchy launcher, choose a local image, review a
+palette direction, and use **Preview** or **Demo** before selecting **Apply**.
+The [getting started guide](getting-started.md) covers requirements, first
+launch, optional applications, and removal.
+
+To remove the packages later:
+
+```sh
+omarchy plugin remove pretty.omagen --yes
+omarchy plugin remove pretty.omagen.bar --yes
+```
+
+Removing the plugins does not delete permanent themes created by you. If an
+Omagen session is active, use its recovery or restore path before removing
+state manually.
+
 ## What is Omagen?
 
 Omagen is an image-to-theme studio for [Omarchy Quattro](https://omarchy.org/).
@@ -96,48 +121,6 @@ If Omagen or the shell is interrupted during a preview or Apply, the next
 launch presents an explicit recovery choice. Restore the original desktop or
 resume the staged workspace when it can still be verified safely.
 
-## Get started
-
-### Requirements
-
-- Omarchy Quattro
-- Hyprland
-- Quickshell
-- Linux x86_64 for the bundled backend executable
-
-Demo applications are optional. Omagen detects available terminals, editors,
-system monitors, and file managers and provides useful fallbacks when a
-preferred application is not installed.
-
-### Install from Omarchy
-
-Use Omarchy's plugin manager to install the stable repository:
-
-```sh
-omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
-```
-
-The plugin manager validates the repository manifest and enables the core
-Omagen integration. The optional full-bar package remains separately
-registered so it can be selected intentionally through Omarchy's normal bar
-configuration.
-
-Go is not required for normal use; the runtime backend is bundled with the
-plugin.
-
-### Remove Omagen
-
-Remove the packages through Omarchy's plugin manager:
-
-```sh
-omarchy plugin remove pretty.omagen --yes
-omarchy plugin remove pretty.omagen.bar --yes
-```
-
-Removing the plugins does not delete permanent themes created by the user. Do
-not manually delete `~/.local/state/omagen` while a session is active; use
-Omagen's recovery or uninstall path first.
-
 ## See it in action
 
 [![Watch the Omagen walkthrough](assets/social/omagen-walkthrough-thumbnail-v2.png)](https://youtu.be/juDJe0zWwZI)
@@ -158,24 +141,8 @@ native bar.
 <p align="center">
   <img src="assets/screenshots/bar-examples/bar-02-split-wide.png" width="850" alt="Wide split bar layout">
 </p>
-<p align="center">
-  <img src="assets/screenshots/bar-examples/bar-03-minimal.png" width="650" alt="Minimal bar state">
-</p>
-<p align="center">
-  <img src="assets/screenshots/bar-examples/bar-04-left-compact.png" width="650" alt="Compact bar placed toward the left">
-</p>
-<p align="center">
-  <img src="assets/screenshots/bar-examples/bar-05-centered-wide.png" width="850" alt="Wide centered bar layout">
-</p>
-<p align="center">
-  <img src="assets/screenshots/bar-examples/bar-06-centered-full.png" width="850" alt="Centered full bar layout">
-</p>
-<p align="center">
-  <img src="assets/screenshots/bar-examples/bar-07-centered-compact.png" width="650" alt="Compact centered bar layout">
-</p>
-
 See the [full bar example gallery](assets/screenshots/bar-examples/README.md)
-for the complete set and capture notes.
+for all seven layouts, placement variants, and capture notes.
 
 ## New v2 examples
 
@@ -205,7 +172,8 @@ historical examples explicitly labeled **made with Omagen v1**.
 | [Recovery and rollback](recovery.md) | Interrupted sessions, restoration, ownership, and safe removal. |
 | [Examples](examples/README.md) | Curated v2 wallpaper/theme pairs and example metadata. |
 | [Demo materials](demos/README.md) | Product walkthroughs and the capture plan for v2. |
-| [Asset checklist](assets/README.md) | Required screenshots, recordings, examples, and provenance. |
+| [Asset catalog](assets/README.md) | Screenshots, recordings, examples, and provenance notes. |
+| [Asset checklist](ASSET-CHECKLIST.md) | Evidence still required before stable release. |
 | [v2.0.0 release notes](release-notes/v2.0.0.md) | Release scope, upgrade notes, limitations, and verification status. |
 
 For implementation contracts, contributor setup, compatibility evidence, and

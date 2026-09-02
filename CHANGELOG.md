@@ -12,7 +12,8 @@ report.
 
 ## [2.0.0] — release notes draft
 
-See [`docs/releases/v2.0.0.md`](docs/releases/v2.0.0.md) for the release
-scope, capability inventory, trust boundaries, upgrade guidance, and recovery
-instructions. The final entry is published only after the exact stable `main`
-commit is tagged.
+See [`docs/product/release-notes/v2.0.0.md`](docs/product/release-notes/v2.0.0.md)
+for the user-facing release scope, trust boundaries, upgrade guidance, and
+recovery instructions. Maintainer verification remains in
+[`docs/releases/v2.0.0.md`](docs/releases/v2.0.0.md). The final entry is
+published only after the exact stable `main` commit is tagged.

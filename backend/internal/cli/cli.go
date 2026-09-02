@@ -10,7 +10,7 @@ type pingResponse struct {
 	Version string `json:"version"`
 }
 
-const BackendVersion = "1.0.0"
+const BackendVersion = "2.0.0"
 
 // Run is the CLI composition root. Command implementations live in the
 // domain-named files in this package; durable behavior remains in backend

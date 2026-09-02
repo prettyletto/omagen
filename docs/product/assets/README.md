@@ -46,6 +46,9 @@ from a smaller clone and checkout footprint.
 The [asset generation checklist](../ASSET-CHECKLIST.md) defines the filenames,
 capture goals, dimensions, and provenance required before the stable release.
 
+The [provenance ledger](PROVENANCE.md) records the source and release status
+of the current branding, screenshots, recordings, and example pairs.
+
 Before promotion, every referenced asset must be present in the exact commit,
 have a reviewable license/provenance, and stay within the marketplace preview
 limits when used as a listing preview.
@@ -83,4 +86,5 @@ documentation-friendly WebP asset. The older pairs remain available as
 historical references and are labeled as made with Omagen v1.
 
 Before the stable release, record the source background provenance and confirm
-that every background and preview can be redistributed with the project.
+that every background and preview can be redistributed with the project. See
+the [provenance ledger](PROVENANCE.md) for the current open confirmations.

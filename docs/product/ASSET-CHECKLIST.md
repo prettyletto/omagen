@@ -17,8 +17,8 @@ assets have been selected and all links have been updated.
 | Demo screenshots | Same | Full Demo plus at least one focused Window/Shell/Bar Demo | Demo Studio and focused Window Demo captured; Full Demo still needed |
 | Recovery screenshot | Same | Interrupted-session recovery with Restore & close/Resume | Needs v2 capture |
 | Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Seven v2 bar examples captured; release evidence still needed |
-| Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Six v2 pairs added; v1 gallery retained and labeled; rights review remains |
-| Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; confirm redistribution rights and export variants |
+| Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Six v2 pairs added; v1 gallery retained and labeled; provenance ledger added; rights review remains |
+| Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; provenance ledger added; confirm redistribution rights and export variants |
 | Marketplace preview | `docs/product/assets/social/omagen-social-preview-v2.png` → root `preview.png` on `main` | Final listing image within marketplace limits | V2 candidate created; approve and promote unchanged for the stable commit |
 
 ## Recommended captures
@@ -30,6 +30,22 @@ assets have been selected and all links have been updated.
    files or names.
 5. An interrupted Apply/recovery clip or still sequence.
 6. A before/after desktop pair using the same source wallpaper.
+
+## Remaining evidence before stable release
+
+The repository can be prepared without claiming this evidence is complete.
+The following items still require a maintainer capture and an exact commit
+record:
+
+- Fast-path and Test live captures for Live Canvas.
+- Full Demo capture, including the supported fallback behavior.
+- Interrupted-session recovery capture showing Restore & close or Resume.
+- At least five independent installations, two upgrades, and one interrupted
+  session recovery run across the supported Omarchy versions.
+- Asset-license and redistribution confirmation recorded in
+  [`assets/PROVENANCE.md`](assets/PROVENANCE.md).
+- Final marketplace preview and preflight report bound to the immutable stable
+  `main` SHA.
 
 ## Capture rules
 
