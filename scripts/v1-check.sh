@@ -168,6 +168,7 @@ required=(
     "docs/product/assets/README.md"
     "docs/product/assets/branding/omagen-icon.png"
     "docs/product/assets/branding/omagen-wordmark.png"
+    "docs/product/assets/social/omagen-social-preview-v2.png"
     "docs/product/demos/README.md"
     "docs/product/examples/README.md"
     "docs/product/release-notes/README.md"

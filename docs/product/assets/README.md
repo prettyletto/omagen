@@ -12,6 +12,18 @@ Before the stable release, confirm the project has permission to redistribute
 them and add a transparent/light-background variant if the current dark icon
 background is not suitable for every listing surface.
 
+## Social preview
+
+The current v2 social-preview candidate is
+`social/omagen-social-preview-v2.png`. It is a 16:9 GitHub/Open Graph cover
+with a restrained image-to-palette visual, the supplied Omagen identity, and
+minimal copy that remains legible at thumbnail size.
+
+Keep this product-source candidate under review while the main promotion is
+prepared. The stable promotion may copy the approved exact asset to the
+repository-root `preview.png` used by marketplace tooling; do not change the
+image after the stable commit is submitted for verification.
+
 The [asset generation checklist](../ASSET-CHECKLIST.md) defines the filenames,
 capture goals, dimensions, and provenance required before the stable release.
 
