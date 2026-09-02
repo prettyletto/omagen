@@ -17,29 +17,28 @@ present marketplace verification as a license review or security certification.
 
 | Asset group | Repository path | Source or creator | Status for stable release |
 | --- | --- | --- | --- |
-| Omagen icon | `docs/product/assets/branding/omagen-icon.png` | Project-provided branding asset | Maintainer confirmation required |
-| Omagen wordmark | `docs/product/assets/branding/omagen-wordmark.png` | Project-provided branding asset | Maintainer confirmation required |
-| Social preview | `docs/product/assets/social/omagen-social-preview-v2.png` | Project artwork assembled for Omagen | Confirm project ownership and any embedded source imagery |
-| Walkthrough thumbnail | `docs/product/assets/social/omagen-walkthrough-thumbnail-v2.png` | Project capture/artwork | Confirm project ownership and permissions |
-| Marketplace preview (root copy) | `preview.png` | Byte-for-byte copy of the walkthrough thumbnail | Confirm project ownership and permissions |
-| Hero workflow GIF | `docs/product/assets/demos/omagen-demo-v2.gif` | Project screen recording | Confirm all visible desktop artwork and UI may be published |
-| Setup screenshots | `docs/product/assets/screenshots/setup-v2/` | Project captures from the Omagen workflow | Confirm visible backgrounds and UI may be published |
-| Bar gallery | `docs/product/assets/screenshots/bar-examples/` | Project captures from Omagen bar presets | Confirm visible backgrounds and UI may be published |
+| Omagen icon | `docs/product/assets/branding/omagen-icon.png` | Project-provided branding asset | Maintainer permission confirmed 2026-09-02 |
+| Omagen wordmark | `docs/product/assets/branding/omagen-wordmark.png` | Project-provided branding asset | Maintainer permission confirmed 2026-09-02 |
+| Social preview | `docs/product/assets/social/omagen-social-preview-v2.png` | Project artwork assembled for Omagen | Maintainer permission confirmed 2026-09-02 |
+| Walkthrough thumbnail | `docs/product/assets/social/omagen-walkthrough-thumbnail-v2.png` | Project capture/artwork | Maintainer permission confirmed 2026-09-02 |
+| Marketplace preview (root copy) | `preview.png` | Byte-for-byte copy of the walkthrough thumbnail | Maintainer permission confirmed 2026-09-02 |
+| Hero workflow GIF | `docs/product/assets/demos/omagen-demo-v2.gif` | Project screen recording | Maintainer permission confirmed 2026-09-02 |
+| Setup screenshots | `docs/product/assets/screenshots/setup-v2/` | Project captures from the Omagen workflow | Maintainer permission confirmed 2026-09-02 |
+| Bar gallery | `docs/product/assets/screenshots/bar-examples/` | Project captures from Omagen bar presets | Maintainer permission confirmed 2026-09-02 |
 
 ## v2 example pairs
 
-The six v2 examples were selected from the local `*-example` themes and pair
+The five v2 examples were selected from the local `*-example` themes and pair
 each theme's own background with its generated preview. The current source
 mapping is:
 
 | Example | Source theme / recipe | Background | Generated preview | Rights status |
 | --- | --- | --- | --- | --- |
-| Elastic Example | `elastic-example` / `elastic-orbit` | `assets/examples/v2/elastic-example-background.webp` | `assets/examples/v2/elastic-example-preview.webp` | Maintainer confirmation required |
-| Gothic Example | `gothic-example` / `gothic-cathedral` | `assets/examples/v2/gothic-example-background.webp` | `assets/examples/v2/gothic-example-preview.webp` | Maintainer confirmation required |
-| Japan Example | `japan-example` / `oriental` | `assets/examples/v2/japan-example-background.webp` | `assets/examples/v2/japan-example-preview.webp` | Maintainer confirmation required |
-| Nature Example | `nature-example` / `nature` | `assets/examples/v2/nature-example-background.webp` | `assets/examples/v2/nature-example-preview.webp` | Maintainer confirmation required |
-| Retro Example | `retro-example` / `retro` | `assets/examples/v2/retro-example-background.webp` | `assets/examples/v2/retro-example-preview.webp` | Maintainer confirmation required |
-| Spectral Example | `spectral-example` / `spectral-shift` | `assets/examples/v2/spectral-example-background.webp` | `assets/examples/v2/spectral-example-preview.webp` | Maintainer confirmation required |
+| Elastic Example | `elastic-example` / `elastic-orbit` | `assets/examples/v2/elastic-example-background.webp` | `assets/examples/v2/elastic-example-preview.webp` | Maintainer permission confirmed 2026-09-02 |
+| Gothic Example | `gothic-example` / `gothic-cathedral` | `assets/examples/v2/gothic-example-background.webp` | `assets/examples/v2/gothic-example-preview.webp` | Maintainer permission confirmed 2026-09-02 |
+| Japan Example | `japan-example` / `oriental` | `assets/examples/v2/japan-example-background.webp` | `assets/examples/v2/japan-example-preview.webp` | Maintainer permission confirmed 2026-09-02 |
+| Nature Example | `nature-example` / `nature` | `assets/examples/v2/nature-example-background.webp` | `assets/examples/v2/nature-example-preview.webp` | Maintainer permission confirmed 2026-09-02 |
+| Retro Example | `retro-example` / `retro` | `assets/examples/v2/retro-example-background.webp` | `assets/examples/v2/retro-example-preview.webp` | Maintainer permission confirmed 2026-09-02 |
 
 The historical gallery remains labeled “made with Omagen v1”. It should be
 reviewed by the same process before being treated as a redistributable release
@@ -47,11 +46,20 @@ asset.
 
 ## Maintainer completion record
 
-Fill this section before stable release; do not replace these fields with
-guesses.
+This is the maintainer's release declaration for the project-provided assets
+in this snapshot. Marketplace verification remains a separate exact-commit
+baseline check and is not a license review.
 
-- Reviewer: `TBD`
-- Review date: `TBD`
-- Asset sources and licenses recorded: `TBD`
-- Permission evidence linked: `TBD`
-- Unlicensed or uncertain assets removed from the stable package: `TBD`
+- Reviewer: Project maintainer
+- Review date: `2026-09-02`
+- Asset sources and licenses recorded: Project-provided branding, captures, artwork, and generated example pairs are cleared for repository redistribution by maintainer confirmation.
+- Permission evidence linked: Maintainer release record; Omagen does not claim an external asset license for embedded source imagery.
+- Unlicensed or uncertain assets removed from the stable package: The mismatched Spectral v2 example pair was removed before promotion.
+
+## Stable snapshot verification
+
+- Stable commit: The exact final `main` SHA is recorded by the commit-bound CI artifact after promotion; never reuse an earlier report.
+- Release tag: `v2.0.0` (only after the final `main` commit is immutable)
+- Marketplace preflight: Must be `passed` or accompanied by exact maintainer approval of `review-required` findings.
+- Preflight artifact: `marketplace-preflight-<final-main-sha>`
+- CI run: The exact-main workflow run associated with the final SHA.
