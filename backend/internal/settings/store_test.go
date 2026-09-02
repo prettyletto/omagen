@@ -16,6 +16,16 @@ func testStore(t *testing.T) *Store {
 	return &Store{path: path}
 }
 
+func TestLoadMissingReturnsDefaults(t *testing.T) {
+	got, err := testStore(t).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != Defaults() {
+		t.Fatalf("got %#v, want defaults %#v", got, Defaults())
+	}
+}
+
 func TestLoadRejectsOversizedSettingsFile(t *testing.T) {
 	store := testStore(t)
 	if err := os.WriteFile(store.path, []byte("{}"), 0o644); err != nil {
@@ -26,16 +36,6 @@ func TestLoadRejectsOversizedSettingsFile(t *testing.T) {
 	}
 	if _, err := store.Load(); !errors.Is(err, fsutil.ErrFileTooLarge) {
 		t.Fatalf("Load() error = %v, want ErrFileTooLarge", err)
-	}
-}
-
-func TestLoadMissingReturnsDefaults(t *testing.T) {
-	got, err := testStore(t).Load()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != Defaults() {
-		t.Fatalf("got %#v, want defaults %#v", got, Defaults())
 	}
 }
 

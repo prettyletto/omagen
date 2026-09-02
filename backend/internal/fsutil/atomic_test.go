@@ -42,7 +42,7 @@ func TestReadFileLimitedRejectsOversizedAndNonRegularFiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := ReadFileLimited(fifo, 4); err == nil {
-		t.Fatal("ReadFileLimited() accepted a FIFO")
+		t.Fatal("ReadFileLimited() accepted a directory")
 	}
 }
 
