@@ -21,6 +21,7 @@ present marketplace verification as a license review or security certification.
 | Omagen wordmark | `docs/product/assets/branding/omagen-wordmark.png` | Project-provided branding asset | Maintainer confirmation required |
 | Social preview | `docs/product/assets/social/omagen-social-preview-v2.png` | Project artwork assembled for Omagen | Confirm project ownership and any embedded source imagery |
 | Walkthrough thumbnail | `docs/product/assets/social/omagen-walkthrough-thumbnail-v2.png` | Project capture/artwork | Confirm project ownership and permissions |
+| Marketplace preview (root copy) | `preview.png` | Byte-for-byte copy of the walkthrough thumbnail | Confirm project ownership and permissions |
 | Hero workflow GIF | `docs/product/assets/demos/omagen-demo-v2.gif` | Project screen recording | Confirm all visible desktop artwork and UI may be published |
 | Setup screenshots | `docs/product/assets/screenshots/setup-v2/` | Project captures from the Omagen workflow | Confirm visible backgrounds and UI may be published |
 | Bar gallery | `docs/product/assets/screenshots/bar-examples/` | Project captures from Omagen bar presets | Confirm visible backgrounds and UI may be published |

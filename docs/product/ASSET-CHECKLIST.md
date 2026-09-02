@@ -19,7 +19,7 @@ assets have been selected and all links have been updated.
 | Full-bar screenshot | Same | Optional `pretty.omagen.bar` enabled, with native fallback explained | Seven v2 bar examples captured; maintainer-confirmed sufficient; release record still needed |
 | Example pairs | `assets/examples/` | Six to eight source wallpaper/generated-result pairs with captions | Six v2 pairs added; v1 gallery retained and labeled; provenance ledger added; rights review remains |
 | Product icon/wordmark | `docs/product/assets/branding/` | Recognizable header mark and wordmark for README and listings | Provided; provenance ledger added; confirm redistribution rights and export variants |
-| Marketplace preview | `docs/product/assets/social/omagen-social-preview-v2.png` → root `preview.png` on `main` | Final listing image within marketplace limits | V2 candidate created; approve and promote unchanged for the stable commit |
+| Marketplace preview | `docs/product/assets/social/omagen-walkthrough-thumbnail-v2.png` → root `preview.png` on `main` | Final listing image within marketplace limits | Selected v2 thumbnail copied to the candidate root preview; promote unchanged for the stable commit |
 
 ## Recommended captures
 
