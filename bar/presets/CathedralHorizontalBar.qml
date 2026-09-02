@@ -37,13 +37,29 @@ Item {
             entries: root.bar ? root.bar.layoutConfig.center : []
         }
 
-        Bar.WidgetGroup {
-            id: rightGroup
-            bar: root.bar
-            region: "right"
-            entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
+        Row {
+            id: rightCluster
+            // The native tray reveals its horizontal drawer inward from the
+            // outer edge. Give it a dedicated slot after the other right
+            // widgets so Gothic keeps the tray's complete hit area.
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
+            spacing: Style.space(4)
+
+            Bar.WidgetGroup {
+                id: rightGroup
+                bar: root.bar
+                region: "right"
+                entries: root.bar ? root.bar.entriesWithoutTray(root.bar.layoutConfig.right) : []
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Bar.WidgetSlot {
+                bar: root.bar
+                entry: root.bar ? (root.bar.trayEntry(root.bar.layoutConfig.right) || ({ id: "omarchy.tray" })) : ({ id: "omarchy.tray" })
+                region: "right"
+                anchors.verticalCenter: parent.verticalCenter
+            }
         }
     }
 }
