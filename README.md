@@ -152,7 +152,6 @@ produce from very different images.
 | Japan Example | <img src="assets/examples/v2/japan-example-background.webp" alt="Japan Example source background" width="300"> | <img src="assets/examples/v2/japan-example-preview.webp" alt="Japan Example generated preview" width="300"> |
 | Nature Example | <img src="assets/examples/v2/nature-example-background.webp" alt="Nature Example source background" width="300"> | <img src="assets/examples/v2/nature-example-preview.webp" alt="Nature Example generated preview" width="300"> |
 | Retro Example | <img src="assets/examples/v2/retro-example-background.webp" alt="Retro Example source background" width="300"> | <img src="assets/examples/v2/retro-example-preview.webp" alt="Retro Example generated preview" width="300"> |
-| Spectral Example | <img src="assets/examples/v2/spectral-example-background.webp" alt="Spectral Example source background" width="300"> | <img src="assets/examples/v2/spectral-example-preview.webp" alt="Spectral Example generated preview" width="300"> |
 
 See the [complete v2 example gallery](docs/product/examples/README.md), including the
 historical examples explicitly labeled **made with Omagen v1**.

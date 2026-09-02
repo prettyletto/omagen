@@ -5,7 +5,7 @@ the generated desktop result and explains what the user will see.
 
 ## New v2 examples
 
-These six examples come from the generated `*-example` themes in the current
+These five examples come from the generated `*-example` themes in the current
 Omagen development workspace. Each pair uses the theme's own background and
 `preview.png`, converted to a documentation-friendly WebP copy.
 
@@ -16,7 +16,6 @@ Omagen development workspace. Each pair uses the theme's own background and
 | Japan Example — zen bar | ![Japan Example background](../../../assets/examples/v2/japan-example-background.webp) | ![Japan Example preview](../../../assets/examples/v2/japan-example-preview.webp) |
 | Nature Example — islands bar | ![Nature Example background](../../../assets/examples/v2/nature-example-background.webp) | ![Nature Example preview](../../../assets/examples/v2/nature-example-preview.webp) |
 | Retro Example — minimal bar | ![Retro Example background](../../../assets/examples/v2/retro-example-background.webp) | ![Retro Example preview](../../../assets/examples/v2/retro-example-preview.webp) |
-| Spectral Example — ribbon bar | ![Spectral Example background](../../../assets/examples/v2/spectral-example-background.webp) | ![Spectral Example preview](../../../assets/examples/v2/spectral-example-preview.webp) |
 
 The v2 examples demonstrate the range of source material and generated
 compositions. The bar descriptor is included as context; the full-bar package

@@ -1,7 +1,6 @@
 package demo
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/prettyletto/omagen/backend/internal/processutil"
 )
 
 type launchHints struct {
@@ -66,27 +67,32 @@ func launchDemoCommands(launches []slotLaunch, hints launchHints, slots []Slot, 
 		if launch.Cmd == nil {
 			return nil, fmt.Errorf("no launcher for demo slot %s", launch.Slot)
 		}
-		resolved, lookErr := exec.LookPath(launch.Cmd.Path)
+		resolved, lookErr := processutil.Resolve(launch.Cmd.Path)
 		if lookErr != nil {
-			resolved = "<not found: " + lookErr.Error() + ">"
+			logger.line("resolve slot=%s path=%q error=%v", launch.Slot, launch.Cmd.Path, lookErr)
+			return nil, fmt.Errorf("resolve demo %s executable: %w", launch.Slot, lookErr)
 		}
-		logger.line("launch slot=%s path=%q resolved=%q args=%q dir=%q env_OMAGEN_DEMO_DIR=%q", launch.Slot, launch.Cmd.Path, resolved, launch.Cmd.Args, launch.Cmd.Dir, envValue(launch.Cmd.Env, "OMAGEN_DEMO_DIR"))
-		var stdout, stderr bytes.Buffer
-		launch.Cmd.Stdout = &stdout
-		launch.Cmd.Stderr = &stderr
+		// Resolve PATH once and execute the same absolute path. This prevents a
+		// PATH replacement between capability discovery and process start.
+		launch.Cmd.Path = resolved
+		logger.line("launch slot=%s path=%q resolved=%q args=%q dir=%q env_OMAGEN_DEMO_DIR=%q", launch.Slot, launch.Cmd.Args[0], resolved, launch.Cmd.Args, launch.Cmd.Dir, envValue(launch.Cmd.Env, "OMAGEN_DEMO_DIR"))
+		stdout := processutil.NewLimitedBuffer(processutil.DefaultOutputLimit)
+		stderr := processutil.NewLimitedBuffer(processutil.DefaultOutputLimit)
+		launch.Cmd.Stdout = stdout
+		launch.Cmd.Stderr = stderr
 		if err := launch.Cmd.Start(); err != nil {
 			logger.line("start slot=%s error=%v stdout=%q stderr=%q", launch.Slot, err, stdout.String(), stderr.String())
 			return nil, fmt.Errorf("start demo %s: %w", launch.Slot, err)
 		}
 		hints.PIDs[launch.Slot] = launch.Cmd.Process.Pid
 		logger.line("started slot=%s pid=%d", launch.Slot, launch.Cmd.Process.Pid)
-		go func(slot Slot, cmd *exec.Cmd, out, errOut *bytes.Buffer) {
+		go func(slot Slot, cmd *exec.Cmd, out, errOut *processutil.LimitedBuffer) {
 			err := cmd.Wait()
 			logger.line("exit slot=%s pid=%d error=%v stdout=%q stderr=%q", slot, cmd.Process.Pid, err, out.String(), errOut.String())
 			if isTerminalSlot(slot) && exitedFromTerminalReload(err) {
 				terminalExits <- processExit{slot: slot, err: err}
 			}
-		}(launch.Slot, launch.Cmd, &stdout, &stderr)
+		}(launch.Slot, launch.Cmd, stdout, stderr)
 	}
 	return waitForDemoWindows(before, hints, slots, 10*time.Second, logger)
 }
@@ -204,8 +210,9 @@ exec "${SHELL:-/bin/bash}" -l
 }
 func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cmd {
 	if capabilities.FileManager.Command != "" {
+		fileManager := resolveCommand(capabilities.FileManager.Command)
 		if capabilities.FileManager.Command == "xdg-open" {
-			cmd := exec.Command(capabilities.FileManager.Command, dir)
+			cmd := exec.Command(fileManager, dir)
 			cmd.Dir = dir
 			return detachGUICommand(cmd)
 		}
@@ -215,11 +222,11 @@ func buildFilesCommandFor(dir, token string, capabilities Capabilities) *exec.Cm
 		// or be handed back to another workspace when its GApplication instance
 		// is not launched through that native boundary.
 		if uwsm, err := exec.LookPath("uwsm-app"); err == nil {
-			cmd := exec.Command(uwsm, "--", capabilities.FileManager.Command, "--new-window", dir)
+			cmd := exec.Command(uwsm, "--", fileManager, "--new-window", dir)
 			cmd.Dir = dir
 			return detachGUICommand(cmd)
 		}
-		cmd := exec.Command(capabilities.FileManager.Command, "--new-window", dir)
+		cmd := exec.Command(fileManager, "--new-window", dir)
 		cmd.Dir = dir
 		return detachGUICommand(cmd)
 	}
@@ -236,18 +243,27 @@ func detachGUICommand(cmd *exec.Cmd) *exec.Cmd {
 }
 
 func terminalCommand(capability ApplicationCapability, appID, dir string, command string, args ...string) *exec.Cmd {
+	terminal := resolveCommand(capability.Command)
+	command = resolveCommand(command)
 	var cmd *exec.Cmd
-	switch capability.Command {
+	switch filepath.Base(terminal) {
 	case "omarchy-launch-tui":
-		cmd = exec.Command(capability.Command, append([]string{"--app-id=" + appID, command}, args...)...)
+		cmd = exec.Command(terminal, append([]string{"--app-id=" + appID, command}, args...)...)
 	case "xdg-terminal-exec":
-		cmd = exec.Command(capability.Command, append([]string{"--app-id=" + appID, "-e", command}, args...)...)
+		cmd = exec.Command(terminal, append([]string{"--app-id=" + appID, "-e", command}, args...)...)
 	default:
-		cmd = exec.Command(capability.Command, append([]string{"-e", command}, args...)...)
+		cmd = exec.Command(terminal, append([]string{"-e", command}, args...)...)
 	}
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "OMAGEN_DEMO_DIR="+dir)
 	return cmd
+}
+
+func resolveCommand(command string) string {
+	if resolved, err := processutil.Resolve(command); err == nil {
+		return resolved
+	}
+	return command
 }
 
 func sourceViewerScript(sample string) string {
