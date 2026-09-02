@@ -1,0 +1,103 @@
+name: Product documentation promotion
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Full 40-character SHA of the current dev head
+        required: true
+        type: string
+      release_version:
+        description: Release version to promote, for example v2.0.0
+        required: true
+        default: v2.0.0
+        type: string
+      release_branch:
+        description: New generated branch name
+        required: true
+        default: release/v2.0.0
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: product-docs-promotion-${{ inputs.release_branch }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Generate reviewed main promotion
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the requested dev source
+        uses: actions/checkout@v4
+        with:
+          ref: dev
+          fetch-depth: 0
+
+      - name: Verify dev has not moved
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          printf '%s' "$SOURCE_SHA" | grep -Eq '^[0-9a-f]{40}$'
+          git fetch origin refs/heads/dev:refs/remotes/origin/dev
+          test "$(git rev-parse refs/remotes/origin/dev)" = "$SOURCE_SHA" || {
+            echo "dev moved; restart promotion with its new exact head SHA" >&2
+            exit 1
+          }
+          git checkout --detach "$SOURCE_SHA"
+          python3 scripts/promote-product-docs.py --check-source
+
+      - name: Create the release branch and materialize main docs
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+        run: |
+          printf '%s' "$RELEASE_VERSION" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'
+          printf '%s' "$RELEASE_BRANCH" | grep -Eq '^release/[A-Za-z0-9._/-]+$'
+          git switch -c "$RELEASE_BRANCH"
+          python3 scripts/promote-product-docs.py \
+            --write \
+            --source-sha "$SOURCE_SHA" \
+            --release-version "$RELEASE_VERSION"
+          python3 scripts/promote-product-docs.py --check
+          python3 scripts/check-doc-links.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md .github/release-provenance.json
+          git diff --cached --quiet && {
+            echo "No product documentation projection changes were generated." >&2
+            exit 1
+          }
+          git commit -m "docs: project product documentation for $RELEASE_VERSION"
+          git push origin "HEAD:$RELEASE_BRANCH"
+
+      - name: Open reviewed main promotion pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_BRANCH: ${{ inputs.release_branch }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          body_file="$RUNNER_TEMP/product-promotion.md"
+          cat > "$body_file" <<EOF
+          ## Controlled product promotion
+
+          This pull request was generated from the exact dev commit $SOURCE_SHA.
+
+          It contains the complete dev product snapshot plus the generated stable root
+          README and release provenance. Review the full code and product documentation
+          together. Do not merge if dev has moved or if the generated README projection
+          is stale.
+
+          The stable CI verifies the recorded dev SHA, the projection, documentation
+          links, package checks, and marketplace preflight before merge.
+          EOF
+          gh pr create \
+            --base main \
+            --head "$RELEASE_BRANCH" \
+            --title "Promote $RELEASE_VERSION product snapshot to main" \
+            --body-file "$body_file"
