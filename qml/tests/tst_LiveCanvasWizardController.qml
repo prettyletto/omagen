@@ -15,10 +15,14 @@ TestCase {
     property bool workflowCancelRequested: false
     property bool workflowBackRequested: false
     property bool restoreAndCloseRequested: false
+    property bool cancelSignalSawInactiveWorkflow: false
 
     Connections {
         target: controller
-        function onWorkflowCancelRequested() { workflowCancelRequested = true }
+        function onWorkflowCancelRequested() {
+            workflowCancelRequested = true
+            cancelSignalSawInactiveWorkflow = !controller.workflowStepActive
+        }
         function onWorkflowBackRequested() { workflowBackRequested = true }
         function onRestoreAndCloseRequested() { restoreAndCloseRequested = true }
     }
@@ -32,6 +36,7 @@ TestCase {
         workflowCancelRequested = false
         workflowBackRequested = false
         restoreAndCloseRequested = false
+        cancelSignalSawInactiveWorkflow = false
         controller.selectedVariant = "source"
         controller.selectedLookFeelPreset = "omarchy-native"
         controller.restoreFromFirstStep = false
@@ -141,6 +146,17 @@ TestCase {
         verify(controller.canGoBack)
         verify(controller.goBack())
         verify(workflowCancelRequested)
+    }
+
+    function test_cancelWorkflowInvalidatesBeforeEmittingCancellation() {
+        controller.beginWorkflow(true)
+
+        verify(controller.cancelWorkflow())
+        verify(cancelSignalSawInactiveWorkflow)
+        verify(!controller.workflowStepActive)
+        verify(!controller.sourceImageSelected)
+        compare(controller.workflowMode, "")
+        verify(!controller.workflowModeConfirmed)
     }
 
     function test_workflowContinueIsSingleFlightAndCanRetryAfterFailure() {
