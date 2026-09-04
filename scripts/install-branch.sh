@@ -5,6 +5,8 @@ set -Eeuo pipefail
 # to execute a mutable branch head, so the caller can inspect the commit before
 # running the installer.
 REPOSITORY="${OMAGEN_TEST_REPOSITORY:-https://github.com/prettyletto/omagen.git}"
+# Retain the branch input for compatibility with existing tester commands. It
+# is informational only; it must never select the source that gets executed.
 BRANCH="${OMAGEN_TEST_BRANCH:-nightly}"
 COMMIT="${OMAGEN_TEST_COMMIT:-}"
 
@@ -26,7 +28,7 @@ for arg in "$@"; do
 done
 
 command -v git >/dev/null 2>&1 || {
-    echo "git is required to install a branch checkout." >&2
+    echo "git is required to install an exact commit checkout." >&2
     exit 1
 }
 
@@ -43,8 +45,9 @@ cleanup() {
 trap cleanup EXIT
 
 checkout="$checkout_root/source"
-echo "Fetching Omagen branch '$BRANCH' for commit $COMMIT..."
-git clone --no-checkout --filter=blob:none --single-branch --branch "$BRANCH" "$REPOSITORY" "$checkout"
+echo "Fetching Omagen commit $COMMIT (branch hint '$BRANCH' is informational only)..."
+git init --quiet "$checkout"
+git -C "$checkout" remote add origin "$REPOSITORY"
 git -C "$checkout" fetch --depth 1 origin "$COMMIT"
 git -C "$checkout" checkout --detach "$COMMIT"
 actual_commit="$(git -C "$checkout" rev-parse HEAD)"
@@ -54,7 +57,7 @@ actual_commit="$(git -C "$checkout" rev-parse HEAD)"
 }
 echo "Testing exact commit $actual_commit."
 
-echo "Installing Omagen branch '$BRANCH'..."
+echo "Installing Omagen commit '$actual_commit'..."
 "$checkout/dev-install.sh" --skip-build
 
-echo "Omagen branch '$BRANCH' is installed."
+echo "Omagen commit '$actual_commit' is installed."
