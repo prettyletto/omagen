@@ -44,6 +44,10 @@ USER_THEME_SET="$XDG_BIN_HOME/omagen-theme-set"
   printf 'full-bar manifest was not installed\n' >&2
   exit 1
 }
+[[ -f "$XDG_CONFIG_HOME/omarchy/plugins/pretty.omagen.bar/qml/services/BoundedOutputParser.qml" ]] || {
+  printf 'full-bar QML service dependency was not installed\n' >&2
+  exit 1
+}
 [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]] || {
   printf 'user dispatcher ownership marker missing\n' >&2
   exit 1
