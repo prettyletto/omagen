@@ -155,6 +155,8 @@ for destination in \
     "$BAR_DEST_DIR/NativeBarClone.qml" \
     "$BAR_DEST_DIR/WorkspacePresentation.qml" \
     "$BAR_DEST_DIR/BarModel.js" \
+    "$BAR_DEST_DIR/qml" \
+    "$BAR_DEST_DIR/qml/services" \
     "$BAR_DEST_DIR/glitch.frag.qsb" \
     "$BAR_DEST_DIR/glitch.vert.qsb"; do
     if [[ -L "$destination" ]]; then
@@ -172,6 +174,14 @@ cp "$SRC_DIR/WorkspacePresentation.qml" "$BAR_DEST_DIR/WorkspacePresentation.qml
 cp "$SRC_DIR/BarModel.js" "$BAR_DEST_DIR/BarModel.js"
 rm -rf "$BAR_DEST_DIR/bar"
 cp -a "$SRC_DIR/bar" "$BAR_DEST_DIR/bar"
+# The full-bar plugin is installed independently from pretty.omagen, so it
+# must carry the service used by NativeBarClone and bar/CustomCommandModule.
+# Keep the payload minimal rather than merging the overlay's qml tree or
+# manifests.
+rm -rf "$BAR_DEST_DIR/qml"
+mkdir -p "$BAR_DEST_DIR/qml/services"
+cp "$SRC_DIR/qml/services/BoundedOutputParser.qml" \
+    "$BAR_DEST_DIR/qml/services/BoundedOutputParser.qml"
 cp "$SRC_DIR/qml/components/glitch.frag.qsb" "$BAR_DEST_DIR/glitch.frag.qsb"
 cp "$SRC_DIR/qml/components/glitch.vert.qsb" "$BAR_DEST_DIR/glitch.vert.qsb"
 
