@@ -159,13 +159,17 @@ Item {
     function cancelWorkflow() {
         if (!root.workflowStepActive)
             return false
-        root.workflowCancelRequested()
+        // In the composition root this signal is wired back to
+        // cancelPreSessionWorkflow(), which calls this method again. Clear
+        // the active state before emitting so that close/Back cancellation
+        // cannot recurse while the signal is being delivered.
         root.workflowStepActive = false
         root.sourceImageSelected = false
         root.workflowMode = ""
         root.workflowModeConfirmed = false
         root.workflowContinuePending = false
         root.workflowHistoryAvailable = false
+        root.workflowCancelRequested()
         return true
     }
 

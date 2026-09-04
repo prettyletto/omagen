@@ -26,6 +26,7 @@ Omarchy, and the runtime adapters meet through explicit data/protocol seams.
   assets, and the `bar/BarSizing.js` helper used by the overlay.
 - `~/.config/omarchy/plugins/pretty.omagen.bar/` contains the full-Bar entry
   point, Bar host files, `bar/` presets/widgets, the maintained Quattro clone,
-  and compiled shader assets.
+  its bounded `qml/services/BoundedOutputParser.qml` dependency, and compiled
+  shader assets.
 
 Neither manifest may absorb the other product's entry point or ownership.
