@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# This script installs a tester-selected, exact commit. It deliberately refuses
-# to execute a mutable branch head, so the caller can inspect the commit before
-# running the installer.
-REPOSITORY="${OMAGEN_TEST_REPOSITORY:-https://github.com/prettyletto/omagen.git}"
+# This script installs a tester-selected, exact commit from the Omagen
+# repository. It deliberately refuses to execute a mutable branch head, so the
+# caller can inspect the commit before running the installer. Fork testing is
+# intentionally outside this marketplace-scanned bootstrap.
 # Retain the branch input for compatibility with existing tester commands. It
 # is informational only; it must never select the source that gets executed.
 BRANCH="${OMAGEN_TEST_BRANCH:-nightly}"
@@ -16,7 +16,7 @@ Usage: OMAGEN_TEST_COMMIT=<full-sha> $0
 
 The exact commit is required before any checked-out code is executed:
   OMAGEN_TEST_COMMIT=<40-character-sha>
-  OMAGEN_TEST_BRANCH=<branch> OMAGEN_TEST_REPOSITORY=<url> $0
+  OMAGEN_TEST_BRANCH=<branch> $0
 EOF
 }
 
@@ -47,8 +47,8 @@ trap cleanup EXIT
 checkout="$checkout_root/source"
 echo "Fetching Omagen commit $COMMIT (branch hint '$BRANCH' is informational only)..."
 git init --quiet "$checkout"
-git -C "$checkout" remote add origin "$REPOSITORY"
-git -C "$checkout" fetch --depth 1 origin "$COMMIT"
+git -C "$checkout" remote add origin https://github.com/prettyletto/omagen.git
+git -C "$checkout" fetch --depth 1 https://github.com/prettyletto/omagen.git "$COMMIT"
 git -C "$checkout" checkout --detach "$COMMIT"
 actual_commit="$(git -C "$checkout" rev-parse HEAD)"
 [[ "$actual_commit" == "$COMMIT" ]] || {

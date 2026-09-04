@@ -123,8 +123,9 @@ OMAGEN_TEST_BRANCH=nightly OMAGEN_TEST_COMMIT=<full-40-character-commit-sha> \
 The bootstrap refuses to execute a mutable branch head. It initializes an
 empty checkout, fetches only the requested full commit, checks it out detached,
 and only then runs `dev-install.sh --skip-build`. `OMAGEN_TEST_COMMIT` is the
-source-of-truth selector; `OMAGEN_TEST_BRANCH` is retained as an informational
-tester hint, while `OMAGEN_TEST_REPOSITORY` selects a different fork.
+source-of-truth selector and `OMAGEN_TEST_BRANCH` is retained only as an
+informational tester hint. This marketplace-scanned bootstrap intentionally
+fetches the Omagen repository itself; test a fork from a separate checkout.
 
 The regular `install.sh` still builds the backend by default. Pass
 `--skip-build` only when the checked-in binary is the intended artifact, as in
