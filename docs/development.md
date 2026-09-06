@@ -91,6 +91,21 @@ pushes to those protected branches. A binary change without a matching source
 build fails the check. Candidate and stable commits also receive the
 marketplace-preflight report described in [the release process](development/release-process.md).
 
+## Repository history budget
+
+The plugin package intentionally carries the current `bin/omagen` and
+`bin/omagen-studio` executables because users must be able to install and run
+Omagen without a Go toolchain. Those two paths are the only large-file
+exceptions in the repository history policy; the bundled-backend verifier still
+requires each executable to match a deterministic build from `backend/`.
+
+New or modified non-runtime files over 5 MiB are rejected on pull requests
+targeting `dev` or `main`. Large walkthrough videos, GIFs, screenshots, and
+other documentation media belong in release or documentation hosting rather
+than the plugin Git history. Removing a file in a later commit does not remove
+its old Git objects, so a history cleanup is an explicit maintenance operation
+and not a substitute for this forward-looking policy.
+
 The root <code>preview.png</code> is a marketplace showcase image. It is not a
 runtime entry point and is not required by the Omarchy shell loader; the
 community marketplace can resize and optimize it for plugin listings.
