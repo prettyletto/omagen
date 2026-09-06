@@ -50,10 +50,15 @@ jobs:
         run: scripts/test-large-file-deltas.sh
 
       - name: Enforce repository history policy
+        if: github.event_name != 'push' || github.event.forced != true
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: scripts/check-large-file-deltas.sh "$BASE_SHA" "$HEAD_SHA"
+
+      - name: Explain forced-history maintenance exception
+        if: github.event_name == 'push' && github.event.forced == true
+        run: echo "Skipped the base-to-head large-file diff because this is a forced history maintenance push; pull requests and ordinary pushes remain enforced."
 
       - name: Install documentation tooling
         run: |
