@@ -23,11 +23,25 @@ without committing to it, and apply it safely when it feels right.
 ## Get started
 
 Omagen is built for Omarchy Quattro with Hyprland and Quickshell on Linux
-x86_64. Install the stable repository through Omarchy's plugin manager:
+x86_64. Install the stable repository through Omarchy's plugin manager, then
+run the bundled package installer once so the same repository materializes both
+Omagen plugin packages:
 
-```sh
-omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
+```zsh
+omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes && \
+  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only
 ```
+
+The first command installs and enables the Studio overlay. Omarchy's plugin
+manager validates only the repository's root manifest, so the second command
+also installs the separate `pretty.omagen.bar` package from the same checkout.
+It does not select that bar; the native Quattro bar remains active until you
+choose a full-bar preset in Omagen. The checked-in backend is used, so Go is not
+required.
+
+After updating the plugin with `omarchy plugin update pretty.omagen --yes`,
+run `"$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only`
+again to synchronize the full-bar package.
 
 Then open Omagen from the Omarchy launcher, choose a local image, review a
 palette direction, and use **Preview** or **Demo** before selecting **Apply**.
