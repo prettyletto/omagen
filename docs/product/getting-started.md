@@ -22,7 +22,7 @@ bundled package installer once:
 
 ```zsh
 omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes && \
-  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --skip-build
+  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only
 ```
 
 The plugin manager installs the repository's root `pretty.omagen` package. The
@@ -32,7 +32,8 @@ The full-bar package is installed but not selected; the native Quattro bar
 remains active until you choose a full-bar preset in Omagen.
 
 After updating the plugin with `omarchy plugin update pretty.omagen --yes`, run
-the installer command again to synchronize the full-bar package.
+`"$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only` again to
+synchronize the full-bar package.
 
 ## First launch
 

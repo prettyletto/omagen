@@ -35,7 +35,7 @@ Omagen plugin packages:
 
 ```zsh
 omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes && \
-  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --skip-build
+  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only
 ```
 
 The first command installs and enables the Studio overlay. Omarchy's plugin
@@ -46,7 +46,8 @@ choose a full-bar preset in Omagen. The checked-in backend is used, so Go is not
 required.
 
 After updating the plugin with `omarchy plugin update pretty.omagen --yes`,
-run the installer command again to synchronize the full-bar package.
+run `"$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only`
+again to synchronize the full-bar package.
 
 Then open Omagen from the Omarchy launcher, choose a local image, review a
 palette direction, and use **Preview** or **Demo** before selecting **Apply**.
