@@ -607,7 +607,7 @@ func NormalizeDesktopStyle(s DesktopStyle) DesktopStyle {
 }
 
 func (s DesktopStyle) Valid() bool {
-	return validChoice(s.BorderStyle, "solid", "split", "split_top", "split_bottom", "blend", "neon", "spin") &&
+	return validChoice(s.BorderStyle, "solid", "split", "split_top", "split_bottom", "blend", "neon", "spin", "dual") &&
 		validChoice(s.BorderSizeMode, "default", "none", "fixed") &&
 		s.BorderSize >= -1 && s.BorderSize <= 24 &&
 		((s.BorderSizeMode == "default" && s.BorderSize == -1) ||

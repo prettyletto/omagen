@@ -55,6 +55,11 @@ bright_green = %q
 bright_cyan = %q
 bright_blue = %q
 bright_magenta = %q
+
+accent2 = %q
+accent3 = %q
+accent4 = %q
+accent5 = %q
 `,
 		palette.Mode,
 
@@ -87,6 +92,11 @@ bright_magenta = %q
 		palette.BrightCyan,
 		palette.BrightBlue,
 		palette.BrightMagenta,
+
+		palette.Accent2,
+		palette.Accent3,
+		palette.Accent4,
+		palette.Accent5,
 	)
 
 	if err := fsutil.AtomicWriteFile(path, []byte(content), 0o644); err != nil {

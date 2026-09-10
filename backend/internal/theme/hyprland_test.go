@@ -204,6 +204,44 @@ func TestWriteHyprlandNeonAddsFocusedWindowGlow(t *testing.T) {
 	}
 }
 
+func TestWriteHyprlandDualUsesAccents(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", Accent: "#ff2d95", Accent2: "#2de0c8", Magenta: "#cc55ee"}
+	if err := WriteHyprland(dir, p, "dual", 0, "native", "native", "native", "native"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `colors = { "rgb(ff2d95)", "rgb(ff2d95)", "rgb(ff2d95)", "rgb(ff2d95)", "rgb(ff2d95)", "rgb(2de0c8)", "rgb(2de0c8)", "rgb(2de0c8)", "rgb(2de0c8)", "rgb(2de0c8)" }, angle = 45`; !strings.Contains(string(data), want) {
+		t.Errorf("generated dual hyprland.lua missing %q:\n%s", want, data)
+	}
+}
+
+func TestWriteHyprlandDualCapsAtTenStops(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{
+		Foreground: "#e5e7eb", DarkForeground: "#72767d",
+		Accent: "#ff2d95", Accent2: "#2de0c8", Accent3: "#f5d90a", Accent4: "#7a5cff", Accent5: "#22c55e",
+	}
+	if err := WriteHyprland(dir, p, "dual", 0, "native", "native", "native", "native"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "hyprland.lua"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := strings.Index(string(data), "colors = {")
+	end := strings.Index(string(data), "}, angle")
+	if start < 0 || end < 0 {
+		t.Fatalf("could not find gradient colors list:\n%s", data)
+	}
+	if got := strings.Count(string(data)[start:end], "rgb("); got > 10 {
+		t.Fatalf("generated dual gradient has %d stops, exceeds Hyprland's 10-stop shader limit", got)
+	}
+}
+
 func TestWriteHyprlandInactiveModes(t *testing.T) {
 	p := Palette{Foreground: "#e5e7eb", DarkForeground: "#72767d", DarkerBackground: "#050607", Accent: "#aa33cc"}
 	for _, style := range []struct {
