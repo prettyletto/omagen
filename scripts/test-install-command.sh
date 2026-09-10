@@ -44,8 +44,40 @@ USER_THEME_SET="$XDG_BIN_HOME/omagen-theme-set"
   printf 'full-bar manifest was not installed\n' >&2
   exit 1
 }
+[[ -f "$XDG_CONFIG_HOME/omarchy/plugins/pretty.omagen.bar/qml/services/BoundedOutputParser.qml" ]] || {
+  printf 'full-bar QML service dependency was not installed\n' >&2
+  exit 1
+}
 [[ "$(sed -n '1,2p' "$USER_THEME_SET")" == $'#!/usr/bin/env bash\n# Omagen user-facing theme activation adapter' ]] || {
   printf 'user dispatcher ownership marker missing\n' >&2
+  exit 1
+}
+
+# Production starts with the plugin manager's clone as the overlay package.
+# Verify that the documented in-place bar refresh uses that clone as a source
+# without copying the overlay package onto itself or deleting its files.
+PRODUCTION_HOME="$TMP_DIR/production-home"
+PRODUCTION_CONFIG="$PRODUCTION_HOME/.config"
+PRODUCTION_PLUGIN="$PRODUCTION_CONFIG/omarchy/plugins/pretty.omagen"
+mkdir -p "$PRODUCTION_PLUGIN"
+cp -a "$ROOT_DIR/." "$PRODUCTION_PLUGIN/"
+HOME="$PRODUCTION_HOME" \
+XDG_CONFIG_HOME="$PRODUCTION_CONFIG" \
+XDG_STATE_HOME="$PRODUCTION_HOME/.local/state" \
+XDG_CACHE_HOME="$PRODUCTION_HOME/.cache" \
+XDG_BIN_HOME="$PRODUCTION_HOME/.local/bin" \
+OMARCHY_PATH="$OMARCHY_PATH" \
+"$PRODUCTION_PLUGIN/install.sh" --bar-only >/dev/null
+[[ -f "$PRODUCTION_PLUGIN/manifest.json" ]] || {
+  printf 'bar-only production refresh modified the overlay package\n' >&2
+  exit 1
+}
+[[ -f "$PRODUCTION_CONFIG/omarchy/plugins/pretty.omagen.bar/manifest.json" ]] || {
+  printf 'bar-only production refresh did not install the full-bar manifest\n' >&2
+  exit 1
+}
+[[ -f "$PRODUCTION_CONFIG/omarchy/plugins/pretty.omagen.bar/qml/services/BoundedOutputParser.qml" ]] || {
+  printf 'bar-only production refresh did not install the full-bar QML service dependency\n' >&2
   exit 1
 }
 
