@@ -9,6 +9,10 @@ type Palette struct {
 	Mode string
 
 	Accent    string
+	Accent2   string
+	Accent3   string
+	Accent4   string
+	Accent5   string
 	Selection string
 	Muted     string
 
@@ -42,6 +46,12 @@ type Palette struct {
 func (p Palette) Validate() error {
 	if p.Mode != "dark" && p.Mode != "light" {
 		return fmt.Errorf("invalid mode %q", p.Mode)
+	}
+
+	for _, extra := range []string{p.Accent2, p.Accent3, p.Accent4, p.Accent5} {
+		if extra != "" && !validHex(extra) {
+			return fmt.Errorf("invalid accent color %q", extra)
+		}
 	}
 
 	colors := []struct {
@@ -90,6 +100,18 @@ func (p Palette) Validate() error {
 	}
 
 	return nil
+}
+
+// ActiveAccents returns Accent followed by Accent2-5, stopping at the first unset one.
+func (p Palette) ActiveAccents() []string {
+	accents := []string{p.Accent}
+	for _, extra := range []string{p.Accent2, p.Accent3, p.Accent4, p.Accent5} {
+		if !validHex(extra) {
+			break
+		}
+		accents = append(accents, extra)
+	}
+	return accents
 }
 
 func validHex(value string) bool {

@@ -84,6 +84,14 @@ func ReadColors(themeDir string) (Palette, error) {
 			palette.BrightBlue = value
 		case "bright_magenta":
 			palette.BrightMagenta = value
+		case "accent2":
+			palette.Accent2 = value
+		case "accent3":
+			palette.Accent3 = value
+		case "accent4":
+			palette.Accent4 = value
+		case "accent5":
+			palette.Accent5 = value
 		}
 	}
 	if err := scanner.Err(); err != nil {

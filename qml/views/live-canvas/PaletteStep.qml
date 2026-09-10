@@ -26,12 +26,30 @@ Item {
     signal variantRequested(string variant)
     signal colorOverridesCommitted(var overrides)
 
-    readonly property var editableRoles: [
-        { key: "accent", label: "Accent", description: "Focus, controls, and the main visual signal." },
-        { key: "background", label: "Background", description: "The base desktop and terminal surface." },
-        { key: "foreground", label: "Foreground", description: "Readable text and icon colour." },
-        { key: "selection", label: "Selection", description: "Highlights used by editors and interactive surfaces." }
-    ]
+    readonly property var extraAccentKeys: ["accent2", "accent3", "accent4", "accent5"]
+    readonly property var extraAccentFallbackKeys: ["magenta", "cyan", "blue", "green"]
+
+    function extraAccentCount() {
+        const palette = root.paletteFor(root.selectedVariant)
+        const staged = root.stagedColors || ({})
+        let count = 0
+        for (const key of root.extraAccentKeys) {
+            if (!(staged[key] !== undefined ? staged[key] : (palette && palette[key])))
+                break
+            count++
+        }
+        return count
+    }
+
+    readonly property var editableRoles: {
+        const roles = [{ key: "accent", label: "Accent", description: "Focus, controls, and the main visual signal." }]
+        for (let i = 0; i < root.extraAccentCount(); i++)
+            roles.push({ key: root.extraAccentKeys[i], label: "Accent " + (i + 2), description: "Extra accent for the Multi accent border gradient." })
+        roles.push({ key: "background", label: "Background", description: "The base desktop and terminal surface." })
+        roles.push({ key: "foreground", label: "Foreground", description: "Readable text and icon colour." })
+        roles.push({ key: "selection", label: "Selection", description: "Highlights used by editors and interactive surfaces." })
+        return roles
+    }
     readonly property var activeRole: root.editableRoles[root.activeRoleIndex]
         || root.editableRoles[0]
 
@@ -63,8 +81,11 @@ Item {
     }
 
     function presetColor(roleKey) {
-        return root.paletteColor(root.paletteFor(root.selectedVariant), roleKey,
-            root.fallbackColor(roleKey))
+        const palette = root.paletteFor(root.selectedVariant)
+        const extraIndex = root.extraAccentKeys.indexOf(roleKey)
+        if (extraIndex >= 0)
+            return root.paletteColor(palette, roleKey, root.paletteColor(palette, root.extraAccentFallbackKeys[extraIndex], root.accentColor))
+        return root.paletteColor(palette, roleKey, root.fallbackColor(roleKey))
     }
 
     function editorColor(roleKey) {
@@ -95,6 +116,16 @@ Item {
 
     function resetColours() {
         root.colorOverridesCommitted({})
+    }
+
+    function addAccent() {
+        const count = root.extraAccentCount()
+        if (count >= root.extraAccentKeys.length)
+            return
+        const key = root.extraAccentKeys[count]
+        const next = root.copyColors(root.stagedColors)
+        next[key] = root.presetColor(key)
+        root.colorOverridesCommitted(next)
     }
 
     function openCustomColours() {
@@ -571,6 +602,20 @@ Item {
                             }
                         }
                     }
+                }
+
+                Button {
+                    Layout.preferredWidth: Style.space(120)
+                    Layout.preferredHeight: Style.space(34)
+                    visible: root.extraAccentCount() < root.extraAccentKeys.length
+                    text: "Add accent"
+                    fontSize: Style.font.caption
+                    foreground: root.foregroundColor
+                    accent: root.accentColor
+                    background: Util.alpha(root.foregroundColor, 0.045)
+                    bordered: true
+                    enabled: root.controlsEnabled
+                    onClicked: root.addAccent()
                 }
 
                 Components.ColorRoleEditor {

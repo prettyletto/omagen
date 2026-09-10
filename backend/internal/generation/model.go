@@ -71,6 +71,10 @@ type Result struct {
 type PaletteView struct {
 	Mode              string `json:"mode"`
 	Accent            string `json:"accent"`
+	Accent2           string `json:"accent2"`
+	Accent3           string `json:"accent3"`
+	Accent4           string `json:"accent4"`
+	Accent5           string `json:"accent5"`
 	Selection         string `json:"selection"`
 	Muted             string `json:"muted"`
 	Background        string `json:"background"`

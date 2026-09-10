@@ -12,6 +12,14 @@ func ApplyColorOverrides(palette Palette, overrides map[string]string) (Palette,
 		switch role {
 		case "accent":
 			palette.Accent = value
+		case "accent2":
+			palette.Accent2 = value
+		case "accent3":
+			palette.Accent3 = value
+		case "accent4":
+			palette.Accent4 = value
+		case "accent5":
+			palette.Accent5 = value
 		case "selection":
 			palette.Selection = value
 		case "muted":

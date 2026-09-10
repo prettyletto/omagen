@@ -55,7 +55,7 @@ func hasGeneratedPaletteDirections(generationRoot string) bool {
 }
 
 func paletteView(p theme.Palette) PaletteView {
-	return PaletteView{Mode: p.Mode, Accent: p.Accent, Selection: p.Selection, Muted: p.Muted, Background: p.Background, DarkBackground: p.DarkBackground, DarkerBackground: p.DarkerBackground, LighterBackground: p.LighterBackground, Foreground: p.Foreground, DarkForeground: p.DarkForeground, LightForeground: p.LightForeground, BrightForeground: p.BrightForeground, Red: p.Red, Yellow: p.Yellow, Orange: p.Orange, Green: p.Green, Cyan: p.Cyan, Blue: p.Blue, Magenta: p.Magenta, Brown: p.Brown, BrightRed: p.BrightRed, BrightYellow: p.BrightYellow, BrightGreen: p.BrightGreen, BrightCyan: p.BrightCyan, BrightBlue: p.BrightBlue, BrightMagenta: p.BrightMagenta}
+	return PaletteView{Mode: p.Mode, Accent: p.Accent, Accent2: p.Accent2, Accent3: p.Accent3, Accent4: p.Accent4, Accent5: p.Accent5, Selection: p.Selection, Muted: p.Muted, Background: p.Background, DarkBackground: p.DarkBackground, DarkerBackground: p.DarkerBackground, LighterBackground: p.LighterBackground, Foreground: p.Foreground, DarkForeground: p.DarkForeground, LightForeground: p.LightForeground, BrightForeground: p.BrightForeground, Red: p.Red, Yellow: p.Yellow, Orange: p.Orange, Green: p.Green, Cyan: p.Cyan, Blue: p.Blue, Magenta: p.Magenta, Brown: p.Brown, BrightRed: p.BrightRed, BrightYellow: p.BrightYellow, BrightGreen: p.BrightGreen, BrightCyan: p.BrightCyan, BrightBlue: p.BrightBlue, BrightMagenta: p.BrightMagenta}
 }
 
 func validGenerationComponent(value string) bool {

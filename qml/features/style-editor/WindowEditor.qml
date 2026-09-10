@@ -21,7 +21,8 @@ Item {
     readonly property var borderOptions: [
         { key: "solid", title: "Solid" }, { key: "split_top", title: "Split top" },
         { key: "split_bottom", title: "Split bottom" }, { key: "blend", title: "Accent blend" },
-        { key: "neon", title: "Neon" }, { key: "spin", title: "Spinning" }
+        { key: "neon", title: "Neon" }, { key: "spin", title: "Spinning" },
+        { key: "dual", title: "Multi accent" }
     ]
     readonly property var shapeOptions: [
         { key: "native", title: "Default" }, { key: "subtle", title: "Subtle" },
@@ -58,7 +59,8 @@ Item {
                 split_bottom: "An accent border with a stronger bottom edge for the focused window.",
                 blend: "A softer border that blends the accent into the window surface.",
                 neon: "A high-contrast accent border for a more luminous focused window.",
-                spin: "An animated accent border treatment for the focused window."
+                spin: "An animated accent border treatment for the focused window.",
+                dual: "A gradient across Accent plus up to 4 extra accents from Custom colours, split evenly."
             },
             shape: {
                 native: "Use the active theme's normal window corner radius.",
