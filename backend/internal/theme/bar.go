@@ -17,11 +17,9 @@ func appendBarOverrides(b *strings.Builder, p Palette, surface, density, attenti
 		return nil
 	}
 
-	if form == "docked" {
-		// The native bar keeps its widgets and input surface; Omagen's additive
-		// section-surface renderer sits underneath those widgets.
-		b.WriteString("background-alpha = 0.0\n")
-	}
+	// Bar topology is handed off through the theme-scoped bar profile. Do not
+	// hide the native bar here: it is the safe fallback while a replacement bar
+	// loads, and shell.toml must never make the desktop bar disappear on its own.
 	switch surface {
 	case "dark":
 		fmt.Fprintf(b, "background = %q\ntext = %q\n", p.DarkBackground, p.Foreground)

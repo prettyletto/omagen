@@ -521,7 +521,7 @@ func TestGenerateEmitsMergedShellAndSectionOverrides(t *testing.T) {
 		t.Fatalf("generated root shell.toml is missing merged sections:\n%s", rootShell)
 	}
 	for section, wants := range map[string][]string{
-		"bar":      {"background-alpha = 0.0", "size-horizontal = 30", "size-vertical = 32", "active = "},
+		"bar":      {"background = ", "size-horizontal = 30", "size-vertical = 32", "active = "},
 		"popups":   {"background = "},
 		"menu":     {"selected-background = ", "selected-background-alpha = 0.18"},
 		"launcher": {"selected-background = ", "selected-background-alpha = 0.18"},
@@ -539,6 +539,9 @@ func TestGenerateEmitsMergedShellAndSectionOverrides(t *testing.T) {
 			if !strings.Contains(text, want) {
 				t.Errorf("shell.%s.toml missing %q:\n%s", section, want, text)
 			}
+		}
+		if section == "bar" && strings.Contains(text, "background-alpha = 0.0") {
+			t.Errorf("shell.%s.toml must keep the native fallback visible:\n%s", section, text)
 		}
 	}
 	metadata, err := os.ReadFile(filepath.Join(sourceDir, "omagen.bar.toml"))

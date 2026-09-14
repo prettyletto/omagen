@@ -185,10 +185,13 @@ func TestWriteShellEmitsDockedBarFormWithoutChangingOtherBarOptions(t *testing.T
 		t.Fatal(err)
 	}
 	text := readShellSection(t, dir, "bar")
-	for _, want := range []string{"background-alpha = 0.0", `background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
+	for _, want := range []string{`background = "#08090a"`, `text = "#e5e7eb"`, "size-horizontal = 30", "size-vertical = 32"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("shell.bar.toml missing %q:\n%s", want, text)
 		}
+	}
+	if strings.Contains(text, "background-alpha = 0.0") {
+		t.Fatalf("docked bar must retain an opaque native fallback:\n%s", text)
 	}
 	if strings.Contains(text, "form =") {
 		t.Fatalf("shell.bar.toml should not contain Omagen-owned form metadata:\n%s", text)
@@ -208,6 +211,22 @@ func TestWriteShellEmitsDockedBarFormWithoutChangingOtherBarOptions(t *testing.T
 		if !strings.Contains(string(profile), want) {
 			t.Fatalf("omagen.bar.json missing %q:\n%s", want, profile)
 		}
+	}
+}
+
+func TestWriteShellKeepsNativeBarVisibleWhenReplacementSpecIsSelected(t *testing.T) {
+	dir := t.TempDir()
+	p := Palette{Background: "#101112", Foreground: "#e5e7eb", DarkBackground: "#08090a", DarkerBackground: "#050607", LighterBackground: "#222426", Selection: "#334455", Accent: "#aa33cc"}
+	spec, err := bar.Preset("dock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteShellWithOverridesAndSpec(dir, p, "flat", "native", "native", "native", "dark", "comfortable", "semantic", "docked", "native", nil, &spec); err != nil {
+		t.Fatal(err)
+	}
+	text := readShellSection(t, dir, "bar")
+	if strings.Contains(text, "background-alpha = 0.0") {
+		t.Fatalf("replacement bar spec must not make the native fallback transparent:\n%s", text)
 	}
 }
 

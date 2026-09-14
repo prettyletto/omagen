@@ -222,16 +222,15 @@ Item {
         ? 1
         : (root.spec.surface && root.spec.surface.opacity !== undefined ? Math.max(0, Math.min(1, Number(root.spec.surface.opacity))) : 1)
     readonly property string rawBarBackground: String(Color.shellValues["bar.background"] || "")
-    // The native host is intentionally hidden with bar.background-alpha while
-    // a replacement is active. Read the raw compiled colour here so Omagen's
-    // visible surface still receives the staged Bar colour without inheriting
-    // that native-host alpha suppression.
+    // Keep the replacement surface's colour independent from the native shell
+    // bar alpha. The selected BarSpec owns the replacement opacity, while this
+    // raw token still supplies the staged theme colour.
     readonly property color surfaceColor: root.rawBarBackground !== ""
         ? Color.flatColor(root.rawBarBackground, Color.background)
         : root.surfaceFor(String(root.spec.surface && root.spec.surface.role || "native"))
-    // Non-native bars intentionally set the native shell bar alpha to zero so
-    // the old host does not paint underneath them. A replacement island still
-    // needs an opaque fill when its surface role is "native".
+    // A replacement surface still needs a concrete fill when its surface role
+    // is "native"; its own BarSpec opacity, rather than shell.toml's native
+    // bar alpha, controls translucency.
     readonly property color replacementSurfaceColor: root.surfaceColor
     readonly property color borderColor: String(root.spec.surface && root.spec.surface.border_role || "none") === "accent" ? Color.accent : Color.foreground
     readonly property real borderOpacity: root.spec.surface && root.spec.surface.border_opacity !== undefined ? Math.max(0, Math.min(1, Number(root.spec.surface.border_opacity))) : 0

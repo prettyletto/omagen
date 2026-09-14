@@ -208,11 +208,6 @@ func WriteShellWithOverridesAndSpec(themeDir string, palette Palette, surface, d
 		}
 		if compiled.Native {
 			appendNativeBarSpec(&barSection.body, palette, compiled.Spec)
-		} else {
-			// Advanced shapes are rendered by the click-through adapter beneath
-			// native widgets. Expose that decoration without changing widget
-			// placement or input ownership.
-			barSection.body.WriteString("background-alpha = 0.0\n")
 		}
 	}
 	if err := appendShellOverrides(map[string]*shellSection{
