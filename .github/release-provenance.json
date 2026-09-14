@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "product-docs-projection-v1",
+  "sourceBranch": "dev",
+  "sourceSha": "39315664dc8479feaabf32d31c0d5650b4d9993f",
+  "releaseVersion": "v2.0.1",
+  "generatedFiles": [
+    "README.md"
+  ],
+  "generatedAt": "2026-09-14T18:13:23.998863Z"
+}
