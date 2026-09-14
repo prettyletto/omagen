@@ -82,10 +82,9 @@ Item {
   property color foreground: themeForeground
   property color barForeground: useTransparentForeground ? transparentForeground : themeForeground
   property bool foregroundAnimationEnabled: true
-  // Omagen suppresses the shared native bar with bar.background-alpha=0
-  // while a replacement is selected. The clone owns its own PanelWindow, so
-  // recover the raw bar color and keep it opaque unless the user explicitly
-  // toggles this bar transparent.
+  // The clone owns its own PanelWindow. Recover the raw bar colour rather than
+  // inheriting a native shell alpha, and keep the clone opaque unless the user
+  // explicitly toggles this bar transparent.
   readonly property string rawBarBackground: String(Color.shellValues["bar.background"] || "")
   property color background: root.rawBarBackground !== ""
     ? Color.flatColor(root.rawBarBackground, Color.background)
