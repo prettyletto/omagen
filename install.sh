@@ -23,22 +23,93 @@ done
 
 usage() {
     cat <<EOF
-Usage: $0 [--skip-build]
+Usage: $0 [--skip-build|--bar-only]
 
 Options:
   --skip-build  Install the checked-in backend binary without compiling Go.
+  --bar-only    Install or refresh only the separate full-bar package.
 EOF
 }
 
 BUILD_BACKEND=1
+BAR_ONLY=0
 
 for arg in "$@"; do
     case "$arg" in
         -h|--help) usage; exit 0 ;;
         --skip-build) BUILD_BACKEND=0 ;;
+        --bar-only) BAR_ONLY=1; BUILD_BACKEND=0 ;;
         *) usage >&2; exit 2 ;;
     esac
 done
+
+install_full_bar() {
+    if [[ "$SRC_DIR" == "$BAR_DEST_DIR" ]]; then
+        echo "Refusing to install the full bar from its own destination: $SRC_DIR" >&2
+        return 1
+    fi
+
+    # The full bar is a separate plugin kind. Keeping it separate from the
+    # bar-widget manifest is required by Quattro's registry: a manifest
+    # selected as the active bar is not also treated as a layout widget.
+    echo "Installing $BAR_PLUGIN_ID..."
+    if [[ -L "$BAR_DEST_DIR" ]]; then
+        echo "Refusing to install through symlinked plugin directory: $BAR_DEST_DIR" >&2
+        return 1
+    fi
+    mkdir -p "$BAR_DEST_DIR"
+    for destination in \
+        "$BAR_DEST_DIR/manifest.json" \
+        "$BAR_DEST_DIR/OmagenBar.qml" \
+        "$BAR_DEST_DIR/BarSurface.qml" \
+        "$BAR_DEST_DIR/BarMoveGhostPanel.qml" \
+        "$BAR_DEST_DIR/CyberpunkBarSignal.qml" \
+        "$BAR_DEST_DIR/NativeBarClone.qml" \
+        "$BAR_DEST_DIR/WorkspacePresentation.qml" \
+        "$BAR_DEST_DIR/BarModel.js" \
+        "$BAR_DEST_DIR/qml" \
+        "$BAR_DEST_DIR/qml/services" \
+        "$BAR_DEST_DIR/glitch.frag.qsb" \
+        "$BAR_DEST_DIR/glitch.vert.qsb"; do
+        if [[ -L "$destination" ]]; then
+            echo "Refusing to install through symlinked package path: $destination" >&2
+            return 1
+        fi
+    done
+    cp "$SRC_DIR/bar-manifest.json" "$BAR_DEST_DIR/manifest.json"
+    cp "$SRC_DIR/OmagenBar.qml" "$BAR_DEST_DIR/OmagenBar.qml"
+    cp "$SRC_DIR/BarSurface.qml" "$BAR_DEST_DIR/BarSurface.qml"
+    cp "$SRC_DIR/BarMoveGhostPanel.qml" "$BAR_DEST_DIR/BarMoveGhostPanel.qml"
+    cp "$SRC_DIR/CyberpunkBarSignal.qml" "$BAR_DEST_DIR/CyberpunkBarSignal.qml"
+    cp "$SRC_DIR/NativeBarClone.qml" "$BAR_DEST_DIR/NativeBarClone.qml"
+    cp "$SRC_DIR/WorkspacePresentation.qml" "$BAR_DEST_DIR/WorkspacePresentation.qml"
+    cp "$SRC_DIR/BarModel.js" "$BAR_DEST_DIR/BarModel.js"
+    rm -rf "$BAR_DEST_DIR/bar"
+    cp -a "$SRC_DIR/bar" "$BAR_DEST_DIR/bar"
+    # The full-bar plugin is installed independently from pretty.omagen, so it
+    # must carry the service used by NativeBarClone and bar/CustomCommandModule.
+    # Keep the payload minimal rather than merging the overlay's qml tree or
+    # manifests.
+    rm -rf "$BAR_DEST_DIR/qml"
+    mkdir -p "$BAR_DEST_DIR/qml/services"
+    cp "$SRC_DIR/qml/services/BoundedOutputParser.qml" \
+        "$BAR_DEST_DIR/qml/services/BoundedOutputParser.qml"
+    cp "$SRC_DIR/qml/components/glitch.frag.qsb" "$BAR_DEST_DIR/glitch.frag.qsb"
+    cp "$SRC_DIR/qml/components/glitch.vert.qsb" "$BAR_DEST_DIR/glitch.vert.qsb"
+
+    echo "Installed $BAR_PLUGIN_ID -> $BAR_DEST_DIR"
+}
+
+if ((BAR_ONLY)); then
+    install_full_bar
+    if omarchy-shell shell rescanPlugins; then
+        echo "Omarchy shell rescanned plugins."
+    else
+        echo "Omarchy shell is not running; rescan later with:"
+        echo "  omarchy-shell shell rescanPlugins"
+    fi
+    exit 0
+fi
 
 if ((BUILD_BACKEND)); then
     echo "Building Omagen backend..."
@@ -50,6 +121,12 @@ else
         exit 1
     }
     echo "Using checked-in Omagen backend (Go build skipped)."
+fi
+
+if [[ "$SRC_DIR" == "$DEST_DIR" ]]; then
+    echo "Refusing a full install from the installed overlay directory: $SRC_DIR" >&2
+    echo "Run this installer from an external checkout, or use --bar-only to refresh the full bar." >&2
+    exit 1
 fi
 
 echo "Installing Omagen..."
@@ -186,7 +263,7 @@ cp "$SRC_DIR/qml/components/glitch.frag.qsb" "$BAR_DEST_DIR/glitch.frag.qsb"
 cp "$SRC_DIR/qml/components/glitch.vert.qsb" "$BAR_DEST_DIR/glitch.vert.qsb"
 
 echo "Installed $PLUGIN_ID -> $DEST_DIR"
-echo "Installed $BAR_PLUGIN_ID -> $BAR_DEST_DIR"
+install_full_bar
 
 if omarchy-shell shell rescanPlugins; then
     echo "Omarchy shell rescanned plugins."

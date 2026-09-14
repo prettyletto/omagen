@@ -17,15 +17,23 @@ fallback is selected instead.
 
 ## Install
 
-Install the stable repository with Omarchy's plugin manager:
+Install the stable repository with Omarchy's plugin manager, then run the
+bundled package installer once:
 
-```sh
-omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes
+```zsh
+omarchy plugin add https://github.com/prettyletto/omagen.git --enable --yes && \
+  "$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only
 ```
 
-This installs the Omagen suite without requiring Go. The core overlay and the
-optional full-bar package remain separate in Omarchy's registry so the native
-Quattro bar is not replaced unexpectedly.
+The plugin manager installs the repository's root `pretty.omagen` package. The
+second command installs the separate `pretty.omagen.bar` package from the same
+repository checkout. This uses the checked-in backend, so Go is not required.
+The full-bar package is installed but not selected; the native Quattro bar
+remains active until you choose a full-bar preset in Omagen.
+
+After updating the plugin with `omarchy plugin update pretty.omagen --yes`, run
+`"$HOME/.config/omarchy/plugins/pretty.omagen/install.sh" --bar-only` again to
+synchronize the full-bar package.
 
 ## First launch
 
