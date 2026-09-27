@@ -27,13 +27,23 @@ Item {
     // its own region.
     property bool compactFlow: false
 
-    readonly property bool hasAnchor: bar.entryIndex(centerGestureGroup.entries,
-        bar.centerAnchor) >= 0
-    readonly property var anchorEntry: bar.entryNamed(centerGestureGroup.entries,
-        bar.centerAnchor)
-    readonly property real anchorWidth: !bar.vertical && hasAnchor
+    // The parent presets declare `bar` with a null default and assign the real
+    // host after creation, so this group's bindings can be evaluated once while
+    // `bar` is still null. Guard every `bar` dereference so that transient state
+    // does not log "Cannot read property ... of null".
+    readonly property bool barReady: centerGestureGroup.bar !== null
+        && centerGestureGroup.bar !== undefined
+
+    readonly property bool hasAnchor: centerGestureGroup.barReady
+        && bar.entryIndex(centerGestureGroup.entries,
+            bar.centerAnchor) >= 0
+    readonly property var anchorEntry: centerGestureGroup.barReady
+        ? bar.entryNamed(centerGestureGroup.entries, bar.centerAnchor) : null
+    readonly property real anchorWidth: centerGestureGroup.barReady
+        && !bar.vertical && hasAnchor
         ? centerAnchorModule.implicitWidth : 0
-    readonly property real anchorHeight: bar.vertical && hasAnchor
+    readonly property real anchorHeight: centerGestureGroup.barReady
+        && bar.vertical && hasAnchor
         ? centerAnchorModule.implicitHeight : 0
     readonly property real beforeWidth: compactAnchorOnly ? 0 : centerBeforeGroup.implicitWidth
     readonly property real afterWidth: compactAnchorOnly ? 0 : centerAfterGroup.implicitWidth
@@ -43,16 +53,18 @@ Item {
     // wider/taller on one side of it. Reserve that difference as symmetric
     // space; otherwise the heavier side paints outside the center capsule and
     // its inactive indicators are clipped during expansion.
-    readonly property real horizontalSideBalance: !bar.vertical && hasAnchor
+    readonly property real horizontalSideBalance: centerGestureGroup.barReady
+        && !bar.vertical && hasAnchor
         ? Math.abs(beforeWidth - afterWidth) : 0
-    readonly property real verticalSideBalance: bar.vertical && hasAnchor
+    readonly property real verticalSideBalance: centerGestureGroup.barReady
+        && bar.vertical && hasAnchor
         ? Math.abs(beforeHeight - afterHeight) : 0
 
     // The anchor is centered in the parent, matching Quattro's native center
     // host. The side groups attach to the anchor rather than to the overall
     // row, so unequal side content cannot move the clock off the monitor
     // center.
-    implicitWidth: bar.vertical
+    implicitWidth: centerGestureGroup.barReady && bar.vertical
         ? (hasAnchor
             ? Math.max(anchorWidth, centerBeforeColumn.implicitWidth,
                 centerAfterColumn.implicitWidth)
@@ -61,7 +73,7 @@ Item {
             ? beforeWidth + anchorWidth + afterWidth
                 + (compactFlow ? 0 : horizontalSideBalance)
             : centerRow.implicitWidth)
-    implicitHeight: bar.vertical
+    implicitHeight: centerGestureGroup.barReady && bar.vertical
         ? (hasAnchor
             ? beforeHeight + anchorHeight + afterHeight + verticalSideBalance
             : centerColumn.implicitHeight)
@@ -76,14 +88,18 @@ Item {
     // content without turning the whole left/center/right bar row into a
     // center hover target.
     HoverHandler {
-        onHoveredChanged: centerGestureGroup.bar.setCenterSectionHovered(hovered)
+        onHoveredChanged: {
+            if (centerGestureGroup.barReady)
+                centerGestureGroup.bar.setCenterSectionHovered(hovered)
+        }
     }
 
     Row {
         id: centerRow
         anchors.centerIn: parent
         spacing: 0
-        visible: !bar.vertical && !centerGestureGroup.hasAnchor
+        visible: centerGestureGroup.barReady && !bar.vertical
+            && !centerGestureGroup.hasAnchor
 
         WidgetGroup {
             bar: centerGestureGroup.bar
@@ -97,10 +113,11 @@ Item {
         id: centerBeforeGroup
         bar: centerGestureGroup.bar
         region: "center"
-        entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
+        entries: bar
+            ? bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor) : []
         active: centerGestureGroup.hasAnchor
         collapseContents: centerGestureGroup.compactAnchorOnly
-        visible: !bar.vertical && centerGestureGroup.hasAnchor
+        visible: !!bar && !bar.vertical && centerGestureGroup.hasAnchor
         anchors.right: centerAnchorModule.left
         anchors.verticalCenter: centerAnchorModule.verticalCenter
     }
@@ -116,7 +133,7 @@ Item {
         // This removes the balancing tail without changing the anchor's
         // position when the before-side is the wider side, which is the
         // normal indicator layout.
-        x: !bar.vertical && centerGestureGroup.compactFlow
+        x: !!bar && !bar.vertical && centerGestureGroup.compactFlow
             ? centerGestureGroup.beforeWidth
             : Math.round((parent.width - width) / 2)
         y: Math.round((parent.height - height) / 2)
@@ -126,10 +143,11 @@ Item {
         id: centerAfterGroup
         bar: centerGestureGroup.bar
         region: "center"
-        entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
+        entries: bar
+            ? bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor) : []
         active: centerGestureGroup.hasAnchor
         collapseContents: centerGestureGroup.compactAnchorOnly
-        visible: !bar.vertical && centerGestureGroup.hasAnchor
+        visible: !!bar && !bar.vertical && centerGestureGroup.hasAnchor
         anchors.left: centerAnchorModule.right
         anchors.verticalCenter: centerAnchorModule.verticalCenter
     }
@@ -138,7 +156,8 @@ Item {
         id: centerColumn
         anchors.centerIn: parent
         spacing: 0
-        visible: bar.vertical && !centerGestureGroup.hasAnchor
+        visible: centerGestureGroup.barReady && bar.vertical
+            && !centerGestureGroup.hasAnchor
 
         VerticalWidgetGroup {
             bar: centerGestureGroup.bar
@@ -152,10 +171,11 @@ Item {
         id: centerBeforeColumn
         bar: centerGestureGroup.bar
         region: "center"
-        entries: bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor)
+        entries: bar
+            ? bar.entriesBefore(centerGestureGroup.entries, bar.centerAnchor) : []
         active: centerGestureGroup.hasAnchor
         collapseContents: centerGestureGroup.compactAnchorOnly
-        visible: bar.vertical && centerGestureGroup.hasAnchor
+        visible: !!bar && bar.vertical && centerGestureGroup.hasAnchor
         anchors.bottom: centerAnchorModule.top
         anchors.horizontalCenter: centerAnchorModule.horizontalCenter
     }
@@ -164,10 +184,11 @@ Item {
         id: centerAfterColumn
         bar: centerGestureGroup.bar
         region: "center"
-        entries: bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor)
+        entries: bar
+            ? bar.entriesAfter(centerGestureGroup.entries, bar.centerAnchor) : []
         active: centerGestureGroup.hasAnchor
         collapseContents: centerGestureGroup.compactAnchorOnly
-        visible: bar.vertical && centerGestureGroup.hasAnchor
+        visible: !!bar && bar.vertical && centerGestureGroup.hasAnchor
         anchors.top: centerAnchorModule.bottom
         anchors.horizontalCenter: centerAnchorModule.horizontalCenter
     }
