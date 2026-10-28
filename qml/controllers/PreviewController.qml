@@ -32,7 +32,8 @@ Item {
     function stableValue(value) {
         if (value === null || value === undefined)
             return null
-        const array = JsonArray.toArray(value)
+        const array = Object.prototype.toString.call(value) === "[object Object]"
+                ? null : JsonArray.toArray(value)
         if (array !== null)
             return array.map(function(item) { return root.stableValue(item) })
         if (typeof value !== "object")

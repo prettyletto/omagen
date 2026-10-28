@@ -70,6 +70,13 @@ TestCase {
         compare(backend.calls, 1)
     }
 
+    function test_objectWithLengthIsDistinctFromArray() {
+        compare(controller.start("source", {}, { values: { length: 0 } }, false), "started")
+        backend.previewApplied("session-1", "generation-1", "source", "preview-source")
+        compare(controller.start("source", {}, { values: [] }, false), "started")
+        compare(backend.calls, 2)
+    }
+
     function test_busyPreviewKeepsOnlyLatestIntent() {
         compare(controller.start("source", { red: "#111111" }, null, true), "started")
         compare(controller.start("source", { red: "#222222" }, null, true), "queued")
