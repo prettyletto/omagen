@@ -4,6 +4,19 @@ import "../gateways/JsonArray.js" as JsonArray
 TestCase {
     name: "JsonArray"
 
+    signal parsed(var value)
+    property var received: null
+    onParsed: function(value) { received = JsonArray.toArray(value) }
+
+    function test_normalizesParsedCatalogAcrossSignalBoundary() {
+        received = null
+        parsed(JSON.parse('[{"id":"glass-blur"},{"id":"nature"}]'))
+        verify(received !== null)
+        compare(received.length, 2)
+        compare(received[0].id, "glass-blur")
+        compare(received[1].id, "nature")
+    }
+
     function test_preservesJavaScriptArray() {
         const source = [{ id: "glass-blur" }]
         const result = JsonArray.toArray(source)
