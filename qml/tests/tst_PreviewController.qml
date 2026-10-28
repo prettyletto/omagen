@@ -38,6 +38,7 @@ TestCase {
     }
 
     property int appliedCount: 0
+    property list<int> sequence: [1, 2]
 
     Connections {
         target: controller
@@ -60,6 +61,13 @@ TestCase {
         compare(controller.start("source", {}, null, false), "alreadyLive")
         compare(backend.calls, 1)
         compare(appliedCount, 2)
+    }
+
+    function test_equivalentSequenceAndArrayDoNotRepeatPreview() {
+        compare(controller.start("source", {}, { values: sequence }, false), "started")
+        backend.previewApplied("session-1", "generation-1", "source", "preview-source")
+        compare(controller.start("source", {}, { values: [1, 2] }, false), "alreadyLive")
+        compare(backend.calls, 1)
     }
 
     function test_busyPreviewKeepsOnlyLatestIntent() {

@@ -1,4 +1,5 @@
 import QtQuick
+import "../gateways/JsonArray.js" as JsonArray
 
 // Owns the preview command and the small piece of state that describes an
 // in-flight colour preview. Higher-level Apply and Demo sequencing remains in
@@ -31,8 +32,9 @@ Item {
     function stableValue(value) {
         if (value === null || value === undefined)
             return null
-        if (Array.isArray(value))
-            return value.map(function(item) { return root.stableValue(item) })
+        const array = JsonArray.toArray(value)
+        if (array !== null)
+            return array.map(function(item) { return root.stableValue(item) })
         if (typeof value !== "object")
             return value
 
