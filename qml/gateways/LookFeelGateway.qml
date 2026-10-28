@@ -1,4 +1,5 @@
 import QtQuick
+import "JsonArray.js" as JsonArray
 
 Item {
     id: root
@@ -24,11 +25,12 @@ Item {
         invalidJsonFallback: "Backend returned invalid Look & Feel catalog JSON"
         timeoutFallback: "Look & Feel catalog request timed out"
         onCompleted: function(result) {
-            if (!Array.isArray(result)) {
+            const catalog = JsonArray.toArray(result)
+            if (catalog === null) {
                 root.catalogFailed("Backend returned an invalid Look & Feel catalog")
                 return
             }
-            root.catalogLoaded(result)
+            root.catalogLoaded(catalog)
         }
         onFailed: root.catalogFailed(message)
     }
