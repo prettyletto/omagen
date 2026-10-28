@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "policyVersion": "product-docs-projection-v1",
   "sourceBranch": "dev",
-  "sourceSha": "39315664dc8479feaabf32d31c0d5650b4d9993f",
-  "releaseVersion": "v2.0.1",
+  "sourceSha": "d5de3164142d85391de3dc31e64a5f7f2dc9eba4",
+  "releaseVersion": "v2.0.2",
   "generatedFiles": [
     "README.md"
   ],
-  "generatedAt": "2026-09-14T18:13:23.998863Z"
+  "generatedAt": "2026-10-28T15:19:36.741978Z"
 }

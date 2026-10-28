@@ -1,4 +1,5 @@
 import QtQuick
+import "JsonArray.js" as JsonArray
 
 Item {
     id: root
@@ -18,11 +19,12 @@ Item {
         failureFallback: "Failed to load installed themes"
         invalidJsonFallback: "Backend returned invalid theme catalog JSON"
         onCompleted: function(result) {
-            if (!Array.isArray(result)) {
+            const themes = JsonArray.toArray(result)
+            if (themes === null) {
                 root.catalogFailed("Backend returned an invalid theme catalog")
                 return
             }
-            root.catalogLoaded(result)
+            root.catalogLoaded(themes)
         }
         onFailed: root.catalogFailed(message)
     }
